@@ -95,7 +95,7 @@ export class AtraccionesService {
       const inicio = dto.dates.start_date.slice(0, 10);
       const fin = dto.dates.end_date.slice(0, 10);
       if (fin < inicio) throw new BadRequestException('dates.end_date no puede ser anterior a dates.start_date');
-      const dias = Math.min(Math.round((Date.parse(fin) - Date.parse(inicio)) / 86400000) + 1, 62);
+      const dias = Math.round((Date.parse(fin) - Date.parse(inicio)) / 86400000) + 1;
       // Excluye las atracciones que no operan NINGÚN día del rango
       w.push(`(SELECT COUNT(*) FROM fecha_bloqueada fb WHERE fb.atr_id = a.atr_id
                 AND fb.fb_fecha BETWEEN ${p.add(inicio)}::date AND ${p.add(fin)}::date) < ${p.add(dias)}`);

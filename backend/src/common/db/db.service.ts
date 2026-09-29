@@ -7,13 +7,25 @@ export interface Sql {
   one<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | null>;
 }
 
+/**
+ * El driver de Postgres de TypeORM devuelve `[filas, filasAfectadas]` en los UPDATE y DELETE
+ * (con o sin RETURNING) y solo `filas` en el resto. Se normaliza a `filas` para que
+ * `UPDATE … RETURNING` / `DELETE … RETURNING` se lean igual que un SELECT.
+ */
+export function filas<T>(resultado: unknown): T[] {
+  if (Array.isArray(resultado) && resultado.length === 2 && Array.isArray(resultado[0]) && typeof resultado[1] === 'number') {
+    return resultado[0] as T[];
+  }
+  return resultado as T[];
+}
+
 class ManagerSql implements Sql {
   constructor(private readonly m: EntityManager) {}
-  query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
-    return this.m.query(sql, params);
+  async query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
+    return filas<T>(await this.m.query(sql, params));
   }
   async one<T>(sql: string, params: unknown[] = []): Promise<T | null> {
-    return ((await this.m.query(sql, params)) as T[])[0] ?? null;
+    return (await this.query<T>(sql, params))[0] ?? null;
   }
 }
 

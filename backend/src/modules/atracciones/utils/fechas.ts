@@ -29,8 +29,10 @@ export function diasDelMes(month: string): string[] {
 }
 
 export function horasAIso(horas: number): string {
-  const h = Math.floor(horas);
-  const m = Math.round((horas - h) * 60);
+  // Se redondea a minutos totales antes de separar: 1.999 h → PT2H (no "PT1H60M")
+  const minutos = Math.round(horas * 60);
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
   if (!h && !m) return 'PT0H';
   return `PT${h ? `${h}H` : ''}${m ? `${m}M` : ''}`;
 }

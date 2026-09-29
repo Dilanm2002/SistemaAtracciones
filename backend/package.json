@@ -18,7 +18,8 @@
     "test": "jest",
     "test:cov": "jest --coverage",
     "seed": "nest build && node dist/seed/run-seed.js",
-    "db:verify": "node scripts/verificar-modelo.js"
+    "db:verify": "node scripts/verificar-modelo.js",
+    "test:e2e": "jest --config test/jest-e2e.json --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -49,9 +50,11 @@
     "@types/jest": "^29.5.14",
     "@types/multer": "^1.4.13",
     "@types/node": "^20.3.1",
+    "@types/supertest": "^6.0.3",
     "eslint": "^9.39.5",
     "globals": "^17.12.0",
     "jest": "^29.7.0",
+    "supertest": "^7.3.0",
     "ts-jest": "^29.4.14",
     "typescript": "^5.1.3",
     "typescript-eslint": "^8.71.0"
