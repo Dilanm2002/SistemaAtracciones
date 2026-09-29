@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  CalendarCheck, Compass, Heart, HelpCircle, LayoutDashboard, LogIn, LogOut, Mail, Map, Menu, Mountain, User, X,
+  CalendarCheck, Compass, Heart, HelpCircle, Home, LayoutDashboard, LogIn, LogOut, Mail, Map, Menu, Mountain, User, X,
 } from 'lucide-react';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
@@ -16,6 +16,7 @@ export function BrandMark({ size = 20 }) {
 }
 
 const NAV = [
+  { to: '/', label: 'Inicio', icon: Home, end: true },
   { to: '/explorar', label: 'Explorar', icon: Compass },
   { to: '/destinos', label: 'Destinos', icon: Map },
   { to: '/ayuda', label: 'Ayuda', icon: HelpCircle },
@@ -87,7 +88,7 @@ export function Header() {
         </Link>
         <nav className="main-nav" aria-label="Principal">
           {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+            <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
               {n.label}
             </NavLink>
           ))}
@@ -124,7 +125,7 @@ export function Header() {
               <button className="icon-btn" onClick={() => setMobile(false)} aria-label="Cerrar menú"><X size={22} /></button>
             </div>
             {NAV.map((n) => (
-              <NavLink key={n.to} to={n.to} className="nav-link"><n.icon size={20} /> {n.label}</NavLink>
+              <NavLink key={n.to} to={n.to} end={n.end} className="nav-link"><n.icon size={20} /> {n.label}</NavLink>
             ))}
             <NavLink to="/favoritos" className="nav-link"><Heart size={20} /> Favoritos</NavLink>
             {isAuth && <NavLink to="/mis-reservas" className="nav-link"><CalendarCheck size={20} /> Mis reservas</NavLink>}
@@ -187,13 +188,13 @@ export default function PublicLayout() {
   const { pathname } = useLocation();
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
   return (
-    <>
+    <div className="site-shell">
       <a href="#main" className="skip-link">Saltar al contenido</a>
       <Header />
-      <main id="main" tabIndex={-1} style={{ outline: 'none' }}>
+      <main id="main" tabIndex={-1} className="site-main">
         <Outlet />
       </main>
       <Footer />
-    </>
+    </div>
   );
 }

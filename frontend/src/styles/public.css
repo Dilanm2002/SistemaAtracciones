@@ -1,3 +1,8 @@
+/* ── Estructura: el footer siempre queda al final de la ventana ─────── */
+.site-shell { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.site-main { flex: 1 0 auto; outline: none; }
+.site-footer { flex-shrink: 0; }
+
 /* ── Header ──────────────────────────────────────────────────────────── */
 .site-header {
   position: sticky; top: 0; z-index: var(--z-header);
@@ -56,7 +61,7 @@
 @keyframes slideleft { from { transform: translateX(30px); opacity: 0; } }
 
 /* ── Footer ──────────────────────────────────────────────────────────── */
-.site-footer { background: var(--sidebar); color: var(--sidebar-ink); margin-top: 80px; padding: 56px 0 28px; }
+.site-footer { background: var(--sidebar); color: var(--sidebar-ink); margin-top: 64px; padding: 56px 0 28px; }
 .site-footer a { color: var(--sidebar-ink); text-decoration: none; }
 .site-footer a:hover { color: #fff; text-decoration: underline; }
 .footer-grid { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: 32px; }

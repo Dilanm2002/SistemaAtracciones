@@ -8,6 +8,46 @@ import { useToast } from '../context/ToastContext';
 import { BADGE, fmtDuration, fmtMoney } from '../utils/format';
 import AtraccionForm from './AtraccionForm';
 
+/** Tarjeta del catálogo: acciones superpuestas a la foto (hover, foco o toque), como en Sal y Canela. */
+function AdminCard({ a, onEdit, onToggle, onDelete }) {
+  const [tapped, setTapped] = useState(false);
+  return (
+    <article
+      className={`adm-card ${a.is_active ? '' : 'inactive'} ${tapped ? 'tapped' : ''}`}
+      onClick={() => setTapped((t) => !t)}
+      onMouseLeave={() => setTapped(false)}
+    >
+      <div className="adm-card-img">
+        <img src={a.photos[0]?.url} alt="" loading="lazy" onError={onImgError} />
+        <div className="adm-card-badges">
+          {!a.is_active && <span className="badge badge-dark"><EyeOff size={12} /> Oculta</span>}
+          {a.featured && <span className="badge badge-cta"><Star size={12} fill="currentColor" /> Destacada</span>}
+          {a.badges.slice(0, 1).map((b) => <span key={b} className="badge badge-dark">{BADGE[b]}</span>)}
+        </div>
+      </div>
+      <div className="adm-card-body">
+        <h3>{a.name}</h3>
+        <div className="adm-card-meta">
+          <span className="adm-card-price">{fmtMoney(a.price.total)}</span>
+          <span>{fmtDuration(a.duration_hours)}</span>
+        </div>
+        <div className="adm-card-meta">
+          <span><Star size={13} fill="var(--cta)" color="var(--cta)" style={{ verticalAlign: '-2px' }} /> {a.ratings.number_of_reviews ? `${Number(a.ratings.score).toFixed(1)} (${a.ratings.number_of_reviews})` : 'Sin reseñas'}</span>
+          <span><Users size={13} style={{ verticalAlign: '-2px' }} /> {a.capacity_per_slot} × {a.times.length}</span>
+        </div>
+      </div>
+      <div className="adm-card-overlay" onClick={(e) => e.stopPropagation()}>
+        <button className="adm-ov-btn edit" onClick={onEdit}><Pencil size={16} /> Editar</button>
+        <button className="adm-ov-btn ghost" onClick={onToggle}>
+          {a.is_active ? <><EyeOff size={16} /> Ocultar del sitio</> : <><Eye size={16} /> Mostrar en el sitio</>}
+        </button>
+        <Link className="adm-ov-btn ghost" to={`/atraccion/${a.id}`}><Mountain size={16} /> Ver en el sitio</Link>
+        <button className="adm-ov-btn del" onClick={onDelete}><Trash2 size={16} /> Eliminar</button>
+      </div>
+    </article>
+  );
+}
+
 export default function AtraccionesAdmin() {
   const toast = useToast();
   const confirm = useConfirm();
@@ -108,6 +148,8 @@ export default function AtraccionesAdmin() {
         </select>
       </div>
 
+      <p className="adm-card-hint">Pasa el mouse sobre una tarjeta (o tócala en el celular) para editar, ocultar o eliminar.</p>
+
       {error ? <ErrorState error={error} onRetry={load} /> : !items ? (
         <div className="adm-card-grid">{[1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 280, borderRadius: 12 }} />)}</div>
       ) : filtered.length === 0 ? (
@@ -118,35 +160,7 @@ export default function AtraccionesAdmin() {
             <div className="adm-group-title">{name}<span className="adm-group-count">{list.length}</span></div>
             <div className="adm-card-grid">
               {list.map((a) => (
-                <article key={a.id} className={`adm-card ${a.is_active ? '' : 'inactive'}`}>
-                  <div className="adm-card-img">
-                    <img src={a.photos[0]?.url} alt="" loading="lazy" onError={onImgError} />
-                    <div className="adm-card-badges">
-                      {!a.is_active && <span className="badge badge-dark"><EyeOff size={12} /> Oculta</span>}
-                      {a.featured && <span className="badge badge-cta"><Star size={12} fill="currentColor" /> Destacada</span>}
-                      {a.badges.slice(0, 1).map((b) => <span key={b} className="badge badge-dark">{BADGE[b]}</span>)}
-                    </div>
-                  </div>
-                  <div className="adm-card-body">
-                    <h3>{a.name}</h3>
-                    <div className="adm-card-meta">
-                      <strong style={{ color: 'var(--text)' }}>{fmtMoney(a.price.total)}</strong>
-                      <span>{fmtDuration(a.duration_hours)}</span>
-                    </div>
-                    <div className="adm-card-meta">
-                      <span><Star size={13} fill="var(--cta)" color="var(--cta)" style={{ verticalAlign: '-2px' }} /> {a.ratings.number_of_reviews ? `${Number(a.ratings.score).toFixed(1)} (${a.ratings.number_of_reviews})` : 'Sin reseñas'}</span>
-                      <span><Users size={13} style={{ verticalAlign: '-2px' }} /> {a.capacity_per_slot} × {a.times.length} salidas</span>
-                    </div>
-                  </div>
-                  <div className="adm-card-actions">
-                    <button className="btn btn-sm" onClick={() => setEditing(a)}><Pencil size={15} /> Editar</button>
-                    <button className="icon-btn sm" onClick={() => toggleActive(a)} aria-label={a.is_active ? `Ocultar ${a.name}` : `Mostrar ${a.name}`} data-tip={a.is_active ? 'Ocultar del sitio' : 'Mostrar en el sitio'}>
-                      {a.is_active ? <EyeOff size={17} /> : <Eye size={17} />}
-                    </button>
-                    <Link className="icon-btn sm" to={`/atraccion/${a.id}`} target="_blank" aria-label={`Ver ${a.name} en el sitio`} data-tip="Ver en el sitio"><Mountain size={17} /></Link>
-                    <button className="icon-btn sm" style={{ color: 'var(--danger)' }} onClick={() => remove(a)} aria-label={`Eliminar ${a.name}`} data-tip="Eliminar"><Trash2 size={17} /></button>
-                  </div>
-                </article>
+                <AdminCard key={a.id} a={a} onEdit={() => setEditing(a)} onToggle={() => toggleActive(a)} onDelete={() => remove(a)} />
               ))}
             </div>
           </section>

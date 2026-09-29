@@ -17,7 +17,7 @@ function Kpi({ icon: Icon, tone, value, label, to }) {
       </span>
     </>
   );
-  return to ? <Link to={to} className="adm-kpi">{content}</Link> : <div className="adm-kpi">{content}</div>;
+  return to ? <Link to={to} className={`adm-kpi tone-${tone}`}>{content}</Link> : <div className={`adm-kpi tone-${tone}`}>{content}</div>;
 }
 
 export default function Dashboard() {

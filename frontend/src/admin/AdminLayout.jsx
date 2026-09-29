@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
+  BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, Home, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
   MessageSquareText, Mountain, Shapes, UserCog, Users,
 } from 'lucide-react';
 import { Auth, Mensajes, Reservas } from '../api/client';
@@ -97,10 +97,18 @@ export default function AdminLayout() {
   }, [user]);
 
   useEffect(() => { refreshCounts(); }, [refreshCounts]);
+  // Al cambiar de módulo: cerrar menú móvil y volver arriba (el contenido tiene scroll propio)
   useEffect(() => {
     setOpen(false);
-    document.querySelector('.adm-content')?.focus();
+    const c = document.querySelector('.adm-content');
+    if (c) { c.scrollTop = 0; c.focus({ preventScroll: true }); }
   }, [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const esc = (e) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [open]);
 
   const nav = NAV.map((g) => ({ ...g, items: g.items.filter((i) => hasScope(i.scope)) })).filter((g) => g.items.length);
   const current = NAV.flatMap((g) => g.items).find((i) => (i.end ? pathname === i.to : pathname.startsWith(i.to))) ?? NAV[0].items[0];
@@ -146,7 +154,10 @@ export default function AdminLayout() {
               </div>
               <button className="icon-btn" onClick={() => setPwOpen(true)} aria-label="Cambiar contraseña" data-tip="Cambiar contraseña"><KeyRound size={16} /></button>
             </div>
-            <button className="adm-logout" onClick={() => { logout(); navigate('/'); }}><LogOut size={16} /> Cerrar sesión</button>
+            <div className="adm-side-links">
+              <Link to="/" className="adm-side-btn"><Home size={16} aria-hidden="true" /> Ir al sitio (Inicio)</Link>
+              <button className="adm-side-btn logout" onClick={() => { logout(); navigate('/'); }}><LogOut size={16} aria-hidden="true" /> Cerrar sesión</button>
+            </div>
           </div>
         </aside>
         <div className={`adm-overlay ${open ? 'open' : ''}`} onClick={() => setOpen(false)} aria-hidden="true" />
@@ -158,8 +169,9 @@ export default function AdminLayout() {
             </button>
             <h1>{current.label}</h1>
             <div className="adm-topbar-right">
-              <span className="muted small hide-mobile">Atajo: <span className="kbd">/</span> buscar</span>
-              <Link to="/" className="btn btn-sm" target="_blank" rel="noreferrer"><ExternalLink size={15} /> <span className="hide-mobile">Ver sitio</span></Link>
+              <span className="muted small hide-mobile">Atajo <span className="kbd">/</span> buscar</span>
+              <span className="adm-topbar-user hide-mobile">{user.nombre.split(' ')[0]} · {ROL_LABEL[user.rol]}</span>
+              <Link to="/" className="icon-btn" aria-label="Ir al sitio público" data-tip="Ver sitio"><ExternalLink size={19} /></Link>
             </div>
           </header>
           <main className="adm-content" id="adm-content" tabIndex={-1} style={{ outline: 'none' }}>
