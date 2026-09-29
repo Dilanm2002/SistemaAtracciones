@@ -34,7 +34,10 @@ import { SeedService } from './seed/seed.service';
           // Supabase (y la mayoría de Postgres en la nube) exige SSL
           ssl: configService.get<string>('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
           // Pool pequeño: en serverless cada instancia abre sus propias conexiones
-          extra: { max: Number(configService.get<string>('DB_POOL_MAX', '5')) },
+          extra: { max: Number(configService.get<string>('DB_POOL_MAX', '5')), connectionTimeoutMillis: 10000 },
+          // En producción (serverless) fallar rápido y mostrar el error en los logs
+          retryAttempts: configService.get<string>('NODE_ENV') === 'production' ? 1 : 9,
+          retryDelay: 2000,
         };
       },
     }),

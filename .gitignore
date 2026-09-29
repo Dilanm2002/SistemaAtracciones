@@ -4,3 +4,5 @@ dist/
 *.log
 backend/public/uploads/*
 !backend/public/uploads/.gitkeep
+.env.*
+!.env.example
