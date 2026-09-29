@@ -42,8 +42,10 @@ export async function createApp(): Promise<NestExpressApplication> {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          imgSrc: ["'self'", 'data:', 'https://*.supabase.co', 'https://validator.swagger.io'],
+          imgSrc: ["'self'", 'data:', 'https://*.supabase.co', 'https://validator.swagger.io', 'https://cdn.redoc.ly'],
           scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+          // Redoc usa un web worker creado desde un blob
+          workerSrc: ["'self'", 'blob:'],
           styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
           connectSrc: ["'self'"],
           frameAncestors: ["'none'"],
@@ -106,6 +108,16 @@ export async function createApp(): Promise<NestExpressApplication> {
     SwaggerModule.setup('api/docs', app, document, {
       customCssUrl: `${SWAGGER_CDN}/swagger-ui.css`,
       customJs: [`${SWAGGER_CDN}/swagger-ui-bundle.js`, `${SWAGGER_CDN}/swagger-ui-standalone-preset.js`],
+    });
+
+    // Redoc del CONTRATO oficial (API-First): contracts/atracciones-openapi.yaml.
+    // Swagger (/api/docs) muestra la implementación; Redoc, el contrato que se acordó.
+    app.getHttpAdapter().get('/api/redoc', (_req: Request, res: Response) => {
+      res.type('html').send(`<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contrato OpenAPI · Atracciones · Descubre EC</title><link rel="icon" href="data:,"></head>
+<body><redoc spec-url="/api/v1/contracts/atracciones-openapi.yaml" hide-download-button="false"></redoc>
+<script src="https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js"></script></body></html>`);
     });
   }
 

@@ -300,6 +300,19 @@ export const RequiredLegend = () => (
   </p>
 );
 
+/** Grupo de botones excluyentes con aria-pressed (sin semántica de tabs, ACC-008). */
+export function Segmented({ options, value, onChange, label, className = '' }) {
+  return (
+    <div className={`segmented ${className}`} role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} type="button" aria-pressed={value === o.value} onClick={() => onChange(o.value)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Breadcrumbs({ items }) {
   return (
     <nav className="breadcrumbs" aria-label="Ruta de navegación">

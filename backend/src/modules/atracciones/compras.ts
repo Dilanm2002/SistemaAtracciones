@@ -2,6 +2,7 @@ import { randomInt } from 'crypto';
 import { QueryFailedError } from 'typeorm';
 import { CatalogosService } from '../../common/db/catalogos.service';
 import { Sql } from '../../common/db/db.service';
+import { emitirEventoReserva, EVENTOS } from '../../common/db/eventos';
 import { CardInfoDto, PaymentMethod } from './dto/reservation.dto';
 
 const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I para evitar confusiones al dictarlo
@@ -98,6 +99,9 @@ export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCo
         );
       }
       if (pagada) await emitirFactura(tx, cat, orden!.ord_id, creado);
+      // Eventos de dominio en la misma transacción (outbox)
+      await emitirEventoReserva(tx, EVENTOS.RESERVA_CREADA, res!.res_id);
+      if (pagada) await emitirEventoReserva(tx, EVENTOS.PAGO_APROBADO, res!.res_id, { payment_number: `PAG-${sufijo}` });
       await tx.query('RELEASE SAVEPOINT compra');
       return { resId: res!.res_id, uuid: res!.res_uuid };
     } catch (e) {
@@ -143,8 +147,10 @@ export async function cancelarCompra(tx: Sql, cat: CatalogosService, resId: stri
        JOIN estado e ON e.est_id = pg.est_id WHERE r.res_id = $1 ORDER BY pg.pag_id DESC LIMIT 1`,
     [resId],
   );
+  await emitirEventoReserva(tx, EVENTOS.RESERVA_CANCELADA, resId, { reason: motivo.slice(0, 255), refunded: pago?.estado === 'APROBADO' });
   if (!pago) return;
   if (pago.estado === 'APROBADO') {
+    await emitirEventoReserva(tx, EVENTOS.PAGO_REEMBOLSADO, resId, { refund_amount: pago.monto });
     await tx.query(
       `INSERT INTO reembolso (pag_id, rem_numero, rem_monto, rem_moneda, rem_motivo, rem_solicitado_en, rem_procesado_en, rem_referencia)
        VALUES ($1::bigint, 'REM-' || lpad($1::bigint::text, 9, '0'), $2, $3, $4, $5, $5, 'SIM-REM-' || $1::bigint::text)
@@ -180,4 +186,6 @@ export async function confirmarCompra(tx: Sql, cat: CatalogosService, resId: str
   );
   await tx.query('UPDATE orden SET est_id = $2 WHERE ord_id = $1', [orden!.ord_id, await cat.estado('PAGADA')]);
   await emitirFactura(tx, cat, orden!.ord_id, fecha);
+  await emitirEventoReserva(tx, EVENTOS.PAGO_APROBADO, resId, { verified_manually: true });
+  await emitirEventoReserva(tx, EVENTOS.RESERVA_CONFIRMADA, resId);
 }

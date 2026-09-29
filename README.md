@@ -1,12 +1,15 @@
 # Descubre EC · Reserva de atracciones turísticas en Ecuador
 
+> 📘 Documentación técnica (arquitectura, modelo de datos, APIs, eventos): [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Guía de demostración: [docs/GUIA-DEFENSA.md](docs/GUIA-DEFENSA.md)
+
 Plataforma web para buscar, reservar y administrar tours, entradas y paquetes turísticos en Ecuador (Andes, Costa, Amazonía y Galápagos). Es el **dominio de Atracciones** del sistema *Booking Prototipo* y está construida sobre la plantilla oficial [`Plantilla-Integracion-Sistemas`](https://github.com/semestre5grupal-ops/Plantilla-Integracion-Sistemas), respetando su contrato `contracts/atracciones-openapi.yaml` para la futura migración a microservicios y Apollo Federation.
 
 ```
 Proyecto Ecommerce/
-├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN) y 02_verificacion.sql
+├── docs/       Documentación técnica (ARQUITECTURA.md) y guía de la defensa (GUIA-DEFENSA.md)
+├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN), 02_verificacion.sql y 03_eventos.sql
 ├── backend/    NestJS 10 + PostgreSQL + Swagger · solo el dominio de Atracciones
-│   └── contracts/ + src/modules/atracciones/contracts/   OpenAPI (REST), GraphQL (Federation) y gRPC
+│   └── contracts/   OpenAPI (REST), AsyncAPI (eventos), GraphQL (Federation) y gRPC
 └── frontend/   React 18 + Vite + CSS propio (sitio público + panel de administración)
 ```
 
@@ -54,7 +57,7 @@ cd backend
 cp .env.example .env
 docker compose up -d
 
-# 2. API  →  http://localhost:3000/api/v1   ·   Swagger: http://localhost:3000/api/docs
+# 2. API  →  http://localhost:3000/api/v1   ·   Swagger: /api/docs   ·   Redoc del contrato: /api/redoc
 npm install
 npm run start:dev          # aplica las migraciones y la primera vez carga datos de demostración
 npm test                   # pruebas unitarias (idempotencia, validaciones, subida de imágenes…)

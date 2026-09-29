@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { AuthUser, esAdmin } from '../../common/auth/scopes';
 import { BitacoraService } from '../../common/db/bitacora.service';
 import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
+import { emitirEvento, EVENTOS, TipoEvento } from '../../common/db/eventos';
 import { paginate } from '../../common/utils/hateoas';
 import { escapeLike } from '../../common/utils/sql';
 import { AtraccionMapper } from './atraccion.mapper';
@@ -31,6 +32,28 @@ export class AtraccionesService {
     const rows = await sql.query<FilaAtraccion>(`${SELECT_ATRACCION} WHERE a.atr_id = ANY($1::bigint[])`, [ids]);
     const porId = new Map(rows.map((r) => [r.id, r]));
     return ids.flatMap((id) => (porId.has(id) ? [porId.get(id)!] : []));
+  }
+
+  /** Healthcheck para el API Gateway: incluye el estado real de la base de datos. */
+  async estado() {
+    const inicio = Date.now();
+    try {
+      const r = await this.db.one<{ tablas: number; migraciones: string[]; atracciones: number; reservas: number; eventos: number }>(
+        `SELECT (SELECT COUNT(*)::int FROM pg_tables WHERE schemaname = 'public') AS tablas,
+                (SELECT array_agg(mig_nombre ORDER BY mig_id) FROM ops.migracion) AS migraciones,
+                (SELECT COUNT(*)::int FROM atraccion WHERE atr_eliminado_en IS NULL) AS atracciones,
+                (SELECT COUNT(*)::int FROM reserva) AS reservas,
+                (SELECT COUNT(*)::int FROM evento) AS eventos`,
+      );
+      return {
+        status: 'UP',
+        service: 'atracciones',
+        timestamp: new Date().toISOString(),
+        database: { status: 'UP', latency_ms: Date.now() - inicio, model: 'database/01_esquema.sql', ...r },
+      };
+    } catch (e) {
+      return { status: 'DEGRADED', service: 'atracciones', timestamp: new Date().toISOString(), database: { status: 'DOWN', error: (e as Error).message } };
+    }
   }
 
   // ── Búsqueda (POST /atracciones/search) ───────────────────────────────
@@ -390,6 +413,18 @@ export class AtraccionesService {
     return id;
   }
 
+  /** Evento de catálogo (para índices de búsqueda de otros servicios), en la misma transacción. */
+  private async eventoAtraccion(tx: Sql, tipo: TipoEvento, a: FilaAtraccion) {
+    await emitirEvento(tx, tipo, 'atraccion', a.uuid, {
+      attraction_id: a.uuid,
+      name: a.nombre,
+      status: a.estado,
+      city_id: a.ciu_id,
+      operator_id: a.ope_codigo,
+      price: { currency: a.moneda, total: a.precio_adulto },
+    });
+  }
+
   private async idPorUuid(tx: Sql, uuid: string): Promise<string> {
     const r = await tx.one<{ id: string }>(`SELECT atr_id::text AS id FROM atraccion a WHERE atr_uuid = $1 AND ${VISIBLE} FOR UPDATE`, [uuid]);
     if (!r) throw new NotFoundException('La atracción no existe o ya no está disponible.');
@@ -399,21 +434,28 @@ export class AtraccionesService {
   async create(dto: CreateAtraccionDto, user: AuthUser) {
     const fila = await this.db.tx(async (tx) => {
       const id = await this.guardar(tx, null, { times: ['09:00'], ...dto });
-      return (await this.cargar([id], tx))[0];
+      const fila = (await this.cargar([id], tx))[0];
+      await this.eventoAtraccion(tx, EVENTOS.ATRACCION_PUBLICADA, fila);
+      return fila;
     });
     await this.bitacora.registrar(user.sub, 'CREAR', 'atraccion', fila.uuid, { nombre: fila.nombre });
     return this.mapper.toResponse(fila);
   }
 
   async replace(uuid: string, dto: CreateAtraccionDto, user: AuthUser) {
-    await this.db.tx(async (tx) => this.guardar(tx, await this.idPorUuid(tx, uuid), dto));
+    await this.db.tx(async (tx) => {
+      const id = await this.guardar(tx, await this.idPorUuid(tx, uuid), dto);
+      await this.eventoAtraccion(tx, EVENTOS.ATRACCION_ACTUALIZADA, (await this.cargar([id], tx))[0]);
+    });
     await this.bitacora.registrar(user.sub, 'REEMPLAZAR', 'atraccion', uuid);
   }
 
   async update(uuid: string, dto: UpdateAtraccionDto, user: AuthUser) {
     const fila = await this.db.tx(async (tx) => {
       const id = await this.guardar(tx, await this.idPorUuid(tx, uuid), dto);
-      return (await this.cargar([id], tx))[0];
+      const fila = (await this.cargar([id], tx))[0];
+      await this.eventoAtraccion(tx, EVENTOS.ATRACCION_ACTUALIZADA, fila);
+      return fila;
     });
     await this.bitacora.registrar(user.sub, 'ACTUALIZAR', 'atraccion', uuid, { campos: Object.keys(dto) });
     return this.mapper.toResponse(fila);
@@ -432,6 +474,7 @@ export class AtraccionesService {
         throw new ConflictException(`No se puede eliminar: tiene ${r!.n} reserva(s) próximas. Desactívala para ocultarla sin afectar a los clientes.`);
       }
       await tx.query(`UPDATE atraccion SET atr_eliminado_en = now(), atr_estado = 'INACTIVA', atr_destacada = FALSE WHERE atr_id = $1`, [id]);
+      await emitirEvento(tx, EVENTOS.ATRACCION_RETIRADA, 'atraccion', uuid, { attraction_id: uuid });
     });
     await this.bitacora.registrar(user.sub, 'ELIMINAR', 'atraccion', uuid);
   }

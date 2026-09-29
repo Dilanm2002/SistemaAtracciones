@@ -77,7 +77,7 @@ export class AtraccionesController {
   @ApiOperation({ summary: 'Healthcheck del microservicio para el API Gateway' })
   @ApiResponse({ status: 200, description: 'Servicio de atracciones operativo.' })
   checkHealth() {
-    return { status: 'UP', service: 'atracciones', timestamp: new Date().toISOString() };
+    return this.atraccionesService.estado();
   }
 
   // ── Reservas: rutas estáticas ─────────────────────────────────────────

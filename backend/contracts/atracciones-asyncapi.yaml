@@ -1,0 +1,275 @@
+asyncapi: 2.6.0
+info:
+  title: Eventos de dominio de Atracciones (Descubre EC)
+  version: 1.0.0
+  description: |
+    Diseño preliminar de la integración orientada a eventos (EDA) del dominio de
+    Atracciones con el resto del marketplace (vuelos, alojamientos, autos,
+    notificaciones, analítica).
+
+    **Cómo se producen hoy (patrón Transactional Outbox):** cada evento se guarda en la
+    tabla `evento` dentro de la MISMA transacción que el cambio de negocio
+    (backend/src/database/sql/003_eventos.sql). Así nunca se emite un evento de una
+    reserva que se revirtió ni se pierde el de una que sí se guardó.
+
+    **Cómo se consumen hoy:** `GET /api/v1/eventos?after=<sequence>` (scope `admin:full`),
+    feed ordenado con cursor. Entrega *al menos una vez*: el consumidor guarda la última
+    `sequence` procesada y descarta duplicados por `id`.
+
+    **Migración a microservicios:** un *relay* leerá las filas con `evt_publicado_en IS NULL`,
+    las publicará en los canales de este documento (Kafka o RabbitMQ) y las marcará como
+    publicadas. Los productores y el formato de los mensajes no cambian.
+
+    Ningún evento incluye datos personales (nombre, documento, correo o teléfono):
+    los consumidores que los necesiten los piden por la API con su token.
+  license:
+    name: Uso académico - Proyecto de Integración de Sistemas
+
+defaultContentType: application/json
+
+servers:
+  produccion-feed:
+    url: sistemaatracciones-backend.vercel.app/api/v1/eventos
+    protocol: https
+    description: Feed HTTP actual (pull con cursor)
+  broker-futuro:
+    url: broker.booking-hub.internal:9092
+    protocol: kafka
+    description: Broker del marketplace tras la migración a microservicios (preliminar)
+
+channels:
+  atracciones.reserva.creada:
+    description: Se registró una compra (orden + reserva). Útil para vuelos/alojamientos (ofrecer transporte o estadía en la misma fecha y ciudad) y notificaciones.
+    subscribe:
+      operationId: onReservaCreada
+      message:
+        $ref: '#/components/messages/ReservaCreada'
+  atracciones.reserva.confirmada:
+    description: El operador verificó el pago de una reserva pendiente (transferencia o pago en sitio).
+    subscribe:
+      operationId: onReservaConfirmada
+      message:
+        $ref: '#/components/messages/ReservaConfirmada'
+  atracciones.reserva.cancelada:
+    description: La reserva se canceló y sus cupos volvieron al inventario.
+    subscribe:
+      operationId: onReservaCancelada
+      message:
+        $ref: '#/components/messages/ReservaCancelada'
+  atracciones.pago.aprobado:
+    description: El pago de la orden quedó aprobado y se emitió la factura.
+    subscribe:
+      operationId: onPagoAprobado
+      message:
+        $ref: '#/components/messages/PagoAprobado'
+  atracciones.pago.reembolsado:
+    description: Se registró el reembolso de un pago aprobado.
+    subscribe:
+      operationId: onPagoReembolsado
+      message:
+        $ref: '#/components/messages/PagoReembolsado'
+  atracciones.atraccion.publicada:
+    description: Nueva atracción en el catálogo (para índices de búsqueda del marketplace).
+    subscribe:
+      operationId: onAtraccionPublicada
+      message:
+        $ref: '#/components/messages/AtraccionCambiada'
+  atracciones.atraccion.actualizada:
+    description: Cambió una atracción (precio, horarios, estado…).
+    subscribe:
+      operationId: onAtraccionActualizada
+      message:
+        $ref: '#/components/messages/AtraccionCambiada'
+  atracciones.atraccion.retirada:
+    description: La atracción se eliminó del catálogo (borrado lógico).
+    subscribe:
+      operationId: onAtraccionRetirada
+      message:
+        $ref: '#/components/messages/AtraccionRetirada'
+
+components:
+  messages:
+    ReservaCreada:
+      name: atracciones.reserva.creada
+      title: Reserva creada
+      payload:
+        $ref: '#/components/schemas/SobreReserva'
+    ReservaConfirmada:
+      name: atracciones.reserva.confirmada
+      title: Reserva confirmada
+      payload:
+        $ref: '#/components/schemas/SobreReserva'
+    ReservaCancelada:
+      name: atracciones.reserva.cancelada
+      title: Reserva cancelada
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/SobreReserva'
+          - type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  reason:
+                    type: string
+                  refunded:
+                    type: boolean
+    PagoAprobado:
+      name: atracciones.pago.aprobado
+      title: Pago aprobado
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/SobreReserva'
+          - type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  payment_number:
+                    type: string
+                  verified_manually:
+                    type: boolean
+    PagoReembolsado:
+      name: atracciones.pago.reembolsado
+      title: Pago reembolsado
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/SobreReserva'
+          - type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  refund_amount:
+                    type: number
+    AtraccionCambiada:
+      name: atracciones.atraccion.cambiada
+      title: Atracción publicada o actualizada
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                $ref: '#/components/schemas/DatosAtraccion'
+    AtraccionRetirada:
+      name: atracciones.atraccion.retirada
+      title: Atracción retirada
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  attraction_id:
+                    type: string
+                    format: uuid
+
+  schemas:
+    Sobre:
+      type: object
+      description: Envoltorio común (columnas de la tabla evento)
+      required: [id, sequence, type, version, aggregate, aggregate_id, occurred_at, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: evt_uuid; usar para descartar duplicados
+        sequence:
+          type: string
+          description: evt_id; cursor del feed (orden total)
+        type:
+          type: string
+          example: atracciones.reserva.creada
+        version:
+          type: integer
+          example: 1
+        aggregate:
+          type: string
+          enum: [reserva, atraccion]
+        aggregate_id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        data:
+          type: object
+    SobreReserva:
+      allOf:
+        - $ref: '#/components/schemas/Sobre'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/DatosReserva'
+    DatosReserva:
+      type: object
+      description: Sin datos personales
+      properties:
+        reservation_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          example: DEC-7F3K9Q
+        status:
+          type: string
+          enum: [CONFIRMADA, PENDIENTE_PAGO, CANCELADA_RES, COMPLETADA]
+        attraction_id:
+          type: string
+          format: uuid
+        operator_id:
+          type: integer
+          description: ope_codigo
+        city_id:
+          type: integer
+          description: ciu_id (el `city` del contrato REST)
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+          example: '08:00'
+        adults:
+          type: integer
+        children:
+          type: integer
+        ticket_count:
+          type: integer
+        total:
+          type: object
+          properties:
+            currency:
+              type: string
+            total:
+              type: number
+        payment_method:
+          type: string
+          enum: [TARJETA, TRANSFERENCIA, EN_SITIO]
+        order_number:
+          type: string
+          example: ORD-7F3K9Q
+    DatosAtraccion:
+      type: object
+      properties:
+        attraction_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [BORRADOR, PUBLICADA, INACTIVA]
+        city_id:
+          type: integer
+        operator_id:
+          type: integer
+        price:
+          type: object
+          properties:
+            currency:
+              type: string
+            total:
+              type: number

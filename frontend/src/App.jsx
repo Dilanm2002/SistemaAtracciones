@@ -25,6 +25,7 @@ const OperadoresAdmin = lazy(() => import('./admin/CatalogAdmin').then((m) => ({
 const ClientesAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ClientesAdmin })));
 const UsuariosAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.UsuariosAdmin })));
 const ResenasAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ResenasAdmin })));
+const IntegracionAdmin = lazy(() => import('./admin/IntegracionAdmin'));
 const MensajesAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.MensajesAdmin })));
 
 /** Atajo "/" para enfocar el buscador de la página (flexibilidad y eficiencia de uso). */
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="reportes" element={<ReportesAdmin />} />
           <Route path="resenas" element={<ResenasAdmin />} />
           <Route path="mensajes" element={<MensajesAdmin />} />
+          <Route path="integracion" element={<IntegracionAdmin />} />
         </Route>
       </Routes>
     </Suspense>

@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import '../styles/admin.css';
 import {
   BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, Home, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
-  MessageSquareText, Mountain, Shapes, UserCog, Users,
+  MessageSquareText, Mountain, Shapes, UserCog, Users, Webhook,
 } from 'lucide-react';
 import { Auth, Mensajes, Reservas } from '../api/client';
 import { Field, Modal, RequiredLegend, Spinner } from '../components/ui';
@@ -47,6 +47,10 @@ export const NAV = [
       { to: '/admin/resenas', label: 'Reseñas', icon: MessageSquareText, scope: 'attractions:write' },
       { to: '/admin/mensajes', label: 'Mensajes', icon: Mail, scope: 'admin:full', badge: 'unread' },
     ],
+  },
+  {
+    group: 'INTEGRACIÓN',
+    items: [{ to: '/admin/integracion', label: 'Eventos y contratos', icon: Webhook, scope: 'admin:full' }],
   },
 ];
 

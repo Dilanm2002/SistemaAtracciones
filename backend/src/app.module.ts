@@ -10,6 +10,7 @@ import { MigracionesService } from './database/migraciones.service';
 import { AtraccionesModule } from './modules/atracciones/atracciones.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ContactoModule } from './modules/contacto/contacto.module';
+import { IntegracionModule } from './modules/integracion/integracion.module';
 import { SeedService } from './seed/seed.service';
 
 @Module({
@@ -63,6 +64,9 @@ import { SeedService } from './seed/seed.service';
     // En la migración a microservicios se extraen como servicios independientes.
     AuthModule,
     ContactoModule,
+
+    // Preparación para la integración: feed de eventos (EDA) y contratos publicados
+    IntegracionModule,
   ],
   controllers: [],
   providers: [MigracionesService, SeedService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

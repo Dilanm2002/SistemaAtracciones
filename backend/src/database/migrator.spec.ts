@@ -5,7 +5,7 @@ import { leerMigraciones, SQL_DIR } from './migrator';
 describe('Migraciones SQL-first', () => {
   it('se aplican en orden numérico y cada una tiene checksum', () => {
     const m = leerMigraciones();
-    expect(m.map((x) => x.nombre)).toEqual(['001_modelo_relacional.sql', '002_seguridad.sql']);
+    expect(m.map((x) => x.nombre)).toEqual(['001_modelo_relacional.sql', '002_seguridad.sql', '003_eventos.sql']);
     m.forEach((x) => expect(x.checksum).toMatch(/^[0-9a-f]{64}$/));
   });
 
@@ -14,6 +14,13 @@ describe('Migraciones SQL-first', () => {
     if (!existsSync(original)) return; // en el despliegue solo existe la copia del backend
     const norm = (s: string) => s.replace(/\r\n/g, '\n');
     expect(norm(readFileSync(join(SQL_DIR, '001_modelo_relacional.sql'), 'utf8'))).toBe(norm(readFileSync(original, 'utf8')));
+  });
+
+  it('003 (eventos) es copia exacta de database/03_eventos.sql', () => {
+    const original = join(__dirname, '..', '..', '..', 'database', '03_eventos.sql');
+    if (!existsSync(original)) return;
+    const norm = (s: string) => s.replace(/\r\n/g, '\n');
+    expect(norm(readFileSync(join(SQL_DIR, '003_eventos.sql'), 'utf8'))).toBe(norm(readFileSync(original, 'utf8')));
   });
 
   it('el modelo corrige el trigger de actualizado_en (columnas con prefijo)', () => {

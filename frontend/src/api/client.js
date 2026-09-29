@@ -117,6 +117,12 @@ export const Geo = {
   idiomas: () => api('/idiomas'),
 };
 
+/** Feed de eventos de dominio (tabla evento, admin:full). */
+export const Eventos = {
+  resumen: () => api('/eventos/resumen'),
+  ultimos: (type) => api(`/eventos${qs({ order: 'desc', limit: 50, type })}`).then((r) => r.data),
+};
+
 /** Favoritos del usuario autenticado (tabla favorito). */
 export const Favoritos = {
   list: () => api('/favoritos'),
