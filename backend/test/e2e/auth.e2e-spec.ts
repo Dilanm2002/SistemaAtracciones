@@ -113,6 +113,25 @@ describeDb('Autenticación y seguridad (E2E)', () => {
     });
   });
 
+  describe('límite de peticiones sin proxy delante', () => {
+    it('sin TRUST_PROXY (API expuesta directamente) cambiar X-Forwarded-For no evade el límite', async () => {
+      const antes = process.env.TRUST_PROXY;
+      process.env.TRUST_PROXY = 'false';
+      const directa = await createTestApp();
+      process.env.TRUST_PROXY = antes;
+      try {
+        const estados: number[] = [];
+        for (let i = 1; i <= 6; i++) {
+          const r = await http(directa).post('/auth/login').set('X-Forwarded-For', `198.51.100.${i}`).send({ email: 'x@y.ec', password: 'Mala12345' });
+          estados.push(r.status);
+        }
+        expect(estados).toEqual([401, 401, 401, 401, 401, 429]);
+      } finally {
+        await directa.close();
+      }
+    });
+  });
+
   describe('autorización por scopes', () => {
     it.each([
       ['GET', '/usuarios'],
@@ -172,6 +191,16 @@ describeDb('Autenticación y seguridad (E2E)', () => {
       expect((await http(app).patch(`/usuarios/${r.body.user.id}`).set(bearer(admin)).send({ email: USERS.cliente.email })).status).toBe(409);
       expect((await http(app).patch('/usuarios/999999999').set(bearer(admin)).send({ nombre: 'Nadie' })).status).toBe(404);
       expect((await http(app).patch('/usuarios/abc').set(bearer(admin)).send({ nombre: 'Nadie' })).status).toBe(400);
+    });
+
+    it('el admin puede quitar el teléfono de un usuario enviándolo vacío', async () => {
+      const r = await registrar({ telefono: '0991112233' });
+      const id = r.body.user.id;
+      const sinTel = await http(app).patch(`/usuarios/${id}`).set(bearer(admin)).send({ telefono: '' });
+      expect(sinTel.status).toBe(200);
+      expect(sinTel.body.telefono).toBeNull();
+      expect((await http(app).patch(`/usuarios/${id}`).set(bearer(admin)).send({ telefono: '022345678' })).body.telefono).toBe('022345678');
+      expect((await http(app).patch(`/usuarios/${id}`).set(bearer(admin)).send({ telefono: '12345' })).status).toBe(400);
     });
 
     it('lista paginada con filtro por rol y búsqueda', async () => {

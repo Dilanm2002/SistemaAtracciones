@@ -42,7 +42,7 @@ export default function Dashboard() {
           <div className="adm-kpi-grid" aria-busy={loading}>
             <Kpi icon={CalendarDays} tone="brand" value={loading ? '—' : data.kpis.reservations_today} label="Reservas para hoy" to={`/admin/reservas?fecha=${todayEc()}`} />
             <Kpi icon={Users} tone="info" value={loading ? '—' : data.kpis.travelers_today} label="Viajeros hoy" />
-            {isAdmin && <Kpi icon={DollarSign} tone="ok" value={loading ? '—' : fmtMoney(data.kpis.revenue_month, { compact: true })} label={`Ingresos de ${new Date().toLocaleDateString('es-EC', { month: 'long' })}`} to="/admin/reportes" />}
+            {isAdmin && <Kpi icon={DollarSign} tone="ok" value={loading ? '—' : fmtMoney(data.kpis.revenue_month, { compact: true })} label={`Ingresos cobrados de ${new Date().toLocaleDateString('es-EC', { month: 'long' })}`} to="/admin/reportes" />}
             <Kpi icon={Hourglass} tone="warn" value={loading ? '—' : data.kpis.pending_reservations} label="Pendientes de pago" to="/admin/reservas?estado=PENDING" />
             <Kpi icon={Mountain} tone="cta" value={loading ? '—' : data.kpis.active_attractions} label="Atracciones activas" to={isAdmin ? '/admin/atracciones' : undefined} />
             {isAdmin && <Kpi icon={Mail} tone="info" value={counts.unread} label="Mensajes sin leer" to="/admin/mensajes" />}
@@ -58,7 +58,7 @@ export default function Dashboard() {
 
           <div className="adm-two">
             <ChartCard
-              title="Ingresos de los últimos 7 días"
+              title="Ingresos cobrados de los últimos 7 días"
               subtitle="Por fecha en que se hizo la reserva (sin canceladas)"
               table={data && {
                 columns: [{ key: 'label', label: 'Día' }, { key: 'reservations', label: 'Reservas', num: true }, { key: 'revenue', label: 'Ingresos', num: true, fmt: (v) => fmtMoney(v) }],

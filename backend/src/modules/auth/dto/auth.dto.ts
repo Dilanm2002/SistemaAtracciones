@@ -118,7 +118,13 @@ export class CreateUsuarioDto extends RegisterDto {
   operadorCodigo?: number | null;
 }
 
-export class UpdateUsuarioDto extends PartialType(OmitType(CreateUsuarioDto, ['password'] as const)) {
+export class UpdateUsuarioDto extends PartialType(OmitType(CreateUsuarioDto, ['password', 'telefono'] as const)) {
+  @ApiPropertyOptional({ description: 'Vacío para quitarlo' })
+  @IsOptional()
+  @Transform(trim)
+  @Matches(/^(|09\d{8}|0[2-7]\d{7})$/, { message: `telefono ${MSG_TELEFONO_EC}` })
+  telefono?: string;
+
   @ApiPropertyOptional({ description: 'Nueva contraseña (opcional)' })
   @IsOptional()
   @IsString()

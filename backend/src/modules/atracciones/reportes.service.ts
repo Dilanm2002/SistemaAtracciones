@@ -18,6 +18,9 @@ const FROM = `
   JOIN atraccion a      ON a.atr_id = dt.atr_id
   JOIN operador op      ON op.ope_id = a.ope_id`;
 const VIGENTE = `e.est_codigo <> 'CANCELADA_RES'`;
+/** Ingresos = dinero cobrado: solo reservas con el pago confirmado (no las PENDIENTE_PAGO). */
+const PAGADA = `e.est_codigo IN ('CONFIRMADA', 'COMPLETADA')`;
+const INGRESO = `COALESCE(SUM(r.res_subtotal) FILTER (WHERE ${PAGADA}), 0)::float8`;
 
 @Injectable()
 export class ReportesService {
@@ -44,7 +47,7 @@ export class ReportesService {
         params,
       ),
       this.db.one<{ reservas: number; ingresos: number }>(
-        `SELECT COUNT(*)::int AS reservas, COALESCE(SUM(r.res_subtotal), 0)::float8 AS ingresos ${FROM}
+        `SELECT COUNT(*)::int AS reservas, ${INGRESO} AS ingresos ${FROM}
           WHERE ${scope} AND (r.res_creado_en AT TIME ZONE ${TZ})::date >= ${inicioMes} AND ${VIGENTE}`,
         params,
       ),
@@ -66,7 +69,7 @@ export class ReportesService {
       ),
       this.db.query<{ dia: string; reservas: number; ingresos: number }>(
         `SELECT to_char((r.res_creado_en AT TIME ZONE ${TZ})::date, 'YYYY-MM-DD') AS dia, COUNT(*)::int AS reservas,
-                COALESCE(SUM(r.res_subtotal), 0)::float8 AS ingresos ${FROM}
+                ${INGRESO} AS ingresos ${FROM}
           WHERE ${scope} AND (r.res_creado_en AT TIME ZONE ${TZ})::date >= ${HOY_EC} - 6 AND ${VIGENTE}
           GROUP BY 1`,
         params,
@@ -110,38 +113,40 @@ export class ReportesService {
     const p = [from, to];
 
     const [totales, porDia, top, porCategoria, porRegion, porMetodo, detalle] = await Promise.all([
-      this.db.one<{ reservas: number; tickets: number; ingresos: number; canceladas: number; todas: number }>(
+      this.db.one<{ reservas: number; tickets: number; ingresos: number; pagadas: number; pendiente: number; canceladas: number; todas: number }>(
         `SELECT COUNT(*) FILTER (WHERE ${VIGENTE})::int AS reservas,
                 COALESCE(SUM(r.res_numero_tickets) FILTER (WHERE ${VIGENTE}), 0)::int AS tickets,
-                COALESCE(SUM(r.res_subtotal) FILTER (WHERE ${VIGENTE}), 0)::float8 AS ingresos,
+                ${INGRESO} AS ingresos,
+                COUNT(*) FILTER (WHERE ${PAGADA})::int AS pagadas,
+                COALESCE(SUM(r.res_subtotal) FILTER (WHERE e.est_codigo = 'PENDIENTE_PAGO'), 0)::float8 AS pendiente,
                 COUNT(*) FILTER (WHERE e.est_codigo = 'CANCELADA_RES')::int AS canceladas,
                 COUNT(*)::int AS todas ${FROM} WHERE ${rango}`,
         p,
       ),
       this.db.query<{ dia: string; reservas: number; ingresos: number }>(
         `SELECT to_char((r.res_creado_en AT TIME ZONE ${TZ})::date, 'YYYY-MM-DD') AS dia, COUNT(*)::int AS reservas,
-                SUM(r.res_subtotal)::float8 AS ingresos ${FROM} WHERE ${rango} AND ${VIGENTE} GROUP BY 1 ORDER BY 1`,
+                ${INGRESO} AS ingresos ${FROM} WHERE ${rango} AND ${VIGENTE} GROUP BY 1 ORDER BY 1`,
         p,
       ),
       this.db.query<{ nombre: string; reservas: number; tickets: number; ingresos: number }>(
-        `SELECT a.atr_nombre AS nombre, COUNT(*)::int AS reservas, SUM(r.res_numero_tickets)::int AS tickets, SUM(r.res_subtotal)::float8 AS ingresos
+        `SELECT a.atr_nombre AS nombre, COUNT(*)::int AS reservas, SUM(r.res_numero_tickets)::int AS tickets, ${INGRESO} AS ingresos
            ${FROM} WHERE ${rango} AND ${VIGENTE} GROUP BY a.atr_id, a.atr_nombre ORDER BY ingresos DESC LIMIT 10`,
         p,
       ),
       this.db.query<{ nombre: string; reservas: number; ingresos: number }>(
-        `SELECT ca.cat_nombre AS nombre, COUNT(*)::int AS reservas, SUM(r.res_subtotal)::float8 AS ingresos
+        `SELECT ca.cat_nombre AS nombre, COUNT(*)::int AS reservas, ${INGRESO} AS ingresos
            ${FROM} JOIN atraccion_categoria ac ON ac.atr_id = a.atr_id JOIN categoria ca ON ca.cat_id = ac.cat_id
           WHERE ${rango} AND ${VIGENTE} GROUP BY ca.cat_nombre ORDER BY ingresos DESC`,
         p,
       ),
       this.db.query<{ region: string; reservas: number; ingresos: number }>(
-        `SELECT rg.reg_nombre AS region, COUNT(*)::int AS reservas, SUM(r.res_subtotal)::float8 AS ingresos
+        `SELECT rg.reg_nombre AS region, COUNT(*)::int AS reservas, ${INGRESO} AS ingresos
            ${FROM} JOIN provincia pv ON pv.prov_id = a.prov_id JOIN region rg ON rg.reg_id = pv.reg_id
           WHERE ${rango} AND ${VIGENTE} GROUP BY rg.reg_nombre`,
         p,
       ),
       this.db.query<{ metodo: string; reservas: number; ingresos: number }>(
-        `SELECT mp.mpa_codigo AS metodo, COUNT(*)::int AS reservas, SUM(r.res_subtotal)::float8 AS ingresos
+        `SELECT mp.mpa_codigo AS metodo, COUNT(*)::int AS reservas, ${INGRESO} AS ingresos
            ${FROM} JOIN metodo_pago mp ON mp.mpa_id = o.mpa_id WHERE ${rango} AND ${VIGENTE} GROUP BY mp.mpa_codigo`,
         p,
       ),
@@ -152,7 +157,8 @@ export class ReportesService {
                 r.res_adultos AS adults, r.res_ninos AS children, r.res_subtotal::float8 AS total, e.est_codigo AS estado,
                 (SELECT mp.mpa_codigo FROM metodo_pago mp WHERE mp.mpa_id = o.mpa_id) AS payment_method,
                 (SELECT x.pax_nombre FROM reserva_pasajero x WHERE x.res_id = r.res_id ORDER BY x.pax_es_titular DESC, x.pax_id LIMIT 1) AS customer,
-                (SELECT u.usu_correo FROM usuario u WHERE u.usu_id = o.usu_id) AS email
+                COALESCE((SELECT x.pax_correo FROM reserva_pasajero x WHERE x.res_id = r.res_id ORDER BY x.pax_es_titular DESC, x.pax_id LIMIT 1),
+                         (SELECT u.usu_correo FROM usuario u WHERE u.usu_id = o.usu_id)) AS email
            ${FROM} WHERE ${rango} ORDER BY r.res_creado_en DESC LIMIT ${DETALLE_MAX + 1}`,
         p,
       ),
@@ -160,13 +166,16 @@ export class ReportesService {
 
     const reservas = totales?.reservas ?? 0;
     const ingresos = num(totales?.ingresos);
+    const pagadas = totales?.pagadas ?? 0;
     return {
       range: { from, to },
       kpis: {
         reservations: reservas,
         tickets: totales?.tickets ?? 0,
         revenue: ingresos,
-        average_ticket: reservas ? num(ingresos / reservas) : 0,
+        // Ingreso cobrado por reserva pagada; lo pendiente de pago se informa aparte
+        average_ticket: pagadas ? num(ingresos / pagadas) : 0,
+        pending_revenue: num(totales?.pendiente),
         cancellations: totales?.canceladas ?? 0,
         cancellation_rate: totales?.todas ? num((totales.canceladas / totales.todas) * 100) : 0,
       },
@@ -189,7 +198,7 @@ export class ReportesService {
     const rows = await this.db.query<{ usuario_id: string; nombre: string; email: string; telefono: string | null; reservas: number; gastado: number; ultima: Date }>(
       `SELECT u.usu_id::text AS usuario_id, u.usu_nombre || ' ' || u.usu_apellido AS nombre, u.usu_correo AS email, u.usu_telefono AS telefono,
               COUNT(*) FILTER (WHERE ${VIGENTE})::int AS reservas,
-              COALESCE(SUM(r.res_subtotal) FILTER (WHERE ${VIGENTE}), 0)::float8 AS gastado,
+              ${INGRESO} AS gastado,
               MAX(r.res_creado_en) AS ultima
          ${FROM} JOIN usuario u ON u.usu_id = o.usu_id
         GROUP BY u.usu_id ORDER BY gastado DESC`,

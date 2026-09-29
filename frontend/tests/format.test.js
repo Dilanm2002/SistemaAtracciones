@@ -41,7 +41,7 @@ describe('fechas', () => {
   it('todayEc tiene formato AAAA-MM-DD', () => {
     assert.match(todayEc(), /^\d{4}-\d{2}-\d{2}$/);
   });
-  it('fmtRelative: minutos, horas, días y meses', () => {
+  it('fmtRelative: pasado y futuro en minutos, horas, días y meses', () => {
     const ahora = Date.parse('2026-09-29T12:00:00Z');
     mock.timers.enable({ apis: ['Date'], now: ahora });
     try {
@@ -49,6 +49,12 @@ describe('fechas', () => {
       assert.match(fmtRelative('2026-09-29T09:00:00Z'), /3 horas/);
       assert.match(fmtRelative('2026-09-27T12:00:00Z'), /anteayer|2 días/);
       assert.match(fmtRelative('2026-01-15T12:00:00Z'), /enero/);
+      // Futuro: nunca "hace …"
+      assert.match(fmtRelative('2026-09-29T15:00:00Z'), /dentro de 3 horas/);
+      assert.match(fmtRelative('2026-09-29T12:20:00Z'), /dentro de 20 minutos/);
+      assert.match(fmtRelative('2026-10-04T12:00:00Z'), /dentro de 5 días/);
+      assert.equal(fmtRelative('2026-09-29T12:00:30Z'), 'ahora');
+      assert.equal(fmtRelative('2026-09-29T11:59:40Z'), 'ahora');
     } finally {
       mock.timers.reset();
     }

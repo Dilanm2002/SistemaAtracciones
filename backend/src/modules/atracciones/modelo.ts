@@ -173,6 +173,8 @@ export interface FilaReserva {
   telefono: string | null;
   pax_nombre: string | null;
   pax_documento: string | null;
+  pax_correo: string | null;
+  pax_telefono: string | null;
   metodo: PaymentMethod | null;
 }
 
@@ -188,7 +190,7 @@ export const SELECT_RESERVA = `
          a.atr_cancelacion_gratuita AS cancelacion_gratuita, a.atr_horas_cancelacion AS horas_cancelacion,
          (SELECT f.fot_url FROM atraccion_foto f WHERE f.atr_id = a.atr_id ORDER BY f.fot_orden, f.fot_id LIMIT 1) AS foto,
          op.ope_codigo, o.usu_id::text AS usu_id, u.usu_correo AS correo, u.usu_telefono AS telefono,
-         pax.pax_nombre, pax.pax_documento, mp.mpa_codigo AS metodo
+         pax.pax_nombre, pax.pax_documento, pax.pax_correo, pax.pax_telefono, mp.mpa_codigo AS metodo
     FROM reserva r
     JOIN estado e         ON e.est_id = r.est_id
     JOIN orden_detalle dt ON dt.det_id = r.det_id
@@ -198,7 +200,7 @@ export const SELECT_RESERVA = `
     JOIN ciudad c         ON c.ciu_id = a.ciu_id
     JOIN operador op      ON op.ope_id = a.ope_id
     LEFT JOIN metodo_pago mp ON mp.mpa_id = o.mpa_id
-    LEFT JOIN LATERAL (SELECT x.pax_nombre, x.pax_documento FROM reserva_pasajero x
+    LEFT JOIN LATERAL (SELECT x.pax_nombre, x.pax_documento, x.pax_correo, x.pax_telefono FROM reserva_pasajero x
                         WHERE x.res_id = r.res_id ORDER BY x.pax_es_titular DESC, x.pax_id LIMIT 1) pax ON TRUE`;
 
 export const slugify = (s: string) =>

@@ -140,6 +140,8 @@ export class ReservasService {
           metodo,
           paxNombre: dto.customer_name,
           paxDocumento: dto.customer_document ?? null,
+          paxCorreo: dto.customer_email ?? null,
+          paxTelefono: dto.customer_phone ?? null,
           notas: dto.notes ?? null,
           tarjeta: dto.card,
         });
@@ -167,7 +169,7 @@ export class ReservasService {
     if (query.attraction_id) w.push(`a.atr_uuid = ${p.add(query.attraction_id)}`);
     if (query.q?.trim()) {
       const q = p.add(`%${escapeLike(query.q.trim())}%`);
-      w.push(`(r.res_codigo ILIKE ${q} OR pax.pax_nombre ILIKE ${q} OR u.usu_correo ILIKE ${q})`);
+      w.push(`(r.res_codigo ILIKE ${q} OR pax.pax_nombre ILIKE ${q} OR u.usu_correo ILIKE ${q} OR pax.pax_correo ILIKE ${q})`);
     }
     const where = w.length ? `WHERE ${w.join(' AND ')}` : '';
     const dir = query.when === 'past' ? 'DESC' : 'ASC';

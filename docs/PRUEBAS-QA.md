@@ -40,13 +40,20 @@ Sin `TEST_DATABASE_URL` (ni `DATABASE_URL`) las suites E2E se omiten. En CI se e
 | 6 | Media | `POST /atracciones/search` con `dates` de más de 62 días excluía atracciones con ≥ 62 días bloqueados aunque operaran otros días del rango | El número de días del rango se limitaba a 62, pero no los días bloqueados | Se compara con el número real de días |
 | 7 | Baja | `horasAIso(1.999)` → `PT1H60M` (ISO 8601 inválido); lo mismo en `fmtDuration` del frontend (“1 h 60 min”) | Se redondeaban los minutos después de separar las horas | Se redondea a minutos totales antes de separar |
 
-## Observaciones no corregidas (requieren decisión)
+## Observaciones de QA corregidas (segunda ronda)
 
-- **`customer_email` y `customer_phone` de la reserva se validan pero se ignoran**: la respuesta muestra el correo y teléfono de la cuenta. O se guardan (p. ej. en `reserva_pasajero`) o se retiran del contrato.
-- **Los reportes cuentan como ingresos las reservas `PENDIENTE_PAGO`** (todo lo que no está cancelado). Si “ingresos” debe ser dinero cobrado, hay que filtrar por pago aprobado.
-- **El límite de peticiones confía en `X-Forwarded-For`** (`trust proxy 1`). Es correcto detrás de Vercel, pero si la API se expone directamente el límite se evade enviando otra IP en la cabecera.
-- Favoritos acepta atracciones **inactivas** (no eliminadas); luego su detalle público responde 404.
-- La elegibilidad para reseñar considera “vivida” una reserva de **hoy** aunque su hora no haya llegado.
-- En el panel de personas no se puede **borrar** el teléfono de un usuario (solo se envía si no está vacío).
-- `fmtRelative` con una fecha futura muestra “hace 1 minuto”.
-- `xlsx` se descarga de `cdn.sheetjs.com`: `npm ci` del frontend falla en redes que bloquean ese dominio.
+| # | Problema | Decisión y corrección | Prueba |
+|---|---|---|---|
+| 8 | `customer_email` y `customer_phone` de la reserva se validaban y se descartaban | Se guardan en `reserva_pasajero` (`pax_correo`, `pax_telefono`; migración `005_contacto_pasajero.sql`, junto al resto de la PII, como exige V-11). La reserva muestra ese contacto y, si no se envió, el de la cuenta. El correo se valida con `dom_correo` y se pasa a minúsculas | E2E `reservas`: guarda, muestra, busca por ese correo y rechaza formatos inválidos |
+| 9 | Los reportes contaban como ingreso las reservas pendientes de pago | Ingresos = dinero cobrado (reservas `CONFIRMADA`/`COMPLETADA`) en el dashboard, las ventas, el desglose y el gasto por cliente. El conteo de reservas incluye las pendientes, y lo pendiente se informa en `kpis.pending_revenue`. El ticket promedio se calcula sobre las reservas pagadas | E2E `catalogo`: una transferencia no suma hasta que el operador la confirma |
+| 10 | El límite de peticiones se podía evadir cambiando `X-Forwarded-For` si la API se exponía sin proxy | Se confía en esa cabecera solo en Vercel (`VERCEL=1`, que la reescribe) o si se configura `TRUST_PROXY`. Sin proxy se usa la IP de la conexión | E2E `auth` con una instancia sin proxy y unitaria de `confianzaProxy` |
+| 11 | Se podían agregar a favoritos atracciones inactivas | Solo se agregan atracciones publicadas y el listado oculta las desactivadas (el favorito se conserva y reaparece si se reactiva) | E2E `catalogo` |
+| 12 | Una reserva de hoy habilitaba la reseña antes de su hora | Se exige que la fecha **y la hora** de la salida ya hayan pasado (hora de Ecuador) | E2E `catalogo`: salida en +1 h no habilita, en −1 h sí |
+| 13 | En el panel de personas no se podía borrar el teléfono de un usuario | `PATCH /usuarios/:id` acepta `telefono: ""` (quita el teléfono) y el panel lo envía al editar | E2E `auth` |
+| 14 | `fmtRelative` mostraba "hace 1 minuto" para fechas futuras | Respeta el sentido del tiempo ("dentro de 3 horas") y muestra "ahora" por debajo de un minuto | `frontend/tests/format.test.js` |
+
+Las 6 pruebas E2E nuevas fallan contra el código anterior y pasan con la corrección.
+
+## Pendiente
+
+- `xlsx` se descarga de `cdn.sheetjs.com`: `npm ci` del frontend falla en redes que bloquean ese dominio (no es un defecto del código).

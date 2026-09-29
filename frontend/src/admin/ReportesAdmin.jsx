@@ -54,8 +54,9 @@ export default function ReportesAdmin() {
       { Indicador: 'Período', Valor: `${from} a ${to}` },
       { Indicador: 'Reservas', Valor: data.kpis.reservations },
       { Indicador: 'Tickets vendidos', Valor: data.kpis.tickets },
-      { Indicador: 'Ingresos (USD)', Valor: data.kpis.revenue },
-      { Indicador: 'Ticket promedio (USD)', Valor: data.kpis.average_ticket },
+      { Indicador: 'Ingresos cobrados (USD)', Valor: data.kpis.revenue },
+      { Indicador: 'Pendiente de cobro (USD)', Valor: data.kpis.pending_revenue ?? 0 },
+      { Indicador: 'Ticket promedio por reserva pagada (USD)', Valor: data.kpis.average_ticket },
       { Indicador: 'Cancelaciones', Valor: data.kpis.cancellations },
       { Indicador: 'Tasa de cancelación (%)', Valor: data.kpis.cancellation_rate },
     ] },
@@ -97,10 +98,10 @@ export default function ReportesAdmin() {
       {error ? <ErrorState error={error} onRetry={load} /> : !data ? <div className="skeleton" style={{ height: 420 }} /> : (
         <>
           <div className="adm-kpi-grid">
-            <div className="adm-kpi tone-ok"><span className="adm-kpi-icon ok"><DollarSign size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{fmtMoney(data.kpis.revenue, { compact: true })}</span><span className="adm-kpi-lbl">Ingresos</span></span></div>
+            <div className="adm-kpi tone-ok"><span className="adm-kpi-icon ok"><DollarSign size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{fmtMoney(data.kpis.revenue, { compact: true })}</span><span className="adm-kpi-lbl">Ingresos cobrados{data.kpis.pending_revenue ? ` · ${fmtMoney(data.kpis.pending_revenue, { compact: true })} por cobrar` : ''}</span></span></div>
             <div className="adm-kpi tone-brand"><span className="adm-kpi-icon brand"><Receipt size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{data.kpis.reservations}</span><span className="adm-kpi-lbl">Reservas</span></span></div>
             <div className="adm-kpi tone-info"><span className="adm-kpi-icon info"><Ticket size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{data.kpis.tickets}</span><span className="adm-kpi-lbl">Tickets vendidos</span></span></div>
-            <div className="adm-kpi tone-cta"><span className="adm-kpi-icon cta"><BarChart3 size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{fmtMoney(data.kpis.average_ticket, { compact: true })}</span><span className="adm-kpi-lbl">Valor promedio por reserva</span></span></div>
+            <div className="adm-kpi tone-cta"><span className="adm-kpi-icon cta"><BarChart3 size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{fmtMoney(data.kpis.average_ticket, { compact: true })}</span><span className="adm-kpi-lbl">Valor promedio por reserva pagada</span></span></div>
             <div className="adm-kpi tone-warn"><span className="adm-kpi-icon warn"><Percent size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{Number(data.kpis.cancellation_rate).toLocaleString('es-EC', { maximumFractionDigits: 1 })} %</span><span className="adm-kpi-lbl">Cancelaciones ({data.kpis.cancellations})</span></span></div>
           </div>
 

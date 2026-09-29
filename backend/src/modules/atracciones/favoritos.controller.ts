@@ -14,11 +14,11 @@ export class FavoritosController {
   constructor(private readonly db: DbService) {}
 
   @Get()
-  @ApiOperation({ summary: 'IDs (UUID) de las atracciones favoritas del usuario, de la más reciente a la más antigua' })
+  @ApiOperation({ summary: 'IDs (UUID) de las atracciones favoritas del usuario (solo publicadas), de la más reciente a la más antigua' })
   async list(@CurrentUser() user: AuthUser): Promise<string[]> {
     const rows = await this.db.query<{ id: string }>(
       `SELECT a.atr_uuid::text AS id FROM favorito f JOIN atraccion a ON a.atr_id = f.atr_id
-        WHERE f.usu_id = $1 AND a.atr_eliminado_en IS NULL ORDER BY f.fav_creado_en DESC`,
+        WHERE f.usu_id = $1 AND a.atr_eliminado_en IS NULL AND a.atr_estado = 'PUBLICADA' ORDER BY f.fav_creado_en DESC`,
       [user.sub],
     );
     return rows.map((r) => r.id);
@@ -30,11 +30,12 @@ export class FavoritosController {
   async add(@Param('attractionId', ParseUUIDPipe) uuid: string, @CurrentUser() user: AuthUser) {
     const r = await this.db.query(
       `INSERT INTO favorito (usu_id, atr_id)
-       SELECT $1, atr_id FROM atraccion WHERE atr_uuid = $2 AND atr_eliminado_en IS NULL
+       SELECT $1, atr_id FROM atraccion WHERE atr_uuid = $2 AND atr_eliminado_en IS NULL AND atr_estado = 'PUBLICADA'
        ON CONFLICT (usu_id, atr_id) DO NOTHING RETURNING fav_id`,
       [user.sub, uuid],
     );
-    if (!r.length && !(await this.db.one('SELECT 1 FROM atraccion WHERE atr_uuid = $1 AND atr_eliminado_en IS NULL', [uuid]))) {
+    // Sin fila nueva: o ya era favorita (204) o la atracción no existe / no está publicada (404, como su detalle)
+    if (!r.length && !(await this.db.one(`SELECT 1 FROM atraccion WHERE atr_uuid = $1 AND atr_eliminado_en IS NULL AND atr_estado = 'PUBLICADA'`, [uuid]))) {
       throw new NotFoundException('La atracción no existe.');
     }
   }

@@ -85,7 +85,8 @@ function UsuarioModal({ item, onClose, onSaved }) {
       email: f.email.trim().toLowerCase(),
       rol: f.rol,
       operadorCodigo: f.rol === 'OPERADOR' ? Number(f.operadorCodigo) : null,
-      ...(f.telefono ? { telefono: f.telefono } : {}),
+      // Al editar se envía siempre: vacío quita el teléfono. Al crear, solo si se llenó
+      ...(item || f.telefono ? { telefono: f.telefono } : {}),
       ...(f.password ? { password: f.password } : {}),
     };
     try {
