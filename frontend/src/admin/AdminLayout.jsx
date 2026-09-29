@@ -1,11 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import '../styles/admin.css';
 import {
   BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, Home, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
   MessageSquareText, Mountain, Shapes, UserCog, Users,
 } from 'lucide-react';
 import { Auth, Mensajes, Reservas } from '../api/client';
-import { Field, Modal, Spinner } from '../components/ui';
+import { Field, Modal, RequiredLegend, Spinner } from '../components/ui';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { initials } from '../utils/format';
@@ -75,6 +76,7 @@ function ChangePasswordModal({ onClose }) {
   return (
     <Modal open onClose={onClose} title="Cambiar contraseña" footer={<><button className="btn" onClick={onClose}>Cancelar</button><button className="btn btn-primary" form="pw-form" disabled={saving}>{saving && <Spinner />} Guardar</button></>}>
       <form id="pw-form" onSubmit={submit} className="stack" noValidate>
+        <RequiredLegend />
         <Field label="Contraseña actual" required error={err.actual}>{(p) => <input {...p} type="password" className="input" autoComplete="current-password" value={f.actual} onChange={(e) => setF({ ...f, actual: e.target.value })} />}</Field>
         <Field label="Nueva contraseña" required error={err.nueva} hint="Mínimo 8 caracteres con letras y números">{(p) => <input {...p} type="password" className="input" autoComplete="new-password" value={f.nueva} onChange={(e) => setF({ ...f, nueva: e.target.value })} />}</Field>
       </form>
@@ -103,11 +105,18 @@ export default function AdminLayout() {
     const c = document.querySelector('.adm-content');
     if (c) { c.scrollTop = 0; c.focus({ preventScroll: true }); }
   }, [pathname]);
+  // Menú móvil: al abrir, foco al primer enlace; Esc cierra y devuelve el foco al botón (ACC-005)
+  const toggleRef = useRef(null);
   useEffect(() => {
-    if (!open) return;
-    const esc = (e) => e.key === 'Escape' && setOpen(false);
+    if (!open) return undefined;
+    const t = setTimeout(() => document.querySelector('#adm-sidebar .adm-nav-item')?.focus(), 30);
+    const esc = (e) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      toggleRef.current?.focus();
+    };
     document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
+    return () => { clearTimeout(t); document.removeEventListener('keydown', esc); };
   }, [open]);
 
   const nav = NAV.map((g) => ({ ...g, items: g.items.filter((i) => hasScope(i.scope)) })).filter((g) => g.items.length);
@@ -164,8 +173,8 @@ export default function AdminLayout() {
 
         <div className="adm-main">
           <header className="adm-topbar">
-            <button className="icon-btn adm-menu-toggle" onClick={() => setOpen(true)} aria-label="Abrir menú" aria-expanded={open} aria-controls="adm-sidebar">
-              <Menu size={22} />
+            <button ref={toggleRef} className="icon-btn adm-menu-toggle" onClick={() => setOpen(true)} aria-label="Abrir menú" aria-expanded={open} aria-controls="adm-sidebar">
+              <Menu size={22} aria-hidden="true" />
             </button>
             <h1>{current.label}</h1>
             <div className="adm-topbar-right">
@@ -174,7 +183,7 @@ export default function AdminLayout() {
               <Link to="/" className="icon-btn" aria-label="Ir al sitio público" data-tip="Ver sitio"><ExternalLink size={19} /></Link>
             </div>
           </header>
-          <main className="adm-content" id="adm-content" tabIndex={-1} style={{ outline: 'none' }}>
+          <main className="adm-content" id="adm-content" tabIndex={-1}>
             <Outlet />
           </main>
         </div>

@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Tag, Trash2, X } from 'lucide-react';
 import { Atracciones, Uploads } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
-import { Alert, Field, Modal, Spinner, Switch, useConfirm } from '../components/ui';
+import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
 
+const MAX_HORAS = 720; // 30 días: mismo límite que la base (atraccion_duracion_valida)
+
 const EMPTY = {
   name: '', short_description: '', long_description: '', product_type: 'GUIDED_TOUR',
-  categories: [], badges: [], supported_languages: ['es'],
+  categories: [], supported_languages: ['es'],
   price: '', child_price: '', duration_hours: '', times: ['09:00'], capacity_per_slot: 20,
   free_cancellation: true, cancellation_hours: 24,
   city: '', address: '', meeting_point: '', latitude: '', longitude: '', operator: '',
@@ -18,7 +20,7 @@ const EMPTY = {
 
 const fromApi = (a) => ({
   name: a.name, short_description: a.short_description ?? '', long_description: a.long_description,
-  product_type: a.product_type, categories: a.categories, badges: a.badges ?? [], supported_languages: a.supported_languages,
+  product_type: a.product_type, categories: a.categories, supported_languages: a.supported_languages,
   price: a.price.total, child_price: a.child_price?.total ?? '', duration_hours: a.duration_hours, times: a.times, capacity_per_slot: a.capacity_per_slot,
   free_cancellation: a.free_cancellation, cancellation_hours: a.cancellation_hours,
   city: a.locations[0]?.city ?? '', address: a.locations[0]?.address ?? '', meeting_point: a.meeting_point ?? '',
@@ -46,7 +48,6 @@ const toApi = (f, destinos, operadores) => {
     not_includes: f.not_includes.map((x) => x.trim()).filter(Boolean),
     recommendations: f.recommendations.map((x) => x.trim()).filter(Boolean),
     categories: f.categories,
-    badges: f.badges,
     locations: [{ address: f.address.trim(), city: Number(f.city), country: 'ec', coordinates: { latitude: Number(f.latitude), longitude: Number(f.longitude) }, type: 'attraction' }],
     photos: f.photos.map((url) => ({ url })),
     supported_languages: f.supported_languages,
@@ -60,44 +61,50 @@ const toApi = (f, destinos, operadores) => {
   };
 };
 
-function ListEditor({ items, onChange, placeholder, addLabel }) {
+/** `name` da nombres únicos a cada fila: «Incluye, elemento 2», «Quitar "Transporte" de Incluye» (ACC-029). */
+function ListEditor({ items, onChange, placeholder, addLabel, name }) {
   return (
-    <div className="list-editor">
+    <div className="list-editor" role="group" aria-label={name}>
       {items.map((v, i) => (
         <div key={i} className="list-editor-item">
-          <input className="input" value={v} placeholder={placeholder} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`${placeholder} ${i + 1}`} />
-          <button type="button" className="icon-btn sm" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label="Quitar"><X size={18} /></button>
+          <input className="input" value={v} placeholder={placeholder} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`${name}, elemento ${i + 1}`} />
+          <button type="button" className="icon-btn sm" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label={`Quitar «${v || `elemento ${i + 1}`}» de ${name}`}><X size={18} aria-hidden="true" /></button>
         </div>
       ))}
-      <button type="button" className="btn btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => onChange([...items, ''])}><Plus size={16} /> {addLabel}</button>
+      <button type="button" className="btn btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => onChange([...items, ''])} aria-label={`${addLabel} en ${name}`}><Plus size={16} aria-hidden="true" /> {addLabel}</button>
     </div>
   );
 }
 
-function TimesInput({ value, onChange, error }) {
+function TimesInput({ value, onChange, error, errorId }) {
   const [t, setT] = useState('');
+  const [formato, setFormato] = useState('');
   const add = () => {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) return;
+    // Una hora mal escrita ya no se descarta en silencio (ACC-030)
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(t)) { setFormato('Escribe la hora en formato HH:MM (24 h), por ejemplo 08:30.'); return; }
+    setFormato('');
     if (!value.includes(t)) onChange([...value, t].sort());
     setT('');
   };
+  const describedBy = [formato && 'times-fmt-err', error && errorId].filter(Boolean).join(' ') || undefined;
   return (
     <div>
-      <div className="tag-input" aria-invalid={!!error}>
+      <div className="tag-input">
         {value.map((h) => (
           <span key={h} className="chip chip-remove" style={{ minHeight: 32 }}>
             <Clock size={13} aria-hidden="true" /> {h}
             <button type="button" onClick={() => onChange(value.filter((x) => x !== h))} aria-label={`Quitar horario ${h}`} style={{ background: 'none', border: 0, padding: 0, display: 'grid' }}><X size={14} /></button>
           </span>
         ))}
-        <input type="time" value={t} onChange={(e) => setT(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} aria-label="Nuevo horario" style={{ maxWidth: 130 }} />
+        <input type="time" value={t} onChange={(e) => { setT(e.target.value); setFormato(''); }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} aria-label="Nuevo horario de salida" aria-invalid={formato || error ? true : undefined} aria-describedby={describedBy} style={{ maxWidth: 130 }} />
         <button type="button" className="btn btn-sm" onClick={add} disabled={!t}>Agregar</button>
       </div>
+      {formato && <span id="times-fmt-err" className="error-text" role="alert">{formato}</span>}
     </div>
   );
 }
 
-export default function AtraccionForm({ atraccion, categorias, destinos, operadores, onClose, onSaved }) {
+export default function AtraccionForm({ atraccion, categorias, destinos, operadores, idiomas, onClose, onSaved }) {
   const toast = useToast();
   const confirm = useConfirm();
   const initial = useMemo(() => (atraccion ? fromApi(atraccion) : EMPTY), [atraccion]);
@@ -111,12 +118,8 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
   const set = (k) => (v) => setF((prev) => ({ ...prev, [k]: v?.target ? (v.target.type === 'checkbox' ? v.target.checked : v.target.value) : v }));
   const toggle = (k, v) => setF((prev) => ({ ...prev, [k]: prev[k].includes(v) ? prev[k].filter((x) => x !== v) : [...prev[k], v] }));
 
-  // Al elegir destino sugerimos coordenadas (el admin puede ajustarlas)
-  useEffect(() => {
-    const d = destinos.find((x) => String(x.codigo) === String(f.city));
-    if (d && (f.latitude === '' || f.longitude === '')) setF((p) => ({ ...p, latitude: d.latitud, longitude: d.longitud }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f.city]);
+  // Idiomas registrados en la base (tabla idioma); si aún no cargan, los conocidos
+  const listaIdiomas = idiomas?.length ? idiomas.map((i) => [i.codigo, LANG[i.codigo] ?? i.nombre]) : Object.entries(LANG);
 
   const close = async () => {
     if (dirty && !(await confirm({ title: '¿Descartar cambios?', message: 'Tienes cambios sin guardar en esta atracción. Si sales ahora se perderán.', confirmText: 'Descartar', danger: true }))) return;
@@ -151,6 +154,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     if (!(Number(f.price) > 0)) e.price = 'Ingresa un precio mayor a 0';
     if (f.child_price !== '' && Number(f.child_price) < 0) e.child_price = 'No puede ser negativo';
     if (!(Number(f.duration_hours) > 0)) e.duration_hours = 'Ingresa la duración en horas (ej. 4 o 2.5)';
+    else if (Number(f.duration_hours) > MAX_HORAS) e.duration_hours = `Máximo ${MAX_HORAS} horas (30 días)`;
     if (!f.times.length) e.times = 'Agrega al menos un horario de salida';
     if (!(Number(f.capacity_per_slot) >= 1)) e.capacity_per_slot = 'Mínimo 1 cupo';
     if (!f.categories.length) e.categories = 'Selecciona al menos una categoría';
@@ -203,6 +207,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
       }
     >
       <form id="atr-form" onSubmit={save} noValidate>
+        <RequiredLegend />
         {apiError && <div style={{ marginBottom: 16 }}><Alert tone="danger" title="No se pudo guardar">{apiError}</Alert></div>}
 
         <div className="form-section">
@@ -234,7 +239,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             <div className="field span-2">
               <span className="label">Idiomas del guía <span className="req">*</span></span>
               <div className="chip-row" role="group" aria-label="Idiomas">
-                {Object.entries(LANG).map(([k, l]) => (
+                {listaIdiomas.map(([k, l]) => (
                   <button key={k} type="button" className="chip" aria-pressed={f.supported_languages.includes(k)} onClick={() => toggle('supported_languages', k)}>{l}</button>
                 ))}
               </div>
@@ -252,8 +257,8 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             <Field label="Cupo por horario" required error={errors.capacity_per_slot}>{(p) => <input {...p} className="input" type="number" min="1" value={f.capacity_per_slot} onChange={set('capacity_per_slot')} />}</Field>
             <div className="field span-2">
               <span className="label">Horarios de salida <span className="req">*</span></span>
-              <TimesInput value={f.times} onChange={set('times')} error={errors.times} />
-              {errors.times && <span className="error-text" role="alert">{errors.times}</span>}
+              <TimesInput value={f.times} onChange={set('times')} error={errors.times} errorId="times-err" />
+              {errors.times && <span id="times-err" className="error-text" role="alert">{errors.times}</span>}
             </div>
             <div className="field">
               <Switch checked={f.free_cancellation} onChange={set('free_cancellation')} label="Permite cancelación gratuita" />
@@ -289,16 +294,16 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
           <div className="form-grid">
             <div className="field">
               <span className="label">Incluye <span className="req">*</span></span>
-              <ListEditor items={f.includes} onChange={set('includes')} placeholder="Ej. Transporte" addLabel="Agregar" />
+              <ListEditor name="Incluye" items={f.includes} onChange={set('includes')} placeholder="Ej. Transporte" addLabel="Agregar" />
               {errors.includes && <span className="error-text" role="alert">{errors.includes}</span>}
             </div>
             <div className="field">
               <span className="label">No incluye</span>
-              <ListEditor items={f.not_includes} onChange={set('not_includes')} placeholder="Ej. Propinas" addLabel="Agregar" />
+              <ListEditor name="No incluye" items={f.not_includes} onChange={set('not_includes')} placeholder="Ej. Propinas" addLabel="Agregar" />
             </div>
             <div className="field span-2">
               <span className="label">Recomendaciones "Antes de ir"</span>
-              <ListEditor items={f.recommendations} onChange={set('recommendations')} placeholder="Ej. Lleva ropa abrigada" addLabel="Agregar recomendación" />
+              <ListEditor name="Recomendaciones" items={f.recommendations} onChange={set('recommendations')} placeholder="Ej. Lleva ropa abrigada" addLabel="Agregar recomendación" />
             </div>
           </div>
         </div>
@@ -309,7 +314,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
           <div className="photo-list">
             {f.photos.map((url, i) => (
               <div key={url} className="photo-thumb">
-                <img src={url} alt={`Foto ${i + 1}`} onError={onImgError} />
+                <img src={url} alt={`Foto ${i + 1}`} loading="lazy" decoding="async" onError={onImgError} />
                 {i === 0 && <span className="badge badge-cta ph-main">Portada</span>}
                 <div className="ph-actions">
                   {i > 0 && <button type="button" onClick={() => movePhoto(i, -1)} aria-label="Mover a la izquierda"><ArrowLeft size={14} /></button>}
@@ -330,9 +335,10 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
           </div>
           <div className="field" style={{ marginTop: 14 }}>
             <span className="label">Insignias</span>
-            <div className="chip-row">
-              {Object.entries(BADGE).map(([k, l]) => <button key={k} type="button" className="chip" aria-pressed={f.badges.includes(k)} onClick={() => toggle('badges', k)}>{l}</button>)}
-            </div>
+            <p className="hint" style={{ margin: 0 }}>
+              Se calculan solas: <strong>{BADGE.best_seller}</strong> (20+ tickets en 60 días), <strong>{BADGE.likely_to_sell_out}</strong> (70 % de ocupación en las próximas 2 semanas) y <strong>{BADGE.new}</strong> (menos de 30 días y sin reseñas).
+              {atraccion?.badges?.length ? <> Ahora: {atraccion.badges.map((b) => BADGE[b] ?? b).join(', ')}.</> : ' Ahora no tiene ninguna.'}
+            </p>
           </div>
         </div>
       </form>

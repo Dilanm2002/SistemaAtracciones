@@ -23,7 +23,7 @@
   --text-2: #3d4d4b;
   --muted: #52615f; /* 5.9:1 sobre blanco */
   --border: #e2dace;
-  --border-strong: #c9bfb0;
+  --border-strong: #968a78; /* ≥3:1 sobre blanco y sobre --bg (ACC-012) */
 
   /* Estados (siempre con ícono + texto, nunca solo color) */
   --success: #15803d;
@@ -53,7 +53,7 @@
   --shadow-sm: 0 1px 2px rgba(28, 43, 42, 0.06), 0 1px 3px rgba(28, 43, 42, 0.08);
   --shadow: 0 4px 12px rgba(28, 43, 42, 0.08), 0 2px 4px rgba(28, 43, 42, 0.05);
   --shadow-lg: 0 18px 40px rgba(28, 43, 42, 0.16);
-  --ring: 0 0 0 3px rgba(20, 184, 166, 0.45);
+  --ring: 0 0 0 3px #0f766e; /* 5.47:1 sobre blanco (ACC-001) */
 
   /* Escala z-index */
   --z-header: 30;
@@ -114,10 +114,11 @@ button { cursor: pointer; }
 button:disabled { cursor: not-allowed; }
 
 :focus-visible {
-  outline: none;
-  box-shadow: var(--ring);
-  border-radius: 6px;
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
 }
+/* El foco programático de los contenedores (main, contenido del panel) no muestra anillo */
+[tabindex='-1']:focus:not(:focus-visible) { outline: none; }
 
 ::selection { background: var(--primary-100); }
 

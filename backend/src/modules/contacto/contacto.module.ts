@@ -1,25 +1,14 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Injectable, Module, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Injectable, Module, NotFoundException, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiProperty, ApiPropertyOptional, ApiTags } from '@nestjs/swagger';
-import { InjectRepository, TypeOrmModule } from '@nestjs/typeorm';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, Repository } from 'typeorm';
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { DbService } from '../../common/db/db.service';
+import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 import { Scopes } from '../../common/auth/auth.decorators';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SCOPES } from '../../common/auth/scopes';
-
-const trim = ({ value }) => (typeof value === 'string' ? value.trim() : value);
-
-@Entity('mensajes')
-export class Mensaje {
-  @PrimaryGeneratedColumn('uuid') id: string;
-  @Column({ type: 'varchar', length: 120 }) nombre: string;
-  @Column({ type: 'varchar', length: 160 }) email: string;
-  @Column({ type: 'varchar', length: 30 }) asunto: string;
-  @Column({ type: 'varchar', length: 2000 }) mensaje: string;
-  @Column({ type: 'boolean', default: false }) leido: boolean;
-  @CreateDateColumn({ type: 'timestamptz' }) createdAt: Date;
-}
+import { trim } from '../../common/utils/transform';
 
 export const ASUNTOS = ['RESERVA', 'CANCELACION', 'PROVEEDOR', 'SUGERENCIA', 'OTRO'] as const;
 
@@ -34,6 +23,8 @@ export class CreateMensajeDto {
   @ApiProperty({ example: 'ana@correo.com' })
   @Transform(trim)
   @IsEmail({}, { message: 'email no tiene un formato válido' })
+  @Matches(/^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, { message: 'email no tiene un formato válido' })
+  @MaxLength(160)
   email: string;
 
   @ApiProperty({ enum: ASUNTOS })
@@ -64,37 +55,44 @@ export class MarcarLeidoDto {
   @ApiProperty() @IsBoolean() leido: boolean;
 }
 
+const SELECT_MENSAJE = `SELECT men_id::text AS id, men_nombre AS nombre, men_correo AS email, men_asunto AS asunto,
+                               men_cuerpo AS mensaje, men_leido AS leido, men_creado_en AS "createdAt" FROM mensaje_contacto`;
+
+/** Tabla mensaje_contacto. */
 @Injectable()
 export class ContactoService {
-  constructor(@InjectRepository(Mensaje) private readonly repo: Repository<Mensaje>) {}
+  constructor(private readonly db: DbService) {}
 
   async create(dto: CreateMensajeDto) {
     if (dto.website) return { ok: true }; // bot detectado: fingimos éxito sin guardar
-    const { website, ...data } = dto;
-    await this.repo.save(this.repo.create(data));
+    await this.db.query('INSERT INTO mensaje_contacto (men_nombre, men_correo, men_asunto, men_cuerpo) VALUES ($1, $2, $3, $4)', [
+      dto.nombre,
+      dto.email,
+      dto.asunto,
+      dto.mensaje,
+    ]);
     return { ok: true };
   }
 
   list(q: MensajesQueryDto) {
-    const where = q.status === 'unread' ? { leido: false } : q.status === 'read' ? { leido: true } : {};
-    return this.repo.find({ where, order: { createdAt: 'DESC' }, take: 300 });
+    const where = q.status === 'unread' ? 'WHERE NOT men_leido' : q.status === 'read' ? 'WHERE men_leido' : '';
+    return this.db.query(`${SELECT_MENSAJE} ${where} ORDER BY men_creado_en DESC LIMIT 300`);
   }
 
   async stats() {
-    return { unread: await this.repo.count({ where: { leido: false } }) };
+    const r = await this.db.one<{ n: number }>('SELECT COUNT(*)::int AS n FROM mensaje_contacto WHERE NOT men_leido');
+    return { unread: r?.n ?? 0 };
   }
 
   async marcar(id: string, leido: boolean) {
-    const m = await this.repo.findOne({ where: { id } });
-    if (!m) throw new NotFoundException('Mensaje no encontrado.');
-    m.leido = leido;
-    return this.repo.save(m);
+    const r = await this.db.query('UPDATE mensaje_contacto SET men_leido = $2 WHERE men_id = $1 RETURNING men_id', [id, leido]);
+    if (!r.length) throw new NotFoundException('Mensaje no encontrado.');
+    return this.db.one(`${SELECT_MENSAJE} WHERE men_id = $1`, [id]);
   }
 
   async remove(id: string) {
-    const m = await this.repo.findOne({ where: { id } });
-    if (!m) throw new NotFoundException('Mensaje no encontrado.');
-    await this.repo.remove(m);
+    const r = await this.db.query('DELETE FROM mensaje_contacto WHERE men_id = $1 RETURNING men_id', [id]);
+    if (!r.length) throw new NotFoundException('Mensaje no encontrado.');
   }
 }
 
@@ -104,6 +102,7 @@ export class ContactoController {
   constructor(private readonly service: ContactoService) {}
 
   @Post()
+  @Throttle({ default: { limit: 5, ttl: 600_000 } }) // 5 mensajes cada 10 minutos por IP
   @ApiOperation({ summary: 'Enviar un mensaje desde el formulario de contacto' })
   create(@Body() dto: CreateMensajeDto) {
     return this.service.create(dto);
@@ -129,7 +128,7 @@ export class ContactoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
-  marcar(@Param('id', ParseUUIDPipe) id: string, @Body() dto: MarcarLeidoDto) {
+  marcar(@Param('id', ParseIdPipe) id: string, @Body() dto: MarcarLeidoDto) {
     return this.service.marcar(id, dto.leido);
   }
 
@@ -138,16 +137,14 @@ export class ContactoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
-  remove(@Param('id', ParseUUIDPipe) id: string) {
+  remove(@Param('id', ParseIdPipe) id: string) {
     return this.service.remove(id);
   }
 }
 
 /** Dominio de Contacto / Atención al cliente (candidato a microservicio propio). */
 @Module({
-  imports: [TypeOrmModule.forFeature([Mensaje])],
   controllers: [ContactoController],
   providers: [ContactoService],
-  exports: [TypeOrmModule],
 })
 export class ContactoModule {}

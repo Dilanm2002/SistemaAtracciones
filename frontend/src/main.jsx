@@ -9,7 +9,7 @@ import { ToastProvider } from './context/ToastContext';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/public.css';
-import './styles/admin.css';
+// admin.css se importa desde AdminLayout (chunk diferido del panel) — WEB-004
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

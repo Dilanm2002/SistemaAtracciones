@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsDateString, IsEnum, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ProductType } from './create-atraccion.dto';
 
@@ -62,17 +62,20 @@ export class FiltersDto {
   @ApiPropertyOptional({ description: 'Texto libre (nombre, descripción, ciudad)', example: 'volcán' })
   @IsOptional()
   @IsString()
+  @MaxLength(120, { message: 'filters.query no puede superar 120 caracteres' })
   query?: string;
 
   @ApiPropertyOptional({ description: 'Slugs de categorías', example: ['aventura'] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @IsString({ each: true })
   categories?: string[];
 
   @ApiPropertyOptional({ description: 'Regiones', example: ['SIERRA'] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @IsIn(['SIERRA', 'COSTA', 'AMAZONIA', 'GALAPAGOS'], { each: true })
   regions?: string[];
 
@@ -96,6 +99,7 @@ export class FiltersDto {
   @ApiPropertyOptional({ enum: ProductType, isArray: true })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @IsEnum(ProductType, { each: true })
   product_types?: ProductType[];
 }
@@ -117,12 +121,14 @@ export class SearchAtraccionesDto {
   @ApiProperty({ description: 'IDs de ciudades/destinos', example: [1], required: false })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @IsInt({ each: true })
   cities?: number[];
 
   @ApiProperty({ description: 'Códigos de países ISO', example: ['ec'], required: false })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @IsString({ each: true })
   countries?: string[];
 
@@ -141,6 +147,7 @@ export class SearchAtraccionesDto {
   @ApiProperty({ description: 'Token opaco de paginación', example: 'eyJvZmZzZXQiOjEyfQ==', required: false })
   @IsString()
   @IsOptional()
+  @MaxLength(200)
   next_page?: string;
 
   @ApiProperty({ description: 'Cantidad de filas a retornar', example: 12, required: false })

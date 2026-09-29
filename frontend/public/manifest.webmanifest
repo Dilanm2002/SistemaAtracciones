@@ -1,0 +1,12 @@
+{
+  "name": "Descubre EC · Tours y experiencias en Ecuador",
+  "short_name": "Descubre EC",
+  "description": "Reserva tours, entradas y experiencias en Galápagos, los Andes, la Amazonía y la Costa.",
+  "lang": "es-EC",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FAF7F2",
+  "theme_color": "#0F766E",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

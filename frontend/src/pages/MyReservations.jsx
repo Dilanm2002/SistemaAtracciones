@@ -118,9 +118,9 @@ export default function MyReservations() {
         <h1>Mis reservas</h1>
         <p>Consulta, añade a tu calendario o cancela tus experiencias.</p>
       </div>
-      <div className="tabs" role="tablist" aria-label="Filtrar reservas" style={{ marginBottom: 20 }}>
+      <div className="tabs" role="group" aria-label="Filtrar reservas" style={{ marginBottom: 20 }}>
         {TABS.map(([k, l]) => (
-          <button key={k} className="tab" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>
+          <button key={k} type="button" className="tab" aria-pressed={tab === k} onClick={() => setTab(k)}>
             {l} <span className="count">{groups[k].length}</span>
           </button>
         ))}
@@ -142,13 +142,13 @@ export default function MyReservations() {
         <div className="res-list">
           {list.map((r) => (
             <article key={r.reservation_id} className="card res-card">
-              <img src={r.attraction.photo} alt="" onError={onImgError} />
+              <img src={r.attraction.photo} alt="" loading="lazy" decoding="async" onError={onImgError} />
               <div>
                 <div className="row" style={{ gap: 8 }}>
                   <StatusBadge status={r.status} />
                   <span className="badge">{r.code}</span>
                 </div>
-                <h3><Link to={`/atraccion/${r.attraction.id}`}>{r.attraction.name}</Link></h3>
+                <h2 className="res-title"><Link to={`/atraccion/${r.attraction.id}`}>{r.attraction.name}</Link></h2>
                 <div className="res-meta">
                   <span><CalendarDays size={15} aria-hidden="true" /> {fmtDate(r.date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>
                   <span><Clock size={15} aria-hidden="true" /> {r.time}</span>

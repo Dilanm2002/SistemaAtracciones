@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BaseResponseDto } from '../../../common/dto/base-response.dto';
+import { Link } from '../../../common/utils/hateoas';
 import { PriceDto, LocationDto, PhotoDto, RatingDto, OperatorDto, UrlDto } from './nested-types.dto';
 import { ProductType } from './create-atraccion.dto';
 
@@ -26,8 +27,8 @@ export class AtraccionResponseDto extends BaseResponseDto {
   @ApiProperty({ description: 'Precio por adulto', type: PriceDto })
   price: PriceDto;
 
-  @ApiProperty({ description: 'Empresa Operadora', type: OperatorDto })
-  operator: OperatorDto;
+  @ApiProperty({ description: 'Empresa Operadora (null si no tiene asignada)', type: OperatorDto, nullable: true })
+  operator: OperatorDto | null;
 
   @ApiProperty({ description: 'Tipo de producto', enum: ProductType, example: ProductType.GUIDED_TOUR })
   product_type: ProductType;
@@ -38,7 +39,7 @@ export class AtraccionResponseDto extends BaseResponseDto {
   @ApiProperty({ description: 'Slugs de categorías', example: ['naturaleza'] })
   categories: string[];
 
-  @ApiProperty({ description: 'Insignias comerciales', example: ['best_seller'] })
+  @ApiProperty({ description: 'Insignias calculadas a partir de ventas, ocupación y antigüedad', example: ['best_seller'] })
   badges: string[];
 
   @ApiProperty({ description: 'Ubicaciones asociadas a la atracción', type: [LocationDto] })
@@ -60,6 +61,8 @@ export class AtraccionResponseDto extends BaseResponseDto {
   url?: UrlDto;
 
   // ── Extensiones ───────────────────────────────────────────────────────
+  @ApiPropertyOptional({ example: 'tour-parque-nacional-cotopaxi' }) slug?: string;
+  @ApiPropertyOptional({ enum: ['BORRADOR', 'PUBLICADA', 'INACTIVA'] }) status?: string;
   @ApiPropertyOptional() short_description?: string;
   @ApiPropertyOptional({ type: PriceDto }) child_price?: PriceDto;
   @ApiPropertyOptional() duration_hours?: number;
@@ -81,5 +84,5 @@ export class AtraccionResponseDto extends BaseResponseDto {
       reserve: { href: '/api/v1/atracciones/123e4567-e89b-12d3-a456-426614174000/reservations', method: 'POST' },
     },
   })
-  _links?: any;
+  _links?: Record<string, Link>;
 }

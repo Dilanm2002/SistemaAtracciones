@@ -26,7 +26,7 @@ function Lightbox({ photos, index, onClose, onIndex }) {
 
   return (
     <div className="lightbox" role="dialog" aria-modal="true" aria-label="Galería de fotos" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <img src={photos[index].url} alt={`Foto ${index + 1} de ${photos.length}`} />
+      <img src={photos[index].url} alt={`Foto ${index + 1} de ${photos.length}`} decoding="async" />
       <button className="icon-btn lb-close" onClick={onClose} aria-label="Cerrar galería" autoFocus><X size={24} /></button>
       {photos.length > 1 && (
         <>
@@ -61,7 +61,7 @@ export default function AttractionDetail() {
       })
       .catch(setError);
   };
-  useEffect(() => { setA(null); load(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => { setA(null); load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   usePageTitle(a?.name);
   useEffect(() => {
@@ -138,7 +138,7 @@ export default function AttractionDetail() {
         <div className={`gallery ${photos.length === 1 ? 'single' : photos.length === 2 ? 'double' : ''}`}>
           {photos.slice(0, 3).map((p, i) => (
             <button key={p.url} onClick={() => setLightbox(i)} aria-label={`Ver foto ${i + 1} de ${photos.length} en grande`}>
-              <img src={p.url} alt={i === 0 ? a.name : ''} onError={onImgError} />
+              <img src={p.url} alt={i === 0 ? a.name : ''} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" {...(i === 0 ? { fetchpriority: 'high' } : {})} onError={onImgError} />
               {i === 0 && photos.length > 1 && <span className="btn btn-sm more"><Images size={16} /> Ver {photos.length} fotos</span>}
             </button>
           ))}

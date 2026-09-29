@@ -1,11 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsPositive, Min, IsLatitude, IsLongitude, ValidateNested, IsOptional, IsInt, Max, Length } from 'class-validator';
+import { IsString, IsNumber, IsPositive, Min, IsLatitude, IsLongitude, ValidateNested, IsOptional, IsInt, Max, Length, Matches, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PriceDto {
   @ApiProperty({ description: 'Código de moneda ISO 4217', example: 'USD' })
   @IsString()
   @Length(3, 3)
+  @Matches(/^[A-Z]{3}$/, { message: 'currency debe ser un código ISO 4217 en mayúsculas (ej. USD)' })
   currency: string;
 
   @ApiProperty({ description: 'Monto total', example: 45.0 })
@@ -15,9 +16,17 @@ export class PriceDto {
 }
 
 export class PhotoDto {
-  @ApiProperty({ description: 'URL de la foto', example: 'http://localhost:3000/img/cotopaxi.jpg' })
+  @ApiProperty({ description: 'URL de la foto (http/https o ruta propia /img/… /uploads/…)', example: 'http://localhost:3000/img/cotopaxi.jpg' })
   @IsString()
+  @MaxLength(500)
+  @Matches(/^(https?:\/\/[^\s"'<>]+|\/(img|uploads)\/[\w.-]+)$/i, { message: 'photos[].url debe ser una URL http(s) o una ruta /img/… o /uploads/…' })
   url: string;
+
+  @ApiProperty({ description: 'Texto alternativo (WCAG 1.1.1)', required: false, example: 'Volcán Cotopaxi al amanecer' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  alt?: string;
 }
 
 export class CoordinatesDto {

@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, Eye, EyeOff, Mail, MailOpen, MessageSquareText, Plus, Reply, Search, Star, Trash2, UserCog, Users } from 'lucide-react';
-import { Mensajes, Reportes, Resenas, Usuarios } from '../api/client';
-import { EmptyState, ErrorState, Field, Modal, Spinner, Stars, Switch, useAsync, useConfirm, useDebounce } from '../components/ui';
+import { Mensajes, Operadores, Reportes, Resenas, Usuarios } from '../api/client';
+import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, Stars, Switch, useAsync, useConfirm, useDebounce } from '../components/ui';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateTime, fmtMoney, fmtRelative, initials } from '../utils/format';
@@ -28,9 +28,10 @@ export function ClientesAdmin() {
         <div className="input-icon"><Search size={18} aria-hidden="true" /><input className="input" type="search" placeholder="Nombre o correo" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar clientes" data-shortcut-search /></div>
       </div>
       {error ? <ErrorState error={error} onRetry={reload} /> : loading ? <div className="skeleton" style={{ height: 300 }} /> : rows.length === 0 ? <EmptyState icon={Users} title="Sin clientes que coincidan" /> : (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
           <table className="table">
-            <thead><tr><th>Cliente</th><th>Contacto</th><th className="num">Reservas</th><th className="num">Total gastado</th><th>Última reserva</th><th className="num">Acciones</th></tr></thead>
+<caption className="sr-only">Clientes y su historial de compras</caption>
+            <thead><tr><th scope="col">Cliente</th><th scope="col">Contacto</th><th scope="col" className="num">Reservas</th><th scope="col" className="num">Total gastado</th><th scope="col">Última reserva</th><th scope="col" className="num">Acciones</th></tr></thead>
             <tbody>
               {rows.map((c) => (
                 <tr key={c.user_id}>
@@ -53,21 +54,38 @@ export function ClientesAdmin() {
 // ── Usuarios y roles ─────────────────────────────────────────────────────
 function UsuarioModal({ item, onClose, onSaved }) {
   const toast = useToast();
-  const [f, setF] = useState(item ? { nombre: item.nombre, email: item.email, telefono: item.telefono ?? '', rol: item.rol, password: '' } : { nombre: '', email: '', telefono: '', rol: 'OPERADOR', password: '' });
+  const [f, setF] = useState(
+    item
+      ? { nombre: item.nombres ?? item.nombre, apellido: item.apellidos ?? '', email: item.email, telefono: item.telefono ?? '', rol: item.rol, password: '', operadorCodigo: item.operadorCodigo ?? '' }
+      : { nombre: '', apellido: '', email: '', telefono: '', rol: 'OPERADOR', password: '', operadorCodigo: '' },
+  );
   const [err, setErr] = useState({});
   const [saving, setSaving] = useState(false);
+  // Un OPERADOR pertenece a una empresa: solo ve y gestiona las reservas de sus atracciones
+  const [operadores, setOperadores] = useState([]);
+  useEffect(() => { Operadores.list(true).then(setOperadores).catch(() => setOperadores([])); }, []);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const save = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (f.nombre.trim().length < 3) errs.nombre = 'Mínimo 3 caracteres';
+    if (f.nombre.trim().length < 2) errs.nombre = 'Mínimo 2 caracteres';
+    if (f.apellido.trim().length < 2) errs.apellido = 'Mínimo 2 caracteres';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email)) errs.email = 'Correo no válido';
     if ((!item || f.password) && (f.password.length < 8 || !/[A-Za-z]/.test(f.password) || !/\d/.test(f.password))) errs.password = 'Mínimo 8 caracteres con letras y números';
     if (f.telefono && !/^\+?\d{7,15}$/.test(f.telefono)) errs.telefono = '7 a 15 dígitos';
+    if (f.rol === 'OPERADOR' && !f.operadorCodigo) errs.operadorCodigo = 'Elige la empresa operadora';
     setErr(errs);
     if (Object.keys(errs).length) return;
     setSaving(true);
-    const body = { nombre: f.nombre.trim(), email: f.email.trim().toLowerCase(), rol: f.rol, ...(f.telefono ? { telefono: f.telefono } : {}), ...(f.password ? { password: f.password } : {}) };
+    const body = {
+      nombre: f.nombre.trim(),
+      apellido: f.apellido.trim(),
+      email: f.email.trim().toLowerCase(),
+      rol: f.rol,
+      operadorCodigo: f.rol === 'OPERADOR' ? Number(f.operadorCodigo) : null,
+      ...(f.telefono ? { telefono: f.telefono } : {}),
+      ...(f.password ? { password: f.password } : {}),
+    };
     try {
       const u = item ? await Usuarios.update(item.id, body) : await Usuarios.create(body);
       toast(item ? 'Usuario actualizado' : `Usuario ${u.email} creado`, 'success');
@@ -77,13 +95,27 @@ function UsuarioModal({ item, onClose, onSaved }) {
   return (
     <Modal open onClose={onClose} title={item ? 'Editar usuario' : 'Nuevo usuario'} footer={<><button className="btn" onClick={onClose}>Cancelar</button><button className="btn btn-primary" form="usr-form" disabled={saving}>{saving && <Spinner />} Guardar</button></>}>
       <form id="usr-form" onSubmit={save} className="stack" noValidate>
-        {err.api && <p className="error-text">{err.api}</p>}
-        <Field label="Nombre" required error={err.nombre}>{(p) => <input {...p} className="input" value={f.nombre} onChange={set('nombre')} />}</Field>
+        <RequiredLegend />
+        {err.api && <Alert tone="danger">{err.api}</Alert>}
+        <div className="form-grid">
+          <Field label="Nombres" required error={err.nombre}>{(p) => <input {...p} className="input" value={f.nombre} onChange={set('nombre')} />}</Field>
+          <Field label="Apellidos" required error={err.apellido}>{(p) => <input {...p} className="input" value={f.apellido} onChange={set('apellido')} />}</Field>
+        </div>
         <Field label="Correo" required error={err.email}>{(p) => <input {...p} className="input" type="email" value={f.email} onChange={set('email')} />}</Field>
         <Field label="Teléfono" error={err.telefono}>{(p) => <input {...p} className="input" type="tel" value={f.telefono} onChange={set('telefono')} />}</Field>
         <Field label="Rol" required hint={f.rol === 'ADMIN' ? 'Acceso total al panel' : f.rol === 'OPERADOR' ? 'Solo Dashboard, Reservas y Disponibilidad' : 'Solo puede reservar en el sitio'}>
           {(p) => <select {...p} className="select" value={f.rol} onChange={set('rol')}>{Object.entries(ROL_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
         </Field>
+        {f.rol === 'OPERADOR' && (
+          <Field label="Empresa operadora" required error={err.operadorCodigo} hint="Solo verá y gestionará las reservas de las atracciones de esta empresa">
+            {(p) => (
+              <select {...p} className="select" value={f.operadorCodigo} onChange={set('operadorCodigo')}>
+                <option value="">Selecciona…</option>
+                {operadores.map((o) => <option key={o.codigo} value={o.codigo}>{o.nombre} (código {o.codigo})</option>)}
+              </select>
+            )}
+          </Field>
+        )}
         <Field label={item ? 'Nueva contraseña (opcional)' : 'Contraseña inicial'} required={!item} error={err.password} hint="Compártela de forma segura; el usuario podrá cambiarla">
           {(p) => <input {...p} className="input" type="text" autoComplete="new-password" value={f.password} onChange={set('password')} />}
         </Field>
@@ -121,16 +153,17 @@ export function UsuariosAdmin() {
         </div>
       </div>
       {error ? <ErrorState error={error} onRetry={reload} /> : loading ? <div className="skeleton" style={{ height: 300 }} /> : data.length === 0 ? <EmptyState icon={UserCog} title="Sin usuarios" /> : (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
           <table className="table">
-            <thead><tr><th>Usuario</th><th>Rol</th><th>Último acceso</th><th>Activo</th><th className="num">Acciones</th></tr></thead>
+<caption className="sr-only">Usuarios del sistema</caption>
+            <thead><tr><th scope="col">Usuario</th><th scope="col">Rol</th><th scope="col">Último acceso</th><th scope="col">Activo</th><th scope="col" className="num">Acciones</th></tr></thead>
             <tbody>
               {data.map((u) => (
                 <tr key={u.id}>
                   <td><strong>{u.nombre}</strong>{u.id === user.sub || u.email === user.email ? <span className="badge" style={{ marginLeft: 6 }}>Tú</span> : null}<div className="muted tiny">{u.email}</div></td>
                   <td><span className={`badge ${u.rol === 'ADMIN' ? 'badge-cta' : u.rol === 'OPERADOR' ? 'badge-info' : ''}`}>{ROL_LABEL[u.rol]}</span></td>
                   <td className="small">{u.ultimoAcceso ? fmtDateTime(u.ultimoAcceso) : 'Nunca'}</td>
-                  <td><Switch checked={u.activo} onChange={() => toggleActive(u)} disabled={u.email === user.email} label={<span className="sr-only">Activo</span>} /></td>
+                  <td><Switch checked={u.activo} onChange={() => toggleActive(u)} disabled={u.email === user.email} ariaLabel={`Usuario ${u.nombre} activo`} /></td>
                   <td><div className="actions"><button className="btn btn-sm" onClick={() => setEditing(u)}>Editar</button></div></td>
                 </tr>
               ))}
@@ -180,13 +213,13 @@ export function ResenasAdmin() {
         <>
           <div className="card">
             {data.data.map((r) => (
-              <div key={r.id} className="msg" style={{ opacity: r.visible ? 1 : 0.65 }}>
+              <div key={r.id} className={`msg ${r.visible ? '' : 'msg-hidden'}`}>
                 <div className="msg-head">
                   <Stars value={r.rating} size={15} />
                   <strong>{r.author}</strong>
-                  <span className="muted small">sobre <Link to={`/atraccion/${r.attraction?.id}`} target="_blank">{r.attraction?.name}</Link></span>
+                  <span className="muted small">sobre <Link to={`/atraccion/${r.attraction?.id}`} target="_blank" rel="noopener noreferrer">{r.attraction?.name}</Link></span>
                   <span className="muted tiny" style={{ marginLeft: 'auto' }}>{fmtRelative(r.created_at)}</span>
-                  {!r.visible && <span className="badge badge-warning"><EyeOff size={12} /> Oculta</span>}
+                  {!r.visible && <span className="badge badge-warning"><EyeOff size={12} aria-hidden="true" /> Oculta</span>}
                 </div>
                 <p className="msg-body">{r.comment}</p>
                 <div className="row" style={{ gap: 8 }}>

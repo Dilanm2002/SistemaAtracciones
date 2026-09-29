@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (lint · test · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit -p tsconfig.json
+      - run: npm test -- --ci
+      - run: npm run build
+      - name: npm audit (dependencias de producción)
+        run: npm audit --omit=dev --audit-level=critical
+
+  database:
+    name: Modelo relacional (migraciones · seed · 02_verificacion.sql)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: descubre_ec
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/descubre_ec
+      JWT_SECRET: ci-solo-para-pruebas-0123456789abcdefghijklmnop
+      NODE_ENV: test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: backend/.nvmrc
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Aplicar migraciones (database/01_esquema.sql + seguridad)
+        run: node dist/database/run-migrations.js
+      - name: Cargar datos de demostración
+        run: node dist/seed/run-seed.js
+      - name: Verificar el modelo con database/02_verificacion.sql
+        run: npm run db:verify
+      - name: Validar el contrato OpenAPI
+        run: npx --yes @redocly/cli@latest lint contracts/atracciones-openapi.yaml
+
+  frontend:
+    name: Frontend (lint · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+        env:
+          VITE_API_URL: https://sistemaatracciones-backend.vercel.app/api/v1
+      - name: npm audit (dependencias de producción)
+        run: npm audit --omit=dev --audit-level=critical
+
+  secrets:
+    name: Escaneo de secretos (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

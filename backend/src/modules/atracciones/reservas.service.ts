@@ -1,11 +1,12 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { randomInt } from 'crypto';
-import { Brackets, DataSource, Repository } from 'typeorm';
-import { AuthUser, SCOPES } from '../../common/auth/scopes';
+import { AuthUser, esAdmin, SCOPES } from '../../common/auth/scopes';
+import { BitacoraService } from '../../common/db/bitacora.service';
+import { CatalogosService } from '../../common/db/catalogos.service';
+import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
 import { IdempotencyService } from '../../common/idempotency/idempotency.service';
+import { escapeLike } from '../../common/utils/sql';
 import { AtraccionMapper } from './atraccion.mapper';
-import { AtraccionesService } from './atracciones.service';
+import { cancelarCompra, confirmarCompra, registrarCompra } from './compras';
 import {
   CancelReservationRequestDto,
   PaymentMethod,
@@ -14,62 +15,77 @@ import {
   ReservationsQueryDto,
   ReservationStatus,
 } from './dto/reservation.dto';
-import { Atraccion } from './entities/atraccion.entity';
-import { FechaBloqueada } from './entities/fecha-bloqueada.entity';
-import { MetodoPago, Reserva } from './entities/reserva.entity';
+import { ESTADO_A_STATUS, FilaReserva, SELECT_RESERVA, sqlTarifa, STATUS_A_ESTADOS } from './modelo';
 import { horaActualEc, hoyEc, sumarDias } from './utils/fechas';
 
-const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I para evitar confusiones al dictarlo
+const LIMITE_LISTADO = 500;
+
+type Alcance = { tipo: 'todas' } | { tipo: 'operador'; codigo: number } | { tipo: 'propias' };
 
 @Injectable()
 export class ReservasService {
   constructor(
-    @InjectRepository(Reserva) private readonly reservas: Repository<Reserva>,
-    private readonly dataSource: DataSource,
-    private readonly atraccionesService: AtraccionesService,
+    private readonly db: DbService,
+    private readonly catalogos: CatalogosService,
     private readonly idempotency: IdempotencyService,
+    private readonly bitacora: BitacoraService,
     private readonly mapper: AtraccionMapper,
   ) {}
 
-  private generarCodigo(): string {
-    return 'DEC-' + Array.from({ length: 6 }, () => ALFABETO[randomInt(ALFABETO.length)]).join('');
+  /**
+   * Alcance de gestión sobre reservas ajenas (auditoría SEG-004):
+   * ADMIN todas; OPERADOR solo las de atracciones de SU empresa (operador_usuario); resto, las propias.
+   */
+  private alcance(user: AuthUser): Alcance {
+    if (esAdmin(user)) return { tipo: 'todas' };
+    if (user.scope.includes(SCOPES.MANAGE) && user.operador != null) return { tipo: 'operador', codigo: user.operador };
+    return { tipo: 'propias' };
   }
 
-  private puedeGestionar(user: AuthUser) {
-    return user.scope?.includes(SCOPES.MANAGE);
+  private puedeGestionar(user: AuthUser, r: FilaReserva): boolean {
+    const a = this.alcance(user);
+    return a.tipo === 'todas' || (a.tipo === 'operador' && r.ope_codigo === a.codigo);
+  }
+
+  private async fila(uuid: string, sql: Sql = this.db): Promise<FilaReserva | null> {
+    return sql.one<FilaReserva>(`${SELECT_RESERVA} WHERE r.res_uuid = $1`, [uuid]);
   }
 
   // ── Crear reserva ─────────────────────────────────────────────────────
-  reserve(atraccionId: string, dto: ReservationRequestDto, key: string, user: AuthUser): Promise<ReservationResponseDto> {
-    return this.idempotency.execute(key, `reserve:${atraccionId}`, { dto, user: user.sub }, () =>
-      this.dataSource.transaction(async (manager) => {
-        // Bloqueo pesimista sobre la atracción: serializa reservas concurrentes del mismo tour
-        const a = await manager
-          .getRepository(Atraccion)
-          .createQueryBuilder('a')
-          .setLock('pessimistic_write')
-          .where('a.id = :id', { id: atraccionId })
-          .andWhere('a.estaActivo = true')
-          .getOne();
+  reserve(atrUuid: string, dto: ReservationRequestDto, key: string, user: AuthUser): Promise<ReservationResponseDto> {
+    return this.idempotency.execute(key, `reserve:${atrUuid}`, user.sub, dto, async () => {
+      await this.catalogos.precargar();
+      const uuid = await this.db.tx(async (tx) => {
+        // 1) La atracción no puede cambiar de precio ni desactivarse mientras se reserva (FOR SHARE)
+        const a = await tx.one<{ atr_id: string; nombre: string; moneda: string; adulto: number | null; nino: number | null }>(
+          `SELECT a.atr_id::text, a.atr_nombre AS nombre, a.atr_moneda AS moneda,
+                  ${sqlTarifa('ADULTO')} AS adulto, ${sqlTarifa('NINO')} AS nino
+             FROM atraccion a WHERE a.atr_uuid = $1 AND a.atr_eliminado_en IS NULL AND a.atr_estado = 'PUBLICADA' FOR SHARE`,
+          [atrUuid],
+        );
         if (!a) throw new NotFoundException('La atracción no existe o ya no está disponible.');
-        const full = await this.atraccionesService.getEntity(atraccionId);
+        if (a.adulto == null) throw new ConflictException('Esta atracción no tiene una tarifa vigente. Intenta más tarde.');
 
         const fecha = dto.date.slice(0, 10);
         const hoy = hoyEc();
         if (fecha < hoy) throw new BadRequestException('No puedes reservar una fecha que ya pasó.');
         if (fecha > sumarDias(hoy, 365)) throw new BadRequestException('Solo se aceptan reservas con hasta un año de anticipación.');
-
-        const bloqueo = await manager.getRepository(FechaBloqueada).findOne({ where: { atraccion: { id: a.id }, fecha } });
+        const bloqueo = await tx.one<{ motivo: string }>('SELECT fb_motivo AS motivo FROM fecha_bloqueada WHERE atr_id = $1 AND fb_fecha = $2', [a.atr_id, fecha]);
         if (bloqueo) throw new ConflictException(`La atracción no opera el ${fecha}: ${bloqueo.motivo}`);
 
+        const horarios = await tx.query<{ hor_id: string; hora: string; cupo: number }>(
+          `SELECT hor_id::text, to_char(hor_hora, 'HH24:MI') AS hora, hor_cupo AS cupo FROM horario
+            WHERE atr_id = $1 AND hor_activo ORDER BY hor_hora`,
+          [a.atr_id],
+        );
+        const lista = horarios.map((h) => h.hora).join(', ');
         let hora = dto.time;
         if (!hora) {
-          if (a.horarios.length !== 1) throw new BadRequestException(`Selecciona un horario: ${a.horarios.join(', ')}`);
-          hora = a.horarios[0];
+          if (horarios.length !== 1) throw new BadRequestException(`Selecciona un horario: ${lista}`);
+          hora = horarios[0].hora;
         }
-        if (!a.horarios.includes(hora)) {
-          throw new BadRequestException(`El horario ${hora} no existe. Horarios disponibles: ${a.horarios.join(', ')}`);
-        }
+        const horario = horarios.find((h) => h.hora === hora);
+        if (!horario) throw new BadRequestException(`El horario ${hora} no existe. Horarios disponibles: ${lista}`);
         if (fecha === hoy && hora <= horaActualEc()) throw new BadRequestException('Esa salida ya partió hoy. Elige otro horario.');
 
         const ninos = dto.children ?? 0;
@@ -77,8 +93,20 @@ export class ReservasService {
         const adultos = dto.ticket_count - ninos;
         if (adultos < 1) throw new BadRequestException('Cada reserva debe incluir al menos un adulto.');
 
-        const ocupados = (await this.atraccionesService.ocupadosPorHora(a.id, fecha, manager)).get(hora) ?? 0;
-        const libres = a.cupoPorHorario - ocupados;
+        // 2) Inventario del día y horario: se crea si no existe y se BLOQUEA la fila.
+        //    Dos reservas simultáneas del mismo horario se ejecutan una detrás de otra.
+        await tx.query(
+          `INSERT INTO disponibilidad (atr_id, hor_id, dis_fecha, dis_cupo_total) VALUES ($1, $2, $3, $4)
+           ON CONFLICT (atr_id, dis_fecha, hor_id) DO NOTHING`,
+          [a.atr_id, horario.hor_id, fecha, horario.cupo],
+        );
+        const inv = await tx.one<{ dis_id: string; total: number; reservado: number; cerrada: boolean }>(
+          `SELECT dis_id::text, dis_cupo_total AS total, dis_cupo_reservado AS reservado, dis_cerrada AS cerrada
+             FROM disponibilidad WHERE atr_id = $1 AND dis_fecha = $2 AND hor_id = $3 FOR UPDATE`,
+          [a.atr_id, fecha, horario.hor_id],
+        );
+        if (inv!.cerrada) throw new ConflictException(`La salida de las ${hora} está cerrada para esa fecha.`);
+        const libres = inv!.total - inv!.reservado;
         if (dto.ticket_count > libres) {
           throw new ConflictException(
             libres > 0
@@ -86,117 +114,116 @@ export class ReservasService {
               : `El horario de las ${hora} está agotado. Elige otro horario o fecha.`,
           );
         }
+        await tx.query('UPDATE disponibilidad SET dis_cupo_reservado = dis_cupo_reservado + $2 WHERE dis_id = $1', [inv!.dis_id, dto.ticket_count]);
 
-        const precioNino = a.precioNino ?? a.precioTicket;
-        const total = Math.round((adultos * a.precioTicket + ninos * precioNino) * 100) / 100;
-        const metodo = (dto.payment_method ?? PaymentMethod.TARJETA) as unknown as MetodoPago;
-
-        const repo = manager.getRepository(Reserva);
-        let codigo = this.generarCodigo();
-        while (await repo.exist({ where: { codigo } })) codigo = this.generarCodigo();
-
-        const r = await repo.save(
-          repo.create({
-            codigo,
-            atraccion: full,
-            usuarioId: user.sub,
-            fecha,
-            hora,
-            adultos,
-            ninos,
-            ticketCount: dto.ticket_count,
-            precioAdulto: a.precioTicket,
-            precioNino,
-            total,
-            moneda: a.moneda,
-            // Pago con tarjeta se confirma al instante; transferencia o pago en sitio quedan pendientes
-            estado: metodo === MetodoPago.TARJETA ? ReservationStatus.CONFIRMED : ReservationStatus.PENDING,
-            metodoPago: metodo,
-            clienteNombre: dto.customer_name,
-            clienteEmail: dto.customer_email ?? user.email,
-            clienteTelefono: dto.customer_phone ?? null,
-            clienteDocumento: dto.customer_document ?? null,
-            notas: dto.notes ?? null,
-            idempotencyKey: key,
-          }),
-        );
-        return this.mapper.toReservation(r);
-      }),
-    );
+        const metodo = dto.payment_method ?? PaymentMethod.TARJETA;
+        if (dto.card && metodo !== PaymentMethod.TARJETA) throw new BadRequestException('card solo aplica al pago con TARJETA.');
+        const compra = await registrarCompra(tx, this.catalogos, {
+          usuId: user.sub,
+          atrId: a.atr_id,
+          atrNombre: a.nombre,
+          disId: inv!.dis_id,
+          fecha,
+          hora,
+          adultos,
+          ninos,
+          precioAdulto: a.adulto,
+          precioNino: a.nino ?? a.adulto,
+          moneda: a.moneda,
+          metodo,
+          paxNombre: dto.customer_name,
+          paxDocumento: dto.customer_document ?? null,
+          notas: dto.notes ?? null,
+          tarjeta: dto.card,
+        });
+        return compra.uuid;
+      });
+      await this.bitacora.registrar(user.sub, 'CREAR', 'reserva', uuid, { atraccion: atrUuid });
+      return this.mapper.toReservation((await this.fila(uuid))!);
+    });
   }
 
   // ── Consultas ─────────────────────────────────────────────────────────
   async list(query: ReservationsQueryDto, user: AuthUser) {
-    const qb = this.reservas
-      .createQueryBuilder('r')
-      .leftJoinAndSelect('r.atraccion', 'a')
-      .withDeleted()
-      .orderBy('r.fecha', query.when === 'past' ? 'DESC' : 'ASC')
-      .addOrderBy('r.hora', 'ASC')
-      .take(500);
+    const p = new Params();
+    const w: string[] = [];
+    const alcance = this.alcance(user);
+    if (query.all !== 'true' || alcance.tipo === 'propias') w.push(`o.usu_id = ${p.add(user.sub)}`);
+    else if (alcance.tipo === 'operador') w.push(`op.ope_codigo = ${p.add(alcance.codigo)}`);
 
-    if (!(query.all === 'true' && this.puedeGestionar(user))) qb.where('r.usuarioId = :uid', { uid: user.sub });
-    else qb.where('1=1');
-
-    const hoy = hoyEc();
-    if (query.status) qb.andWhere('r.estado = :st', { st: query.status });
-    if (query.when === 'upcoming') qb.andWhere('r.fecha >= :hoy', { hoy });
-    if (query.when === 'past') qb.andWhere('r.fecha < :hoy', { hoy });
-    if (query.date) qb.andWhere('r.fecha = :date', { date: query.date.slice(0, 10) });
-    if (query.from) qb.andWhere('r.fecha >= :from', { from: query.from.slice(0, 10) });
-    if (query.to) qb.andWhere('r.fecha <= :to', { to: query.to.slice(0, 10) });
-    if (query.attraction_id) qb.andWhere('a.id = :aid', { aid: query.attraction_id });
+    if (query.status) w.push(`e.est_codigo = ANY(${p.add(STATUS_A_ESTADOS[query.status])}::text[])`);
+    if (query.when === 'upcoming') w.push(`r.res_fecha >= ${HOY_EC}`);
+    if (query.when === 'past') w.push(`r.res_fecha < ${HOY_EC}`);
+    if (query.date) w.push(`r.res_fecha = ${p.add(query.date.slice(0, 10))}::date`);
+    if (query.from) w.push(`r.res_fecha >= ${p.add(query.from.slice(0, 10))}::date`);
+    if (query.to) w.push(`r.res_fecha <= ${p.add(query.to.slice(0, 10))}::date`);
+    if (query.attraction_id) w.push(`a.atr_uuid = ${p.add(query.attraction_id)}`);
     if (query.q?.trim()) {
-      const q = `%${query.q.trim()}%`;
-      qb.andWhere(new Brackets((w) => w.where('r.codigo ILIKE :q', { q }).orWhere('r.clienteNombre ILIKE :q', { q }).orWhere('r.clienteEmail ILIKE :q', { q })));
+      const q = p.add(`%${escapeLike(query.q.trim())}%`);
+      w.push(`(r.res_codigo ILIKE ${q} OR pax.pax_nombre ILIKE ${q} OR u.usu_correo ILIKE ${q})`);
     }
-    return (await qb.getMany()).map((r) => this.mapper.toReservation(r));
+    const where = w.length ? `WHERE ${w.join(' AND ')}` : '';
+    const dir = query.when === 'past' ? 'DESC' : 'ASC';
+    const rows = await this.db.query<FilaReserva & { total_filas: number }>(
+      `SELECT x.*, COUNT(*) OVER ()::int AS total_filas FROM (${SELECT_RESERVA} ${where}) x
+        ORDER BY x.fecha ${dir}, x.hora ASC LIMIT ${LIMITE_LISTADO}`,
+      p.values,
+    );
+    return { rows: rows.map((r) => this.mapper.toReservation(r)), total: rows[0]?.total_filas ?? 0, limit: LIMITE_LISTADO };
   }
 
-  private async getOwned(id: string, user: AuthUser): Promise<Reserva> {
-    const r = await this.reservas.findOne({ where: { id }, withDeleted: true });
-    if (!r) throw new NotFoundException('Reserva no encontrada.');
-    if (r.usuarioId !== user.sub && !this.puedeGestionar(user)) {
-      // 404 en vez de 403 para no revelar que la reserva existe
-      throw new NotFoundException('Reserva no encontrada.');
-    }
+  /** Reserva propia o gestionable; con `lock` bloquea la fila antes de leer su estado (CON-003). */
+  private async getOwned(uuid: string, user: AuthUser, sql: Sql = this.db, lock = false): Promise<FilaReserva> {
+    if (lock) await sql.query('SELECT 1 FROM reserva WHERE res_uuid = $1 FOR UPDATE', [uuid]);
+    const r = await this.fila(uuid, sql);
+    // 404 en vez de 403 para no revelar que la reserva existe
+    if (!r || (r.usu_id !== user.sub && !this.puedeGestionar(user, r))) throw new NotFoundException('Reserva no encontrada.');
     return r;
   }
 
-  async getById(id: string, user: AuthUser) {
-    return this.mapper.toReservation(await this.getOwned(id, user));
+  async getById(uuid: string, user: AuthUser) {
+    return this.mapper.toReservation(await this.getOwned(uuid, user));
   }
 
   // ── Cancelar ──────────────────────────────────────────────────────────
-  cancel(id: string, dto: CancelReservationRequestDto, key: string, user: AuthUser) {
-    return this.idempotency.execute(key, `cancel:${id}`, { dto, user: user.sub }, async () => {
-      const r = await this.getOwned(id, user);
-      if (r.estado === ReservationStatus.CANCELLED) throw new ConflictException('Esta reserva ya estaba cancelada.');
-      const gestor = this.puedeGestionar(user);
-      if (!gestor && !this.mapper.canCancel(r)) {
-        throw new ConflictException(
-          r.atraccion.cancelacionGratuita
-            ? `La cancelación gratuita solo está disponible hasta ${r.atraccion.horasCancelacion} horas antes. Escríbenos para revisar tu caso.`
-            : 'Esta actividad no admite cancelación gratuita. Escríbenos para revisar tu caso.',
-        );
-      }
-      r.estado = ReservationStatus.CANCELLED;
-      r.motivoCancelacion = gestor && r.usuarioId !== user.sub ? `[Operador] ${dto.reason}` : dto.reason;
-      r.canceladaEn = new Date();
-      return this.mapper.toReservation(await this.reservas.save(r));
+  cancel(uuid: string, dto: CancelReservationRequestDto, key: string, user: AuthUser) {
+    return this.idempotency.execute(key, `cancel:${uuid}`, user.sub, dto, async () => {
+      await this.catalogos.precargar();
+      await this.db.tx(async (tx) => {
+        const r = await this.getOwned(uuid, user, tx, true);
+        if (ESTADO_A_STATUS[r.estado] === ReservationStatus.CANCELLED) throw new ConflictException('Esta reserva ya estaba cancelada.');
+        if (r.estado === 'COMPLETADA') throw new ConflictException('La experiencia ya se realizó; no puede cancelarse.');
+        const gestor = this.puedeGestionar(user, r);
+        if (!gestor && !this.mapper.canCancel(r)) {
+          throw new ConflictException(
+            r.cancelacion_gratuita
+              ? `La cancelación gratuita solo está disponible hasta ${r.horas_cancelacion} horas antes. Escríbenos para revisar tu caso.`
+              : 'Esta actividad no admite cancelación gratuita. Escríbenos para revisar tu caso.',
+          );
+        }
+        const motivo = gestor && r.usu_id !== user.sub ? `[Operador] ${dto.reason}` : dto.reason;
+        // Estado, cupos devueltos al inventario y reembolso o rechazo del pago
+        await cancelarCompra(tx, this.catalogos, r.res_id, motivo);
+      });
+      await this.bitacora.registrar(user.sub, 'CANCELAR', 'reserva', uuid, { motivo: dto.reason });
+      return this.mapper.toReservation((await this.fila(uuid))!);
     });
   }
 
   // ── Confirmar (pago verificado por el operador) ───────────────────────
-  confirm(id: string, key: string, user: AuthUser) {
-    return this.idempotency.execute(key, `confirm:${id}`, { user: user.sub }, async () => {
-      if (!this.puedeGestionar(user)) throw new ForbiddenException('Solo el personal puede confirmar reservas.');
-      const r = await this.getOwned(id, user);
-      if (r.estado !== ReservationStatus.PENDING) {
-        throw new ConflictException(`Solo se pueden confirmar reservas pendientes (estado actual: ${r.estado}).`);
-      }
-      r.estado = ReservationStatus.CONFIRMED;
-      return this.mapper.toReservation(await this.reservas.save(r));
+  confirm(uuid: string, key: string, user: AuthUser) {
+    return this.idempotency.execute(key, `confirm:${uuid}`, user.sub, {}, async () => {
+      await this.catalogos.precargar();
+      await this.db.tx(async (tx) => {
+        const r = await this.getOwned(uuid, user, tx, true);
+        if (!this.puedeGestionar(user, r)) throw new ForbiddenException('Solo el personal de la empresa operadora puede confirmar esta reserva.');
+        if (r.estado !== 'PENDIENTE_PAGO') {
+          throw new ConflictException(`Solo se pueden confirmar reservas pendientes de pago (estado actual: ${ESTADO_A_STATUS[r.estado] ?? r.estado}).`);
+        }
+        await confirmarCompra(tx, this.catalogos, r.res_id);
+      });
+      await this.bitacora.registrar(user.sub, 'CONFIRMAR_PAGO', 'reserva', uuid);
+      return this.mapper.toReservation((await this.fila(uuid))!);
     });
   }
 }

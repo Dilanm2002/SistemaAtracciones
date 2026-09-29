@@ -49,7 +49,7 @@ export default function Home() {
           <SearchBar destinos={destinos} />
         </div>
         <span className="hero-credit">
-          Foto: <a href="https://commons.wikimedia.org/wiki/File:Cotopaxi_01.jpg" target="_blank" rel="noreferrer">Cotopaxi, Wikimedia Commons</a> (CC BY-SA 3.0)
+          Foto: <a href="https://commons.wikimedia.org/wiki/File:Cotopaxi_01.jpg" target="_blank" rel="noopener noreferrer">Cotopaxi, Wikimedia Commons</a> (CC BY-SA 3.0)
         </span>
       </section>
 
@@ -131,7 +131,7 @@ export default function Home() {
           <div className="region-grid">
             {REGIONES.map((r) => (
               <Link key={r.key} to={`/explorar?region=${r.key}`} className="region-card">
-                <img src={`${imgBase}/img/${r.img}`} alt="" loading="lazy" onError={onImgError} />
+                <img src={`${imgBase}/img/${r.img}`} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
                 <div className="rc-body">
                   <h3>{r.name}</h3>
                   <p>{r.text}</p>
@@ -153,7 +153,7 @@ export default function Home() {
             <div className="dest-grid">
               {[...destinos].sort((a, b) => b.total_atracciones - a.total_atracciones).slice(0, 4).map((d) => (
                 <Link key={d.id} to={`/explorar?destino=${d.codigo}`} className="dest-card">
-                  <img src={d.imagen} alt="" loading="lazy" onError={onImgError} />
+                  <img src={d.imagen} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
                   <div className="rc-body">
                     <h3>{d.nombre}</h3>
                     <p>{d.total_atracciones} experiencias · {d.provincia}</p>

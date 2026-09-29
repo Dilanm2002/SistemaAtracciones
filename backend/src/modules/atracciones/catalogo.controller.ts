@@ -7,7 +7,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -16,10 +15,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
 import { CurrentUser, Scopes } from '../../common/auth/auth.decorators';
 import { StorageService } from '../../common/storage/storage.service';
+import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 import { JwtAuthGuard, OptionalJwtGuard } from '../../common/auth/jwt-auth.guard';
 import { AuthUser, SCOPES } from '../../common/auth/scopes';
 import { AtraccionMapper } from './atraccion.mapper';
@@ -45,6 +46,19 @@ const verTodo = (q: CatalogoQueryDto, u?: AuthUser) => q.all === 'true' && !!u?.
 export class CatalogoController {
   constructor(private readonly catalogo: CatalogoService) {}
 
+  // ── Geografía e idiomas ───────────────────────────────────────────────
+  @Get('provincias')
+  @ApiOperation({ summary: 'Provincias del Ecuador con su región (tabla provincia)' })
+  listProvincias() {
+    return this.catalogo.listProvincias();
+  }
+
+  @Get('idiomas')
+  @ApiOperation({ summary: 'Idiomas en que se pueden ofrecer las atracciones (tabla idioma)' })
+  listIdiomas() {
+    return this.catalogo.listIdiomas();
+  }
+
   // ── Categorías ────────────────────────────────────────────────────────
   @Get('categorias')
   @UseGuards(OptionalJwtGuard)
@@ -57,16 +71,16 @@ export class CatalogoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  createCategoria(@Body() dto: CreateCategoriaDto) {
-    return this.catalogo.createCategoria(dto);
+  createCategoria(@Body() dto: CreateCategoriaDto, @CurrentUser() u: AuthUser) {
+    return this.catalogo.createCategoria(dto, u);
   }
 
   @Patch('categorias/:id')
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  updateCategoria(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCategoriaDto) {
-    return this.catalogo.updateCategoria(id, dto);
+  updateCategoria(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdateCategoriaDto, @CurrentUser() u: AuthUser) {
+    return this.catalogo.updateCategoria(id, dto, u);
   }
 
   @Delete('categorias/:id')
@@ -74,14 +88,14 @@ export class CatalogoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  deleteCategoria(@Param('id', ParseUUIDPipe) id: string) {
-    return this.catalogo.deleteCategoria(id);
+  deleteCategoria(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
+    return this.catalogo.deleteCategoria(id, u);
   }
 
   // ── Destinos ──────────────────────────────────────────────────────────
   @Get('destinos')
   @UseGuards(OptionalJwtGuard)
-  @ApiOperation({ summary: 'Listar destinos/ciudades (el `codigo` es el city ID del contrato)' })
+  @ApiOperation({ summary: 'Listar destinos (tabla ciudad; `codigo` = ciu_id = city del contrato). Públicamente solo los que tienen atracciones' })
   listDestinos(@Query() q: CatalogoQueryDto, @CurrentUser() u?: AuthUser) {
     return this.catalogo.listDestinos(verTodo(q, u));
   }
@@ -90,16 +104,16 @@ export class CatalogoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  createDestino(@Body() dto: CreateDestinoDto) {
-    return this.catalogo.createDestino(dto);
+  createDestino(@Body() dto: CreateDestinoDto, @CurrentUser() u: AuthUser) {
+    return this.catalogo.createDestino(dto, u);
   }
 
   @Patch('destinos/:id')
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  updateDestino(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateDestinoDto) {
-    return this.catalogo.updateDestino(id, dto);
+  updateDestino(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdateDestinoDto, @CurrentUser() u: AuthUser) {
+    return this.catalogo.updateDestino(id, dto, u);
   }
 
   @Delete('destinos/:id')
@@ -107,8 +121,8 @@ export class CatalogoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  deleteDestino(@Param('id', ParseUUIDPipe) id: string) {
-    return this.catalogo.deleteDestino(id);
+  deleteDestino(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
+    return this.catalogo.deleteDestino(id, u);
   }
 
   // ── Operadores ────────────────────────────────────────────────────────
@@ -123,16 +137,16 @@ export class CatalogoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  createOperador(@Body() dto: CreateOperadorDto) {
-    return this.catalogo.createOperador(dto);
+  createOperador(@Body() dto: CreateOperadorDto, @CurrentUser() u: AuthUser) {
+    return this.catalogo.createOperador(dto, u);
   }
 
   @Patch('operadores/:id')
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  updateOperador(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateOperadorDto) {
-    return this.catalogo.updateOperador(id, dto);
+  updateOperador(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdateOperadorDto, @CurrentUser() u: AuthUser) {
+    return this.catalogo.updateOperador(id, dto, u);
   }
 
   @Delete('operadores/:id')
@@ -140,8 +154,8 @@ export class CatalogoController {
   @UseGuards(JwtAuthGuard)
   @Scopes(SCOPES.WRITE)
   @ApiBearerAuth()
-  deleteOperador(@Param('id', ParseUUIDPipe) id: string) {
-    return this.catalogo.deleteOperador(id);
+  deleteOperador(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
+    return this.catalogo.deleteOperador(id, u);
   }
 }
 
@@ -168,23 +182,23 @@ export class AdminAtraccionesController {
   @Patch('resenas/:id')
   @Scopes(SCOPES.WRITE)
   @ApiOperation({ summary: 'Mostrar u ocultar una reseña' })
-  moderar(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ModerarResenaDto) {
-    return this.resenas.moderar(id, dto.visible);
+  moderar(@Param('id', ParseIdPipe) id: string, @Body() dto: ModerarResenaDto, @CurrentUser() u: AuthUser) {
+    return this.resenas.moderar(id, dto.visible, u);
   }
 
   @Delete('resenas/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @Scopes(SCOPES.WRITE)
-  deleteResena(@Param('id', ParseUUIDPipe) id: string) {
-    return this.resenas.remove(id);
+  deleteResena(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
+    return this.resenas.remove(id, u);
   }
 
   // ── Reportes ──────────────────────────────────────────────────────────
   @Get('reportes/dashboard')
   @Scopes(SCOPES.MANAGE)
   @ApiOperation({ summary: 'KPIs del panel de administración' })
-  dashboard() {
-    return this.reportes.dashboard();
+  dashboard(@CurrentUser() user: AuthUser) {
+    return this.reportes.dashboard(user);
   }
 
   @Get('reportes/ventas')
@@ -208,6 +222,8 @@ export class AdminAtraccionesController {
   // ── Subida de imágenes ────────────────────────────────────────────────
   @Post('uploads')
   @Scopes(SCOPES.WRITE)
+  @Throttle({ default: { limit: 30, ttl: 3_600_000 } }) // 30 imágenes por hora
+  @ApiResponse({ status: 400, description: 'El archivo no es una imagen JPG, PNG o WebP válida.' })
   @ApiOperation({ summary: 'Subir una imagen (JPG, PNG o WebP, máx. 4 MB)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
@@ -221,7 +237,7 @@ export class AdminAtraccionesController {
           : cb(new BadRequestException('Solo se permiten imágenes JPG, PNG o WebP.'), false),
     }),
   )
-  async upload(@UploadedFile() file: any) {
+  async upload(@UploadedFile() file: Express.Multer.File | undefined) {
     if (!file) throw new BadRequestException('Adjunta una imagen en el campo "file".');
     const path = await this.storage.save(file);
     return { path, url: this.mapper.absUrl(path) };

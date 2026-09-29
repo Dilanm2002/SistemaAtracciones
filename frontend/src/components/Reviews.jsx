@@ -54,25 +54,43 @@ export function ReviewModal({ open, onClose, attraction, onDone }) {
         <div className="field">
           <span className="label" id="rv-stars">Tu calificación</span>
           <div className="row">
-            <div className="star-picker" role="radiogroup" aria-labelledby="rv-stars" onMouseLeave={() => setHover(0)}>
+            {/* radiogroup con tabindex rotatorio y flechas (ACC-009) */}
+            <div
+              className="star-picker"
+              role="radiogroup"
+              aria-labelledby="rv-stars"
+              aria-required="true"
+              aria-invalid={errors.rating ? true : undefined}
+              aria-describedby={errors.rating ? 'rv-stars-err' : undefined}
+              onMouseLeave={() => setHover(0)}
+              onKeyDown={(e) => {
+                const delta = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+                const target = e.key === 'Home' ? 1 : e.key === 'End' ? 5 : delta ? Math.min(5, Math.max(1, (rating || 0) + delta)) : 0;
+                if (!target) return;
+                e.preventDefault();
+                setRating(target);
+                e.currentTarget.querySelectorAll('[role="radio"]')[target - 1]?.focus();
+              }}
+            >
               {[1, 2, 3, 4, 5].map((i) => (
                 <button
                   key={i}
                   type="button"
                   role="radio"
                   aria-checked={rating === i}
+                  tabIndex={rating === i || (!rating && i === 1) ? 0 : -1}
                   aria-label={`${i} estrella${i > 1 ? 's' : ''}: ${LABELS[i]}`}
                   className={(hover || rating) >= i ? 'on' : ''}
                   onMouseEnter={() => setHover(i)}
                   onClick={() => setRating(i)}
                 >
-                  <Star size={30} fill="currentColor" strokeWidth={0} />
+                  <Star size={30} fill="currentColor" strokeWidth={0} aria-hidden="true" />
                 </button>
               ))}
             </div>
-            <strong>{LABELS[hover || rating]}</strong>
+            <strong aria-hidden="true">{LABELS[hover || rating]}</strong>
           </div>
-          {errors.rating && <span className="error-text" role="alert">{errors.rating}</span>}
+          {errors.rating && <span id="rv-stars-err" className="error-text" role="alert">{errors.rating}</span>}
         </div>
         <Field label="Tu experiencia" required error={errors.comment} hint={`${comment.length}/1000 caracteres`}>
           {(p) => (
@@ -105,7 +123,7 @@ export default function Reviews({ attraction, onChanged }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(1, filter); /* eslint-disable-next-line */ }, [attraction.id, filter]);
+  useEffect(() => { load(1, filter); }, [attraction.id, filter]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isAuth) Atracciones.reviewEligibility(attraction.id).then(setElig).catch(() => setElig(null));
   }, [attraction.id, isAuth]);

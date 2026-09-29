@@ -4,7 +4,7 @@ import { ArrowLeft, Banknote, CalendarDays, Clock, CreditCard, Landmark, Lock, M
 import { Atracciones, newIdempotencyKey, Reservas } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { LoginForm, RegisterForm } from '../components/AuthForms';
-import { Alert, Breadcrumbs, ErrorState, Field, Spinner, usePageTitle } from '../components/ui';
+import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePageTitle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtMoney } from '../utils/format';
@@ -20,6 +20,17 @@ const luhn = (num) => {
   }
   return sum % 10 === 0;
 };
+/** Marca por el prefijo (IIN); solo se envía la marca y los 4 últimos dígitos. */
+const marcaTarjeta = (n) => {
+  const d = n.replace(/\D/g, '');
+  if (/^4/.test(d)) return 'VISA';
+  if (/^(5[1-5]|2[2-7])/.test(d)) return 'MASTERCARD';
+  if (/^3[47]/.test(d)) return 'AMEX';
+  if (/^3(0[0-5]|[68])/.test(d)) return 'DINERS';
+  return 'OTRA';
+};
+const RE_DOCUMENTO = /^(\d{10}|[A-Z]{1,2}\d{6,9})$/;
+
 const fmtCard = (v) => v.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
 const fmtExp = (v) => v.replace(/\D/g, '').slice(0, 4).replace(/^(\d{2})(\d)/, '$1/$2');
 
@@ -68,7 +79,7 @@ export default function Checkout() {
     );
   }
   if (loadError) return <div className="container"><ErrorState error={loadError} onRetry={() => window.location.reload()} /></div>;
-  if (!a) return <div className="container" style={{ paddingTop: 40 }}><Spinner /> Preparando tu reserva…</div>;
+  if (!a) return <div className="container" style={{ paddingTop: 40 }}><Spinner label="Preparando tu reserva…" /></div>;
 
   const childPrice = a.child_price?.total ?? a.price.total;
   const total = adultos * a.price.total + ninos * childPrice;
@@ -84,6 +95,9 @@ export default function Checkout() {
     if (form.nombre.trim().length < 3) errs.nombre = 'Escribe el nombre completo del titular de la reserva';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) errs.email = 'Ingresa un correo válido para recibir la confirmación';
     if (!/^\+?\d{7,15}$/.test(form.telefono.replace(/\s/g, ''))) errs.telefono = 'Necesitamos un teléfono (7 a 15 dígitos) por si hay cambios de último minuto';
+    if (form.documento.trim() && !RE_DOCUMENTO.test(form.documento.trim().toUpperCase())) {
+      errs.documento = 'Cédula de 10 dígitos o pasaporte (1-2 letras y 6-9 dígitos, ej. AB1234567)';
+    }
     setErrors(errs);
     return !Object.keys(errs).length;
   };
@@ -124,9 +138,21 @@ export default function Checkout() {
           customer_name: form.nombre.trim(),
           customer_email: form.email.trim(),
           customer_phone: form.telefono.replace(/\s/g, ''),
-          ...(form.documento.trim() ? { customer_document: form.documento.trim() } : {}),
+          ...(form.documento.trim() ? { customer_document: form.documento.trim().toUpperCase() } : {}),
           ...(form.notas.trim() ? { notes: form.notas.trim() } : {}),
           payment_method: pay.metodo,
+          // Nunca se envía el número completo ni el CVV (PCI-DSS): solo lo que se guarda en pago_tarjeta
+          ...(pay.metodo === 'TARJETA'
+            ? {
+                card: {
+                  brand: marcaTarjeta(pay.numero),
+                  last4: pay.numero.replace(/\D/g, '').slice(-4),
+                  holder: pay.titular.trim(),
+                  exp_month: Number(pay.exp.split('/')[0]),
+                  exp_year: 2000 + Number(pay.exp.split('/')[1]),
+                },
+              }
+            : {}),
         },
         idemKey.current,
       );
@@ -143,7 +169,7 @@ export default function Checkout() {
 
   const Summary = (
     <aside className="order-summary card" aria-label="Resumen de tu reserva">
-      <div className="os-img"><img src={a.photos?.[0]?.url} alt="" onError={onImgError} /></div>
+      <div className="os-img"><img src={a.photos?.[0]?.url} alt="" loading="lazy" decoding="async" onError={onImgError} /></div>
       <div className="os-body">
         <h2 style={{ fontSize: '1.08rem' }}>{a.name}</h2>
         <div className="os-row"><CalendarDays size={16} aria-hidden="true" /> <span>{fmtDateLong(fecha)}</span></div>
@@ -191,14 +217,15 @@ export default function Checkout() {
             <div className="card card-pad" style={{ marginTop: sinCupo ? 16 : 0 }}>
               <h2 style={{ fontSize: '1.2rem' }}>Inicia sesión para continuar</h2>
               <p className="muted small">Así guardamos tu reserva en tu cuenta y podrás gestionarla o cancelarla cuando quieras. Tu selección se mantiene.</p>
-              <div className="tabs" role="tablist" style={{ marginBottom: 18 }}>
-                <button className="tab" role="tab" aria-selected={authTab === 'login'} onClick={() => setAuthTab('login')}>Ya tengo cuenta</button>
-                <button className="tab" role="tab" aria-selected={authTab === 'register'} onClick={() => setAuthTab('register')}>Soy nuevo</button>
+              <div className="tabs" role="group" aria-label="Cómo quieres continuar" style={{ marginBottom: 18 }}>
+                <button type="button" className="tab" aria-pressed={authTab === 'login'} onClick={() => setAuthTab('login')}>Ya tengo cuenta</button>
+                <button type="button" className="tab" aria-pressed={authTab === 'register'} onClick={() => setAuthTab('register')}>Soy nuevo</button>
               </div>
               {authTab === 'login' ? <LoginForm showDemo /> : <RegisterForm />}
             </div>
           ) : step === 1 ? (
             <form className="card card-pad" onSubmit={next} noValidate style={{ marginTop: sinCupo ? 16 : 0 }}>
+        <RequiredLegend />
               <h2 style={{ fontSize: '1.2rem' }}>Datos del titular</h2>
               <p className="muted small">Presenta un documento con este nombre en el punto de encuentro.</p>
               <div className="form-grid">
@@ -211,8 +238,8 @@ export default function Checkout() {
                 <Field label="Teléfono / WhatsApp" required error={errors.telefono}>
                   {(p) => <input {...p} className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="0991234567" value={form.telefono} onChange={set('telefono')} />}
                 </Field>
-                <Field label="Cédula o pasaporte" hint="Opcional, agiliza el ingreso a parques nacionales">
-                  {(p) => <input {...p} className="input" value={form.documento} onChange={set('documento')} maxLength={20} />}
+                <Field label="Cédula o pasaporte" hint="Opcional, agiliza el ingreso a parques nacionales. Ej. 1712345678 o AB1234567" error={errors.documento}>
+                  {(p) => <input {...p} className="input" value={form.documento} onChange={set('documento')} maxLength={11} autoCapitalize="characters" />}
                 </Field>
                 <Field label="Notas para el operador" hint="Alergias, movilidad reducida, hotel de recogida…" className="span-2">
                   {(p) => <textarea {...p} className="textarea" value={form.notas} onChange={set('notas')} maxLength={500} style={{ minHeight: 80 }} />}
@@ -225,6 +252,7 @@ export default function Checkout() {
             </form>
           ) : (
             <form className="card card-pad" onSubmit={submit} noValidate style={{ marginTop: sinCupo ? 16 : 0 }}>
+        <RequiredLegend />
               <h2 style={{ fontSize: '1.2rem' }}>Método de pago</h2>
               <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
                 <legend className="sr-only">Elige cómo pagar</legend>
@@ -251,16 +279,16 @@ export default function Checkout() {
                 <>
                   <div className="card-fields">
                     <Field label="Número de tarjeta" required error={errors.numero} className="span-2">
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="cc-number" placeholder="4111 1111 1111 1111" value={pay.numero} onChange={setP('numero', fmtCard)} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="4111 1111 1111 1111" value={pay.numero} onChange={setP('numero', fmtCard)} />}
                     </Field>
                     <Field label="Vencimiento" required error={errors.exp}>
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="cc-exp" placeholder="MM/AA" value={pay.exp} onChange={setP('exp', fmtExp)} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="MM/AA" value={pay.exp} onChange={setP('exp', fmtExp)} />}
                     </Field>
                     <Field label="CVV" required error={errors.cvv}>
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="cc-csc" placeholder="123" maxLength={4} value={pay.cvv} onChange={setP('cvv', (v) => v.replace(/\D/g, ''))} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="123" maxLength={4} value={pay.cvv} onChange={setP('cvv', (v) => v.replace(/\D/g, ''))} />}
                     </Field>
                     <Field label="Titular de la tarjeta" required error={errors.titular} className="span-2">
-                      {(p) => <input {...p} className="input" autoComplete="cc-name" value={pay.titular} onChange={setP('titular')} />}
+                      {(p) => <input {...p} className="input" autoComplete="off" value={pay.titular} onChange={setP('titular')} />}
                     </Field>
                   </div>
                   <p className="tiny muted" style={{ marginTop: 10 }}><Lock size={12} aria-hidden="true" /> Pago simulado para el prototipo: no se realizan cargos reales. Prueba con 4111 1111 1111 1111.</p>

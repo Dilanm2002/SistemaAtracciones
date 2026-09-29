@@ -49,7 +49,9 @@
 .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 .icon-btn.sm { width: 36px; height: 36px; }
 
+.spinner-wrap { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.92rem; }
 .spinner {
+  flex-shrink: 0;
   width: 18px; height: 18px;
   border: 2.5px solid currentColor;
   border-right-color: transparent;
@@ -77,9 +79,10 @@
   transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 .textarea { min-height: 110px; resize: vertical; line-height: 1.5; }
-.input::placeholder, .textarea::placeholder { color: #7b8886; }
-.input:hover, .select:hover, .textarea:hover { border-color: #a99d8b; }
-.input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--secondary); box-shadow: var(--ring); }
+.input::placeholder, .textarea::placeholder { color: var(--muted); opacity: 1; }
+.input:hover, .select:hover, .textarea:hover { border-color: #8a7d6c; }
+.input:focus, .select:focus, .textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.35); }
+.input:focus-visible, .select:focus-visible, .textarea:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
 .input[aria-invalid='true'], .select[aria-invalid='true'], .textarea[aria-invalid='true'] { border-color: var(--danger); }
 .input-icon { position: relative; }
 .input-icon > svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
@@ -108,7 +111,7 @@
 }
 .switch input:checked + .track { background: var(--primary); }
 .switch input:checked + .track::after { transform: translateX(18px); }
-.switch input:focus-visible + .track { box-shadow: var(--ring); }
+.switch input:focus-visible + .track { outline: 3px solid var(--primary); outline-offset: 2px; }
 
 /* ── Tarjetas y superficies ──────────────────────────────────────────── */
 .card {
@@ -170,8 +173,8 @@
 .rating-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 0.9rem; }
 .rating-inline strong { color: var(--text); }
 .star-picker { display: inline-flex; gap: 4px; }
-.star-picker button { background: none; border: 0; padding: 4px; color: #d9d1c4; border-radius: 6px; }
-.star-picker button.on { color: var(--cta); }
+.star-picker button { background: none; border: 0; padding: 4px; color: #8f8372; border-radius: 6px; } /* 3.7:1 (ACC-014) */
+.star-picker button.on { color: #b45309; } /* 5:1 */
 
 /* ── Skeleton ────────────────────────────────────────────────────────── */
 .skeleton {
@@ -269,9 +272,9 @@
   white-space: nowrap; display: inline-flex; gap: 8px; align-items: center;
 }
 .tab:hover { color: var(--text); }
-.tab[aria-selected='true'] { color: var(--primary); border-bottom-color: var(--primary); }
+.tab[aria-selected='true'], .tab[aria-pressed='true'] { color: var(--primary); border-bottom-color: var(--primary); }
 .tab .count { background: var(--surface-2); border-radius: 99px; padding: 0 8px; font-size: 0.78rem; }
-.tab[aria-selected='true'] .count { background: var(--primary-50); }
+.tab[aria-selected='true'] .count, .tab[aria-pressed='true'] .count { background: var(--primary-50); }
 
 .segmented { display: inline-flex; background: var(--surface-2); border-radius: 10px; padding: 3px; gap: 2px; flex-wrap: wrap; }
 .segmented button {
@@ -414,3 +417,11 @@
 .dropdown-menu hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
 .dropdown-head { padding: 10px 12px 8px; }
 .dropdown-head strong { display: block; }
+
+/* ── Drawer accesible (menú móvil, filtros) ─────────────────────────── */
+.drawer-backdrop { position: fixed; inset: 0; z-index: var(--z-drawer); background: rgba(12, 22, 21, 0.5); animation: fade 150ms ease; }
+.drawer { position: absolute; top: 0; bottom: 0; width: min(340px, 88vw); background: var(--surface); padding: 18px; overflow-y: auto; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: 4px; }
+.drawer-right { right: 0; animation: slideleft 200ms ease; }
+.drawer-left { left: 0; animation: slideright 200ms ease; }
+@keyframes slideright { from { transform: translateX(-30px); opacity: 0; } }
+.req-legend { margin: 0 0 12px; }

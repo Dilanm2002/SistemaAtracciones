@@ -14,14 +14,21 @@ info:
     Todos los endpoints transaccionales exigen la cabecera `Idempotency-Key` (UUID v4) para
     garantizar operaciones idempotentes y evitar reservas o cancelaciones duplicadas.
     Los errores siguen el estándar RFC 7807 (application/problem+json).
+
+    Modelo de datos: database/01_esquema.sql. Los identificadores públicos de atracciones
+    y reservas son UUID (`atr_uuid`, `res_uuid`); `city` es el id de la tabla `ciudad`
+    y `operator.id` es `ope_codigo`. Cada reserva genera una orden, su pago y, si el pago
+    queda aprobado, su factura.
   # Versión actual de la API
-  version: 1.2.0
+  version: 2.0.0
+  license:
+    name: Uso académico - Proyecto de Integración de Sistemas
 
 # Lista de servidores donde la API está alojada
 servers:
   # URL del entorno local o API Gateway
   - url: /api/v1
-    description: API Gateway - Ruta base
+    description: API Gateway - Ruta base. Los `_links` HATEOAS de las respuestas ya incluyen este prefijo.
 
 # Categorías visuales para agrupar y organizar los endpoints en la documentación
 tags:
@@ -37,13 +44,14 @@ paths:
   /atracciones/search:
     # Método HTTP POST (Ideal para payloads de búsqueda grandes que exceden límites de URL en GET)
     post:
+      operationId: searchAtracciones
       tags:
         - Atracciones - Catálogo
       summary: Búsqueda de atracciones
-      security:
-        - OAuth2Security:
-          - attractions:read
-      description: Endpoint para buscar atracciones en base a fechas, locaciones y filtros.
+      security: []
+      description: |
+        Endpoint público (catálogo) para buscar atracciones en base a fechas, locaciones y filtros.
+        Sujeto a rate limiting (429 + `Retry-After`).
       requestBody:
         required: true
         content:
@@ -63,13 +71,15 @@ paths:
   # Endpoint masivo para recuperar datos estáticos y evitar N+1
   /atracciones/details:
     post:
+      operationId: getAtraccionesDetails
       tags:
         - Atracciones - Catálogo
       summary: Obtener detalles estáticos de múltiples atracciones (Batch)
-      security:
-        - OAuth2Security:
-          - attractions:read
-      description: Ideal para consultar múltiples IDs y evitar el problema N+1.
+      security: []
+      description: |
+        Endpoint público. Ideal para consultar múltiples IDs (máx. 50) y evitar el problema N+1.
+        El contenido del catálogo solo existe en español: `languages` acepta `es` / `es-ec`
+        y cualquier otro valor responde 400. `metadata.not_found` lista los IDs inexistentes.
       requestBody:
         required: true
         content:
@@ -78,43 +88,93 @@ paths:
               $ref: '#/components/schemas/DetailsRequest'
       responses:
         '200':
-          description: Detalles de atracciones en los idiomas solicitados.
+          description: Detalles de las atracciones solicitadas.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SearchAtraccionesResponse'
+                $ref: '#/components/schemas/DetailsResponse'
         '400':
           $ref: '#/components/responses/ProblemDetails400'
   /atracciones/health:
     get:
+      operationId: getHealth
       tags:
         - Atracciones - Catálogo
       summary: Healthcheck del microservicio
+      security: []
       responses:
         '200':
           description: Servicio de atracciones operativo
+        '429':
+          $ref: '#/components/responses/ProblemDetails429'
   
   # Endpoints sobre el recurso principal: Colección de Atracciones
   /atracciones:
     # Obtener listado con paginación tradicional (Útil para catálogos simples)
     get:
+      operationId: listAtracciones
       tags:
         - Atracciones - Catálogo
       summary: Obtener el listado paginado de atracciones
+      description: |
+        Público. Con un token que tenga `attractions:write` se habilita el filtro `status`
+        para ver también las atracciones inactivas.
       security:
+        - {}
         - OAuth2Security:
           - attractions:read
       parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
         - name: limit
           in: query
           schema:
             type: integer
+            minimum: 1
+            maximum: 200
             default: 10
         - name: offset
           in: query
+          description: Desplazamiento; si se envía tiene prioridad sobre `page`.
           schema:
             type: integer
-            default: 0
+            minimum: 0
+        - name: q
+          in: query
+          description: Texto a buscar en nombre o ciudad.
+          schema:
+            type: string
+            maxLength: 120
+        - name: category
+          in: query
+          description: Slug de categoría.
+          schema:
+            type: string
+        - name: city
+          in: query
+          description: Código numérico del destino.
+          schema:
+            type: integer
+        - name: featured
+          in: query
+          schema:
+            type: string
+            enum: ['true', 'false']
+        - name: operator
+          in: query
+          description: Código de la empresa operadora.
+          schema:
+            type: integer
+        - name: status
+          in: query
+          description: Solo con `attractions:write`.
+          schema:
+            type: string
+            enum: [active, inactive, all]
       responses:
         '200':
           description: Listado de atracciones recuperado exitosamente.
@@ -131,7 +191,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaginatedAtraccionResponse'
+        '400':
+          $ref: '#/components/responses/ProblemDetails400'
+        '429':
+          $ref: '#/components/responses/ProblemDetails429'
     post:
+      operationId: createAtraccion
       tags:
         - Atracciones - Catálogo
       summary: Registrar una nueva atracción
@@ -159,13 +224,16 @@ paths:
           $ref: '#/components/responses/ProblemDetails400'
   /atracciones/{id}:
     get:
+      operationId: getAtraccion
       tags:
         - Atracciones - Catálogo
       summary: Obtener el detalle de una atracción
+      description: |
+        Público. Con un token que tenga `attractions:write` también se pueden consultar atracciones inactivas.
       security:
+        - {}
         - OAuth2Security:
           - attractions:read
-      summary: Obtener el detalle de una atracción
       parameters:
         - name: id
           in: path
@@ -192,6 +260,7 @@ paths:
         '404':
           $ref: '#/components/responses/ProblemDetails404'
     put:
+      operationId: replaceAtraccion
       tags:
         - Atracciones - Catálogo
       summary: Reemplazar datos completos de una atracción
@@ -217,6 +286,7 @@ paths:
         '400':
           $ref: '#/components/responses/ProblemDetails400'
     patch:
+      operationId: updateAtraccion
       tags:
         - Atracciones - Catálogo
       summary: Actualizar parcialmente una atracción
@@ -246,6 +316,7 @@ paths:
         '400':
           $ref: '#/components/responses/ProblemDetails400'
     delete:
+      operationId: deleteAtraccion
       tags:
         - Atracciones - Catálogo
       summary: Eliminar una atracción
@@ -268,6 +339,7 @@ paths:
   # Consultar disponibilidad de fechas o franjas horarias
   /atracciones/{id}/availability:
     get:
+      operationId: getAvailability
       tags:
         - Atracciones - Catálogo
       summary: Consultar disponibilidad de cupos
@@ -300,6 +372,7 @@ paths:
   # Endpoint transaccional de creación de orden/reserva
   /atracciones/{id}/reservations:
     post:
+      operationId: createReservation
       tags:
         - Atracciones - Reservas
       summary: Crear una reserva de la atracción
@@ -342,6 +415,7 @@ paths:
           $ref: '#/components/responses/ProblemDetails409'
   /atracciones/reservations/{reservationId}/cancel:
     post:
+      operationId: cancelReservation
       tags:
         - Atracciones - Reservas
       summary: Cancelar una reserva
@@ -380,86 +454,9 @@ paths:
           $ref: '#/components/responses/ProblemDetails404'
         '409':
           $ref: '#/components/responses/ProblemDetails409'
-  /atracciones/{id}:
-    put:
-      tags:
-        - Atracciones - Catálogo
-      summary: Reemplazar datos de una atracción
-      security:
-        - OAuth2Security:
-          - attractions:write
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateAtraccionRequest'
-      responses:
-        '204':
-          description: Reemplazo exitoso
-        '400':
-          $ref: '#/components/responses/ProblemDetails400'
-        '404':
-          $ref: '#/components/responses/ProblemDetails404'
-    patch:
-      tags:
-        - Atracciones - Catálogo
-      summary: Actualizar parcialmente una atracción
-      security:
-        - OAuth2Security:
-          - attractions:write
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateAtraccionRequest'
-      responses:
-        '200':
-          description: Actualización exitosa
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AtraccionResponse'
-        '400':
-          $ref: '#/components/responses/ProblemDetails400'
-        '404':
-          $ref: '#/components/responses/ProblemDetails404'
-    delete:
-      tags:
-        - Atracciones - Catálogo
-      summary: Eliminar una atracción
-      security:
-        - OAuth2Security:
-          - attractions:write
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: Eliminación exitosa
-        '404':
-          $ref: '#/components/responses/ProblemDetails404'
   /atracciones/reservations:
     get:
+      operationId: listReservations
       tags:
         - Atracciones - Reservas
       summary: Historial de reservas del usuario
@@ -477,6 +474,7 @@ paths:
                   $ref: '#/components/schemas/ReservationResponse'
   /atracciones/reservations/{reservationId}:
     get:
+      operationId: getReservation
       tags:
         - Atracciones - Reservas
       summary: Obtener detalle de una reserva
@@ -513,10 +511,13 @@ components:
           authorizationUrl: https://auth.booking-hub.com/oauth2/authorize
           tokenUrl: https://auth.booking-hub.com/oauth2/token
           scopes:
-            attractions:read: Leer catálogo y detalles
+            attractions:read: Leer catálogo, detalles y reservas propias
             attractions:book: Hacer reservas
+            attractions:cancel: Cancelar reservas propias (o de su empresa, si es operador)
             attractions:write: Crear y mantener inventario
+            attractions:manage: Gestionar reservas y fechas bloqueadas (confirmar, bloquear días)
             attractions:webhooks: Gestionar webhooks
+            admin:full: Administración total (usuarios, operadores, reportes globales)
   
   # Moldes de Respuestas de Error estandarizadas
   responses:
@@ -534,6 +535,16 @@ components:
             $ref: '#/components/schemas/ProblemDetails'
     ProblemDetails409:
       description: Conflicto o error de idempotencia
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ProblemDetails429:
+      description: Demasiadas solicitudes (límite por IP). Reintentar después de `Retry-After` segundos.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
       content:
         application/problem+json:
           schema:
@@ -584,6 +595,7 @@ components:
           type: string
         city:
           type: integer
+          description: Id de la ciudad (tabla ciudad; ver GET /destinos)
         country:
           type: string
         coordinates:
@@ -592,10 +604,16 @@ components:
           type: string
     Photo:
       type: object
+      required:
+        - url
       properties:
         url:
           type: string
           format: uri
+        alt:
+          type: string
+          maxLength: 200
+          description: Texto alternativo (WCAG 1.1.1). Si se omite se genera a partir del nombre.
     Operator:
       type: object
       properties:
@@ -624,15 +642,42 @@ components:
           format: uri
     DetailsRequest:
       type: object
+      required:
+        - attractions
       properties:
         attractions:
           type: array
+          minItems: 1
+          maxItems: 50
           items:
             type: string
+            format: uuid
         languages:
           type: array
+          description: Idiomas del contenido. El catálogo solo está en español.
           items:
             type: string
+            enum: [es, es-ec]
+    DetailsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AtraccionResponse'
+        metadata:
+          type: object
+          properties:
+            total_results:
+              type: integer
+            not_found:
+              type: array
+              items:
+                type: string
+                format: uuid
+            language:
+              type: string
+              example: es
     SearchAtraccionesRequest:
       type: object
       properties:
@@ -742,8 +787,11 @@ components:
         free_cancellation:
           type: boolean
     UpdateAtraccionRequest:
-      type: object
-      description: Update atraccion request
+      description: |
+        Actualización parcial: mismos campos que `CreateAtraccionRequest`, todos opcionales.
+        Solo se modifican los campos enviados.
+      allOf:
+        - $ref: '#/components/schemas/CreateAtraccionRequest'
     AtraccionResponse:
       type: object
       properties:
@@ -797,7 +845,21 @@ components:
         url:
           $ref: '#/components/schemas/Url'
         _links:
-          type: object
+          $ref: '#/components/schemas/Links'
+    Links:
+      type: object
+      description: |
+        Enlaces HATEOAS. `href` es una ruta absoluta respecto al host e incluye ya el
+        prefijo `/api/v1` (no debe resolverse contra `servers.url`).
+      additionalProperties:
+        type: object
+        properties:
+          href:
+            type: string
+            example: /api/v1/atracciones/123e4567-e89b-42d3-a456-426614174000
+          method:
+            type: string
+            enum: [GET, POST, PUT, PATCH, DELETE]
     PaginatedAtraccionResponse:
       type: object
       properties:
@@ -842,12 +904,62 @@ components:
           format: date
         time:
           type: string
+          pattern: '^([01]\d|2[0-3]):[0-5]\d$'
+          description: Obligatoria si la atracción tiene más de un horario.
         ticket_count:
           type: integer
+          minimum: 1
+          maximum: 30
         customer_name:
           type: string
+          minLength: 3
+          maxLength: 120
         customer_email:
           type: string
+          description: Informativo; la reserva queda a nombre del usuario autenticado.
+        children:
+          type: integer
+          minimum: 0
+          maximum: 30
+          description: Cuántos de los tickets son de niño (tarifa NINO).
+        customer_phone:
+          type: string
+          pattern: '^\+?\d{7,15}$'
+        customer_document:
+          type: string
+          pattern: '^(\d{10}|[A-Z]{1,2}\d{6,9})$'
+          description: Cédula (10 dígitos) o pasaporte. Se guarda en reserva_pasajero.
+        payment_method:
+          type: string
+          enum: [TARJETA, TRANSFERENCIA, EN_SITIO]
+          default: TARJETA
+          description: TARJETA confirma al instante; los demás dejan la reserva PENDING hasta verificar el pago.
+        card:
+          $ref: '#/components/schemas/CardInfo'
+        notes:
+          type: string
+          maxLength: 500
+    CardInfo:
+      type: object
+      description: |
+        Datos NO sensibles de la tarjeta (PCI-DSS). Nunca se envía el número completo
+        ni el CVV. Solo con payment_method TARJETA.
+      required: [brand, last4, holder, exp_month, exp_year]
+      properties:
+        brand:
+          type: string
+          enum: [VISA, MASTERCARD, AMEX, DINERS, OTRA]
+        last4:
+          type: string
+          pattern: '^\d{4}$'
+        holder:
+          type: string
+        exp_month:
+          type: integer
+          minimum: 1
+          maximum: 12
+        exp_year:
+          type: integer
     ReservationResponse:
       type: object
       properties:
@@ -861,6 +973,26 @@ components:
           type: integer
         total_price:
           $ref: '#/components/schemas/Price'
+        code:
+          type: string
+          example: DEC-7F3K9Q
+        date:
+          type: string
+          format: date
+        time:
+          type: string
+        adults:
+          type: integer
+        children:
+          type: integer
+        payment_method:
+          type: string
+          enum: [TARJETA, TRANSFERENCIA, EN_SITIO]
+        can_cancel:
+          type: boolean
+          description: Si todavía puede cancelarse sin costo.
+        _links:
+          $ref: '#/components/schemas/Links'
     CancelReservationRequest:
       type: object
       required:

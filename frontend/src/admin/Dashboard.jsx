@@ -85,9 +85,10 @@ export default function Dashboard() {
               {loading ? <div className="skeleton" style={{ height: 240, margin: 18 }} /> : data.upcoming.length === 0 ? (
                 <EmptyState icon={CalendarDays} title="Sin salidas próximas" />
               ) : (
-                <div className="table-wrap" style={{ border: 0, borderTop: '1px solid var(--border)', borderRadius: 0 }}>
+                <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable" style={{ border: 0, borderTop: '1px solid var(--border)', borderRadius: 0 }}>
                   <table className="table">
-                    <thead><tr><th>Fecha</th><th>Atracción</th><th className="num">Pax</th><th>Estado</th></tr></thead>
+<caption className="sr-only">Próximas salidas</caption>
+                    <thead><tr><th scope="col">Fecha</th><th scope="col">Atracción</th><th scope="col" className="num">Pax</th><th scope="col">Estado</th></tr></thead>
                     <tbody>
                       {data.upcoming.map((r) => (
                         <tr key={r.reservation_id}>

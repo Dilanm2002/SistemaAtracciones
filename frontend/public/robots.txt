@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /reservar/
+Disallow: /reserva/
+Disallow: /mis-reservas
+Disallow: /perfil
+
+Sitemap: https://descubre-ec.vercel.app/sitemap.xml

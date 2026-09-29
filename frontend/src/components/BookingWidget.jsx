@@ -46,9 +46,10 @@ export function AvailabilityCalendar({ attractionId, value, onChange }) {
       {error ? (
         <Alert tone="danger">No se pudo cargar la disponibilidad. {error.message}</Alert>
       ) : (
-        <div className="cal-grid" role="grid" aria-label={`Disponibilidad de ${label}`} aria-busy={!days}>
+        // Grupo de botones con aria-pressed (ACC-007): cada día ya lleva su fecha completa en el nombre
+        <div className="cal-grid" role="group" aria-label={`Disponibilidad de ${label}`} aria-busy={!days}>
           {DOW.map((d) => <div key={d} className="cal-dow" aria-hidden="true">{d}</div>)}
-          {Array.from({ length: offset }, (_, i) => <div key={`e${i}`} />)}
+          {Array.from({ length: offset }, (_, i) => <div key={`e${i}`} aria-hidden="true" />)}
           {(days ?? Array.from({ length: new Date(y, m, 0).getDate() }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, '0')}`, status: 'loading' }))).map((d) => {
             const disabled = d.status !== 'available' && d.status !== 'low';
             const day = Number(d.date.slice(8));
@@ -138,7 +139,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           <>
             <h3>2. Elige el horario <span className="muted" style={{ fontWeight: 500 }}>· {fmtDateLong(date)}</span></h3>
             {loadingAvail ? (
-              <div className="row muted small"><Spinner /> Consultando cupos…</div>
+              <div className="row muted small"><Spinner label="Consultando cupos…" /></div>
             ) : avail?.slots?.length ? (
               <div className="slots" role="group" aria-label="Horarios disponibles">
                 {avail.slots.map((s) => (

@@ -2,13 +2,15 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import PublicLayout from './components/PublicLayout';
 import { Spinner } from './components/ui';
-import AttractionDetail from './pages/AttractionDetail';
-import Checkout from './pages/Checkout';
-import Confirmation from './pages/Confirmation';
-import Explore from './pages/Explore';
 import Home from './pages/Home';
 import { Contact, Destinations, Favorites, Help, Login, NotFound, Profile, Register, RequireAuth } from './pages/MiscPages';
-import MyReservations from './pages/MyReservations';
+
+// Las páginas más pesadas del sitio se descargan al visitarlas (WEB-007)
+const Explore = lazy(() => import('./pages/Explore'));
+const AttractionDetail = lazy(() => import('./pages/AttractionDetail'));
+const Checkout = lazy(() => import('./pages/Checkout'));
+const Confirmation = lazy(() => import('./pages/Confirmation'));
+const MyReservations = lazy(() => import('./pages/MyReservations'));
 
 // El panel admin se carga bajo demanda: los viajeros no descargan su código
 const AdminLayout = lazy(() => import('./admin/AdminLayout'));
@@ -40,7 +42,7 @@ function useSearchShortcut() {
   }, []);
 }
 
-const Loading = () => <div style={{ padding: 60, display: 'flex', gap: 10, justifyContent: 'center' }}><Spinner /> Cargando…</div>;
+const Loading = () => <div style={{ padding: 60, display: 'flex', gap: 10, justifyContent: 'center' }}><Spinner label="Cargando…" /></div>;
 
 export default function App() {
   useSearchShortcut();

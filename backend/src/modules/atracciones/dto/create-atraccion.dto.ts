@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsBoolean,
@@ -14,10 +15,27 @@ import {
   MaxLength,
   Min,
   MinLength,
+  Validate,
   ValidateNested,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PriceDto, LocationDto, PhotoDto, OperatorDto } from './nested-types.dto';
+
+/** Duración ISO 8601 mayor a 0 y de máximo 30 días (720 h). */
+@ValidatorConstraint({ name: 'duracionRazonable' })
+export class DuracionRazonable implements ValidatorConstraintInterface {
+  validate(v: string) {
+    const m = /^PT(?:(\d+)H)?(?:(\d+)M)?$/.exec(v ?? '');
+    if (!m) return false;
+    const horas = Number(m[1] ?? 0) + Number(m[2] ?? 0) / 60;
+    return horas > 0 && horas <= 720 && Number(m[2] ?? 0) < 60;
+  }
+  defaultMessage() {
+    return 'duration debe ser mayor a 0 y de máximo 30 días (PT720H); los minutos deben ser menores a 60';
+  }
+}
 
 export enum ProductType {
   SINGLE_TICKET = 'SINGLE_TICKET',
@@ -30,7 +48,7 @@ export class CreateAtraccionDto {
   @ApiProperty({ description: 'Nombre de la atracción turística', example: 'Tour al Parque Nacional Cotopaxi' })
   @IsString()
   @MinLength(3, { message: 'name debe tener al menos 3 caracteres' })
-  @MaxLength(255)
+  @MaxLength(200)
   name: string;
 
   @ApiProperty({ description: 'Descripción detallada de la atracción', example: 'Excursión guiada al volcán Cotopaxi, incluye caminata hasta el refugio.' })
@@ -40,7 +58,8 @@ export class CreateAtraccionDto {
 
   @ApiProperty({ description: 'Duración en formato ISO 8601', example: 'PT8H' })
   @IsString()
-  @Matches(/^PT(\d+H)?(\d+M)?$/, { message: 'duration debe estar en formato ISO 8601, ej. PT8H o PT1H30M' })
+  @Matches(/^PT(\d{1,3}H)?(\d{1,2}M)?$/, { message: 'duration debe estar en formato ISO 8601, ej. PT8H o PT1H30M' })
+  @Validate(DuracionRazonable)
   duration: string;
 
   @ApiProperty({ description: 'Precio por adulto', type: PriceDto })
@@ -59,37 +78,45 @@ export class CreateAtraccionDto {
 
   @ApiProperty({ description: 'Qué incluye el tour/paquete', example: ['Transporte', 'Guía bilingüe', 'Almuerzo'] })
   @IsArray()
+  @ArrayMaxSize(30)
   @IsString({ each: true })
+  @MaxLength(150, { each: true, message: 'cada elemento de includes puede tener hasta 150 caracteres' })
   includes: string[];
 
   @ApiProperty({ description: 'Slugs de categorías', example: ['naturaleza', 'aventura'] })
   @IsArray()
+  @ArrayMaxSize(10)
   @ArrayMinSize(1, { message: 'categories debe tener al menos una categoría' })
   @IsString({ each: true })
   categories: string[];
 
-  @ApiProperty({ description: 'Insignias comerciales', example: ['best_seller'], required: false })
+  @ApiProperty({ description: 'Se acepta por compatibilidad con el contrato pero se ignora: las insignias se calculan (ventas, ocupación, antigüedad)', example: ['best_seller'], required: false })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(5)
   @IsString({ each: true })
   badges?: string[];
 
-  @ApiProperty({ description: 'Ubicaciones del tour (la primera es la principal)', type: [LocationDto] })
+  @ApiProperty({ description: 'Ubicación del tour (exactamente una)', type: [LocationDto] })
   @IsArray()
   @ArrayMinSize(1, { message: 'locations debe tener al menos una ubicación' })
+  @ArrayMaxSize(1, { message: 'Por ahora cada atracción admite una sola ubicación' })
   @ValidateNested({ each: true })
   @Type(() => LocationDto)
   locations: LocationDto[];
 
   @ApiProperty({ description: 'Fotos de la atracción', type: [PhotoDto] })
   @IsArray()
+  @ArrayMaxSize(12)
   @ValidateNested({ each: true })
   @Type(() => PhotoDto)
   photos: PhotoDto[];
 
   @ApiProperty({ description: 'Idiomas soportados', example: ['es', 'en'] })
   @IsArray()
-  @IsString({ each: true })
+  @ArrayMaxSize(8)
+  @ArrayMinSize(1, { message: 'supported_languages debe tener al menos un idioma' })
+  @Matches(/^[a-z]{2}$/, { each: true, message: 'supported_languages debe contener códigos ISO 639-1 (ej. es, en)' })
   supported_languages: string[];
 
   @ApiProperty({ description: 'Permite cancelación gratuita', example: true })
@@ -112,18 +139,23 @@ export class CreateAtraccionDto {
   @ApiPropertyOptional({ example: ['Propinas', 'Alquiler de equipo'] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(30)
   @IsString({ each: true })
+  @MaxLength(150, { each: true, message: 'cada elemento de not_includes puede tener hasta 150 caracteres' })
   not_includes?: string[];
 
   @ApiPropertyOptional({ example: ['Lleva ropa abrigada', 'Protector solar'] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @IsString({ each: true })
+  @MaxLength(150, { each: true, message: 'cada recomendación puede tener hasta 150 caracteres' })
   recommendations?: string[];
 
   @ApiPropertyOptional({ description: 'Horarios de salida', example: ['07:00', '13:00'] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(24)
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { each: true, message: 'times debe contener horas en formato HH:mm' })
   times?: string[];
 
@@ -138,6 +170,7 @@ export class CreateAtraccionDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(720)
   cancellation_hours?: number;
 
   @ApiPropertyOptional({ example: 'Parque La Carolina, frente al Quicentro' })

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 /**
@@ -18,6 +18,7 @@ export class ListAtraccionesQueryDto extends PaginationQueryDto {
   @ApiPropertyOptional({ description: 'Busca por nombre o ciudad' })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   q?: string;
 
   @ApiPropertyOptional({ description: 'Slug de categoría' })
@@ -30,6 +31,12 @@ export class ListAtraccionesQueryDto extends PaginationQueryDto {
   @Type(() => Number)
   @IsInt()
   city?: number;
+
+  @ApiPropertyOptional({ description: 'Código de la empresa operadora', example: 101 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  operator?: number;
 
   @ApiPropertyOptional({ description: 'Solo con attractions:write → active | inactive | all', enum: ['active', 'inactive', 'all'] })
   @IsOptional()

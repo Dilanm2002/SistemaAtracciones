@@ -1,12 +1,14 @@
-// Punto de entrada serverless para Vercel.
-// `npm run build` (nest build) genera ../dist antes de empaquetar esta función.
-const { createApp } = require('../dist/app.factory');
+// Punto de entrada serverless para Vercel (JavaScript plano porque Vercel lo ejecuta tal cual;
+// toda la lógica vive en TypeScript dentro de ../dist). `npm run vercel-build` genera ../dist.
 
 let serverPromise;
 
 function bootstrap() {
   serverPromise ??= (async () => {
+    // require dentro del try de la petición: si dist/ falta, se responde un 503 problem+json (OPS-001)
+    const { createApp } = require('../dist/app.factory');
     const app = await createApp();
+    app.enableShutdownHooks();
     await app.init();
     return app.getHttpAdapter().getInstance();
   })().catch((err) => {
@@ -22,20 +24,18 @@ module.exports = async (req, res) => {
     return server(req, res);
   } catch (err) {
     // Diagnóstico en los Runtime Logs de Vercel (sin imprimir secretos)
-    console.error('[bootstrap] No se pudo iniciar la API:', err?.message, {
-      DATABASE_URL: !!process.env.DATABASE_URL,
-      DB_SSL: process.env.DB_SSL,
-      NODE_ENV: process.env.NODE_ENV,
-    });
+    console.error('[bootstrap] No se pudo iniciar la API:', err?.message);
     res.statusCode = 503;
     res.setHeader('Content-Type', 'application/problem+json');
+    res.setHeader('Retry-After', '30');
     res.end(
       JSON.stringify({
         type: 'https://api.descubre-ec.com/errors/unavailable',
         title: 'Servicio no disponible',
         status: 503,
-        detail: 'La API no pudo iniciar. Revisa los logs del despliegue.',
-        cause: String(err?.message ?? err).replace(/postgres(ql)?:\/\/[^\s]+/g, '[DATABASE_URL]'),
+        detail: 'La API no pudo iniciar. Intenta de nuevo en unos segundos.',
+        // Mensaje técnico sin secretos (la URL de la base se oculta)
+        cause: String(err?.message ?? err).replace(/postgres(ql)?:\/\/\S+/g, '[DATABASE_URL]'),
       }),
     );
   }

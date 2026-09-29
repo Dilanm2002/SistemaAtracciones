@@ -1,21 +1,131 @@
 syntax = "proto3";
 
-package atracciones;
+package atracciones.v1;
 
-// Contrato gRPC base (Reto 2)
-// Los estudiantes deberán expandir este archivo para integraciones de alto rendimiento (streaming / unary).
+// Contrato gRPC del dominio de Atracciones (Reto 2).
+// Refleja el modelo relacional (database/01_esquema.sql) y el contrato REST.
+// Los campos 1-4 de AtraccionResponse son los de la plantilla original y
+// conservan su número para no romper clientes existentes.
 
 service AtraccionesService {
   rpc GetAtraccion (GetAtraccionRequest) returns (AtraccionResponse);
+  // Lote (equivale a POST /atracciones/details): evita el N+1 entre servicios
+  rpc BatchGetAtracciones (BatchGetAtraccionesRequest) returns (BatchGetAtraccionesResponse);
+  rpc GetDisponibilidad (GetDisponibilidadRequest) returns (DisponibilidadResponse);
+  // Transaccionales: exigen idempotency_key (UUID v4), igual que la cabecera Idempotency-Key
+  rpc CrearReserva (CrearReservaRequest) returns (ReservaResponse);
+  rpc CancelarReserva (CancelarReservaRequest) returns (ReservaResponse);
+}
+
+enum TipoProducto {
+  TIPO_PRODUCTO_UNSPECIFIED = 0;
+  SINGLE_TICKET = 1;
+  GUIDED_TOUR = 2;
+  PACKAGE = 3;
+}
+
+enum EstadoReserva {
+  ESTADO_RESERVA_UNSPECIFIED = 0;
+  CONFIRMED = 1;
+  PENDING = 2;
+  CANCELLED = 3;
+}
+
+enum MetodoPago {
+  METODO_PAGO_UNSPECIFIED = 0;
+  TARJETA = 1;
+  TRANSFERENCIA = 2;
+  EN_SITIO = 3;
+}
+
+message Precio {
+  string moneda = 1;   // ISO 4217
+  double total = 2;
 }
 
 message GetAtraccionRequest {
-  string id = 1;
+  string id = 1;       // atr_uuid
 }
 
 message AtraccionResponse {
-  string id = 1;
+  string id = 1;                 // atr_uuid
   string nombre = 2;
-  double precioTicket = 3;
-  bool estaActivo = 4;
+  double precioTicket = 3;       // tarifa ADULTO vigente
+  bool estaActivo = 4;           // atr_estado = PUBLICADA
+  string descripcion = 5;
+  string ciudad = 6;             // ciudad.ciu_nombre
+  int32 ciudad_id = 7;           // ciu_id (city del contrato REST)
+  string provincia = 8;
+  string region = 9;
+  double latitud = 10;
+  double longitud = 11;
+  double duracion_horas = 12;
+  TipoProducto tipo = 13;
+  int32 operador_codigo = 14;
+  string operador_nombre = 15;
+  Precio precio_nino = 16;
+  repeated string horarios = 17; // HH:mm
+  repeated string categorias = 18;
+  repeated string idiomas = 19;
+  bool cancelacion_gratuita = 20;
+  double calificacion = 21;
+  int32 numero_resenas = 22;
+}
+
+message BatchGetAtraccionesRequest {
+  repeated string ids = 1;       // máx. 50
+}
+
+message BatchGetAtraccionesResponse {
+  repeated AtraccionResponse atracciones = 1;
+  repeated string no_encontradas = 2;
+}
+
+message GetDisponibilidadRequest {
+  string atraccion_id = 1;
+  string fecha = 2;              // AAAA-MM-DD
+}
+
+message CupoHorario {
+  string hora = 1;
+  int32 capacidad = 2;
+  int32 disponibles = 3;
+}
+
+message DisponibilidadResponse {
+  string fecha = 1;
+  int32 cupos_disponibles = 2;
+  repeated CupoHorario horarios = 3;
+  string motivo_no_disponible = 4;
+}
+
+message CrearReservaRequest {
+  string idempotency_key = 1;
+  string atraccion_id = 2;
+  string fecha = 3;
+  string hora = 4;
+  int32 tickets = 5;
+  int32 ninos = 6;
+  string nombre_titular = 7;
+  string documento_titular = 8;
+  MetodoPago metodo_pago = 9;
+}
+
+message CancelarReservaRequest {
+  string idempotency_key = 1;
+  string reserva_id = 2;         // res_uuid
+  string motivo = 3;
+}
+
+message ReservaResponse {
+  string id = 1;                 // res_uuid
+  string codigo = 2;             // DEC-XXXXXX
+  EstadoReserva estado = 3;
+  string atraccion_id = 4;
+  string fecha = 5;
+  string hora = 6;
+  int32 adultos = 7;
+  int32 ninos = 8;
+  Precio total = 9;
+  MetodoPago metodo_pago = 10;
 }

@@ -1,41 +1,58 @@
 import { ProductType } from '../modules/atracciones/dto/create-atraccion.dto';
-import { Region } from '../modules/atracciones/entities/destino.entity';
 
-export const CATEGORIAS = [
-  { slug: 'naturaleza', nombre: 'Naturaleza', icono: 'trees', orden: 1, descripcion: 'Volcanes, lagunas, páramos y bosques nublados.' },
-  { slug: 'aventura', nombre: 'Aventura', icono: 'mountain', orden: 2, descripcion: 'Caminatas, deportes y adrenalina.' },
-  { slug: 'cultura', nombre: 'Cultura e historia', icono: 'landmark', orden: 3, descripcion: 'Patrimonio colonial, arqueología y tradiciones vivas.' },
-  { slug: 'vida-silvestre', nombre: 'Vida silvestre', icono: 'bird', orden: 4, descripcion: 'Fauna única: tortugas gigantes, ballenas y colibríes.' },
-  { slug: 'playa', nombre: 'Playa y mar', icono: 'waves', orden: 5, descripcion: 'Snorkel, surf y costa del Pacífico.' },
-  { slug: 'tours-ciudad', nombre: 'Tours de ciudad', icono: 'building-2', orden: 6, descripcion: 'Recorridos guiados por las ciudades más bonitas.' },
-  { slug: 'trenes-miradores', nombre: 'Trenes y miradores', icono: 'train-front', orden: 7, descripcion: 'Vistas panorámicas y rutas ferroviarias históricas.' },
+/**
+ * Categorías: las de primer nivel ya vienen en database/01_esquema.sql; aquí se
+ * completan (ícono, descripción) y se agregan subcategorías con cat_padre_id.
+ */
+export const CATEGORIAS: { slug: string; nombre: string; icono: string; orden: number; descripcion: string; padre?: string }[] = [
+  { slug: 'naturales', nombre: 'Naturaleza', icono: 'trees', orden: 1, descripcion: 'Volcanes, lagunas, páramos y bosques nublados.' },
+  { slug: 'aventura', nombre: 'Aventura', icono: 'bike', orden: 2, descripcion: 'Caminatas, deportes y adrenalina.' },
+  { slug: 'cultural', nombre: 'Cultura e historia', icono: 'landmark', orden: 3, descripcion: 'Patrimonio colonial, arqueología y tradiciones vivas.' },
+  { slug: 'vida-silvestre', nombre: 'Vida silvestre', icono: 'bird', orden: 4, descripcion: 'Fauna única: tortugas gigantes, ballenas y colibríes.', padre: 'naturales' },
+  { slug: 'playas', nombre: 'Playa y mar', icono: 'waves', orden: 5, descripcion: 'Snorkel, surf y costa del Pacífico.' },
+  { slug: 'tours-ciudad', nombre: 'Tours de ciudad', icono: 'building-2', orden: 6, descripcion: 'Recorridos guiados por las ciudades más bonitas.', padre: 'cultural' },
+  { slug: 'trenes-miradores', nombre: 'Trenes y miradores', icono: 'train-front', orden: 7, descripcion: 'Vistas panorámicas y rutas ferroviarias históricas.', padre: 'cultural' },
   { slug: 'gastronomia', nombre: 'Gastronomía', icono: 'utensils', orden: 8, descripcion: 'Cacao, café y sabores ecuatorianos.' },
+  { slug: 'montana', nombre: 'Montaña', icono: 'mountain', orden: 9, descripcion: 'Sierra, volcanes y senderismo de altura.' },
 ];
 
+/** Slug antiguo de los datos de demo → slug del modelo. */
+export const SLUG: Record<string, string> = { naturaleza: 'naturales', cultura: 'cultural', playa: 'playas' };
+
+/**
+ * Destinos = ciudades del modelo (tabla ciudad). Las que ya trae 01_esquema.sql se
+ * reconocen por su código INEC y solo se completan con descripción e imagen.
+ */
 export const DESTINOS = [
-  { codigo: 1, nombre: 'Quito', provincia: 'Pichincha', region: Region.SIERRA, latitud: -0.2202, longitud: -78.5125, imagen: '/img/quito-centro.jpg', descripcion: 'La capital más antigua de Sudamérica y primer Patrimonio Cultural de la Humanidad.' },
-  { codigo: 2, nombre: 'Baños de Agua Santa', provincia: 'Tungurahua', region: Region.SIERRA, latitud: -1.3964, longitud: -78.4247, imagen: '/img/casa-arbol.jpg', descripcion: 'La capital de la aventura: cascadas, termas y deportes extremos a los pies del Tungurahua.' },
-  { codigo: 3, nombre: 'Santa Cruz (Galápagos)', provincia: 'Galápagos', region: Region.GALAPAGOS, latitud: -0.7431, longitud: -90.3134, imagen: '/img/galapagos-tortugas.jpg', descripcion: 'Corazón de las islas encantadas, hogar de tortugas gigantes y playas de arena blanca.' },
-  { codigo: 4, nombre: 'San Cristóbal (Galápagos)', provincia: 'Galápagos', region: Region.GALAPAGOS, latitud: -0.9017, longitud: -89.6102, imagen: '/img/kicker-rock.jpg', descripcion: 'Lobos marinos en el malecón y el icónico León Dormido.' },
-  { codigo: 5, nombre: 'Cuenca', provincia: 'Azuay', region: Region.SIERRA, latitud: -2.9001, longitud: -79.0059, imagen: '/img/cuenca.jpg', descripcion: 'Ciudad de cúpulas azules, ríos y el arte del sombrero de paja toquilla.' },
-  { codigo: 6, nombre: 'Guayaquil', provincia: 'Guayas', region: Region.COSTA, latitud: -2.1894, longitud: -79.8891, imagen: '/img/malecon.jpg', descripcion: 'La Perla del Pacífico: malecón, barrio Las Peñas y gastronomía costeña.' },
-  { codigo: 7, nombre: 'Otavalo', provincia: 'Imbabura', region: Region.SIERRA, latitud: 0.2343, longitud: -78.2625, imagen: '/img/otavalo.jpg', descripcion: 'Tierra de lagos y del mercado indígena más famoso de los Andes.' },
-  { codigo: 8, nombre: 'Mindo', provincia: 'Pichincha', region: Region.SIERRA, latitud: -0.052, longitud: -78.7757, imagen: '/img/mindo.jpg', descripcion: 'Bosque nublado con más de 500 especies de aves y el mejor cacao.' },
-  { codigo: 9, nombre: 'Cotopaxi', provincia: 'Cotopaxi', region: Region.SIERRA, latitud: -0.9352, longitud: -78.6155, imagen: '/img/cotopaxi.jpg', descripcion: 'Volcanes nevados, páramos y la laguna del Quilotoa.' },
-  { codigo: 10, nombre: 'Riobamba y Alausí', provincia: 'Chimborazo', region: Region.SIERRA, latitud: -1.671, longitud: -78.6471, imagen: '/img/chimborazo.jpg', descripcion: 'El punto más cercano al Sol y el tren de la Nariz del Diablo.' },
-  { codigo: 11, nombre: 'Montañita', provincia: 'Santa Elena', region: Region.COSTA, latitud: -1.8286, longitud: -80.7525, imagen: '/img/montanita.jpg', descripcion: 'Olas perfectas para surfear y ambiente bohemio frente al mar.' },
-  { codigo: 12, nombre: 'Puerto López', provincia: 'Manabí', region: Region.COSTA, latitud: -1.5566, longitud: -80.8113, imagen: '/img/isla-plata.jpg', descripcion: 'Avistamiento de ballenas jorobadas y la Isla de la Plata.' },
-  { codigo: 13, nombre: 'Cuyabeno', provincia: 'Sucumbíos', region: Region.AMAZONIA, latitud: -0.018, longitud: -76.318, imagen: '/img/cuyabeno.jpg', descripcion: 'Selva amazónica, lagunas negras, delfines rosados y comunidades ancestrales.' },
+  { codigo: 1, codigoInec: '170150', nombre: 'Quito', provincia: 'Pichincha', imagen: '/img/quito-centro.jpg', descripcion: 'La capital más antigua de Sudamérica y primer Patrimonio Cultural de la Humanidad.' },
+  { codigo: 2, codigoInec: '180250', nombre: 'Baños de Agua Santa', provincia: 'Tungurahua', imagen: '/img/casa-arbol.jpg', descripcion: 'La capital de la aventura: cascadas, termas y deportes extremos a los pies del Tungurahua.' },
+  { codigo: 3, codigoInec: '200150', nombre: 'Puerto Ayora', provincia: 'Galápagos', imagen: '/img/galapagos-tortugas.jpg', descripcion: 'En la isla Santa Cruz, corazón de las islas encantadas: tortugas gigantes y playas de arena blanca.' },
+  { codigo: 4, codigoInec: '020100', nombre: 'Puerto Baquerizo Moreno', provincia: 'Galápagos', imagen: '/img/kicker-rock.jpg', descripcion: 'Capital de Galápagos en San Cristóbal: lobos marinos en el malecón y el icónico León Dormido.' },
+  { codigo: 5, codigoInec: '010100', nombre: 'Cuenca', provincia: 'Azuay', imagen: '/img/cuenca.jpg', descripcion: 'Ciudad de cúpulas azules, ríos y el arte del sombrero de paja toquilla.' },
+  { codigo: 6, codigoInec: '090150', nombre: 'Guayaquil', provincia: 'Guayas', imagen: '/img/malecon.jpg', descripcion: 'La Perla del Pacífico: malecón, barrio Las Peñas y gastronomía costeña.' },
+  { codigo: 7, codigoInec: '100450', nombre: 'Otavalo', provincia: 'Imbabura', imagen: '/img/otavalo.jpg', descripcion: 'Tierra de lagos y del mercado indígena más famoso de los Andes.' },
+  { codigo: 8, codigoInec: '170450', nombre: 'Mindo', provincia: 'Pichincha', imagen: '/img/mindo.jpg', descripcion: 'Bosque nublado con más de 500 especies de aves y el mejor cacao.' },
+  { codigo: 9, codigoInec: '050100', nombre: 'Latacunga', provincia: 'Cotopaxi', imagen: '/img/cotopaxi.jpg', descripcion: 'Puerta de entrada al volcán Cotopaxi, los páramos y la laguna del Quilotoa.' },
+  { codigo: 10, codigoInec: '060100', nombre: 'Riobamba', provincia: 'Chimborazo', imagen: '/img/chimborazo.jpg', descripcion: 'El punto más cercano al Sol y el tren de la Nariz del Diablo en Alausí.' },
+  { codigo: 11, codigoInec: '240150', nombre: 'Montañita', provincia: 'Santa Elena', imagen: '/img/montanita.jpg', descripcion: 'Olas perfectas para surfear y ambiente bohemio frente al mar.' },
+  { codigo: 12, codigoInec: '130650', nombre: 'Puerto López', provincia: 'Manabí', imagen: '/img/isla-plata.jpg', descripcion: 'Avistamiento de ballenas jorobadas y la Isla de la Plata.' },
+  { codigo: 13, codigoInec: '230100', nombre: 'Nueva Loja', provincia: 'Sucumbíos', imagen: '/img/cuyabeno.jpg', descripcion: 'Puerta a la Reserva Cuyabeno: selva amazónica, lagunas negras y delfines rosados.' },
 ];
 
 export const OPERADORES = [
-  { codigo: 101, nombre: 'Andes Explorer Ecuador', ruc: '1792345678001', email: 'reservas@andesexplorer.ec', telefono: '022456789' },
-  { codigo: 102, nombre: 'Galápagos Blue Tours', ruc: '2090123456001', email: 'info@galapagosblue.ec', telefono: '052526789' },
-  { codigo: 103, nombre: 'Quito Tour Bus', ruc: '1791234567001', email: 'ventas@quitotourbus.ec', telefono: '022567890' },
-  { codigo: 104, nombre: 'Amazonía Viva Expediciones', ruc: '2190456789001', email: 'selva@amazoniaviva.ec', telefono: '062830123' },
-  { codigo: 105, nombre: 'Pacífico Aventura', ruc: '1391234567001', email: 'hola@pacificoaventura.ec', telefono: '052300456' },
-  { codigo: 106, nombre: 'Tren Ecuador Experiencias', ruc: '1768123456001', email: 'boletos@trenexperiencias.ec', telefono: '032930126' },
-  { codigo: 107, nombre: 'Austro Travel Cuenca', ruc: '0190345678001', email: 'tours@austrotravel.ec', telefono: '072845123' },
+  { codigo: 101, nombre: 'Andes Explorer Ecuador', ruc: '1792345678001', email: 'reservas@andesexplorer.ec', telefono: '022456789', provincia: 'Pichincha', direccion: 'Av. Amazonas N24-03 y Colón, Quito' },
+  { codigo: 102, nombre: 'Galápagos Blue Tours', ruc: '2090123456001', email: 'info@galapagosblue.ec', telefono: '052526789', provincia: 'Galápagos', direccion: 'Av. Charles Darwin, Puerto Ayora' },
+  { codigo: 103, nombre: 'Quito Tour Bus', ruc: '1791234567001', email: 'ventas@quitotourbus.ec', telefono: '022567890', provincia: 'Pichincha', direccion: 'Av. Naciones Unidas y Shyris, Quito' },
+  { codigo: 104, nombre: 'Amazonía Viva Expediciones', ruc: '2190456789001', email: 'selva@amazoniaviva.ec', telefono: '062830123', provincia: 'Sucumbíos', direccion: 'Av. Quito y 12 de Febrero, Nueva Loja' },
+  { codigo: 105, nombre: 'Pacífico Aventura', ruc: '1391234567001', email: 'hola@pacificoaventura.ec', telefono: '052300456', provincia: 'Manabí', direccion: 'Malecón Julio Izurieta, Puerto López' },
+  { codigo: 106, nombre: 'Tren Ecuador Experiencias', ruc: '1768123456001', email: 'boletos@trenexperiencias.ec', telefono: '032930126', provincia: 'Chimborazo', direccion: 'Estación de Alausí, Chimborazo' },
+  { codigo: 107, nombre: 'Austro Travel Cuenca', ruc: '0190345678001', email: 'tours@austrotravel.ec', telefono: '072845123', provincia: 'Azuay', direccion: 'Calle Larga 7-80, Cuenca' },
+];
+
+/** Idiomas que usan los datos de demo y no trae el catálogo base (es, en, fr, de). */
+export const IDIOMAS_EXTRA = [
+  { codigo: 'pt', nombre: 'Portugues' },
+  { codigo: 'qu', nombre: 'Kichwa' },
 ];
 
 interface SeedAtraccion {
@@ -366,15 +383,15 @@ export const ATRACCIONES: SeedAtraccion[] = [
   },
 ];
 
-export const USUARIOS = [
-  { nombre: 'Administrador Descubre EC', email: 'admin@descubre-ec.com', password: 'Admin123', rol: 'ADMIN', telefono: '0990000001' },
-  { nombre: 'Carlos Operaciones', email: 'operador@descubre-ec.com', password: 'Operador123', rol: 'OPERADOR', telefono: '0990000002' },
-  { nombre: 'María Guamán', email: 'cliente@descubre-ec.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0991234567' },
-  { nombre: 'Ana Torres', email: 'ana.torres@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0987654321' },
-  { nombre: 'Luis Andrade', email: 'luis.andrade@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0981122334' },
-  { nombre: 'Sofía Mendoza', email: 'sofia.mendoza@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0975566778' },
-  { nombre: 'John Smith', email: 'john.smith@mail.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '+14155550123' },
-  { nombre: 'Daniela Paredes', email: 'daniela.paredes@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0969988776' },
+export const USUARIOS: { nombre: string; apellido: string; email: string; password: string; rol: string; telefono: string; documento?: string; operadorCodigo?: number }[] = [
+  { nombre: 'Andrea', apellido: 'Salazar', email: 'admin@descubre-ec.com', password: 'Admin123', rol: 'ADMIN', telefono: '0990000001' },
+  { nombre: 'Carlos', apellido: 'Operaciones', email: 'operador@descubre-ec.com', password: 'Operador123', rol: 'OPERADOR', telefono: '0990000002', operadorCodigo: 101 },
+  { nombre: 'María', apellido: 'Guamán', email: 'cliente@descubre-ec.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0991234567', documento: '1718293745' },
+  { nombre: 'Ana', apellido: 'Torres', email: 'ana.torres@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0987654321', documento: '0923456781' },
+  { nombre: 'Luis', apellido: 'Andrade', email: 'luis.andrade@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0981122334' },
+  { nombre: 'Sofía', apellido: 'Mendoza', email: 'sofia.mendoza@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0975566778' },
+  { nombre: 'John', apellido: 'Smith', email: 'john.smith@mail.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '+14155550123', documento: 'A1234567' },
+  { nombre: 'Daniela', apellido: 'Paredes', email: 'daniela.paredes@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0969988776' },
 ];
 
 export const COMENTARIOS: Record<number, string[]> = {

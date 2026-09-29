@@ -1,9 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
-import { IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLength, Max, IsEnum, MinLength, IsIn } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLength, Max, IsEnum, MinLength, IsIn, IsUUID, ValidateNested } from 'class-validator';
+import { Link } from '../../../common/utils/hateoas';
 import { PriceDto } from './nested-types.dto';
-
-const trim = ({ value }) => (typeof value === 'string' ? value.trim() : value);
+import { trim } from '../../../common/utils/transform';
 
 export enum ReservationStatus {
   CONFIRMED = 'CONFIRMED',
@@ -15,6 +15,47 @@ export enum PaymentMethod {
   TARJETA = 'TARJETA',
   TRANSFERENCIA = 'TRANSFERENCIA',
   EN_SITIO = 'EN_SITIO',
+}
+
+export enum CardBrand {
+  VISA = 'VISA',
+  MASTERCARD = 'MASTERCARD',
+  AMEX = 'AMEX',
+  DINERS = 'DINERS',
+  OTRA = 'OTRA',
+}
+
+/**
+ * Datos NO sensibles de la tarjeta (PCI-DSS): nunca se envía ni se guarda el número
+ * completo ni el CVV; solo marca, últimos 4 dígitos, titular y vencimiento.
+ */
+export class CardInfoDto {
+  @ApiProperty({ enum: CardBrand })
+  @IsEnum(CardBrand)
+  brand: CardBrand;
+
+  @ApiProperty({ example: '1111' })
+  @Matches(/^\d{4}$/, { message: 'card.last4 debe tener 4 dígitos' })
+  last4: string;
+
+  @ApiProperty({ example: 'JUAN PEREZ' })
+  @Transform(trim)
+  @IsString()
+  @MinLength(3)
+  @MaxLength(120)
+  holder: string;
+
+  @ApiProperty({ example: 12 })
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  exp_month: number;
+
+  @ApiProperty({ example: 2029 })
+  @IsInt()
+  @Min(2020)
+  @Max(2100)
+  exp_year: number;
 }
 
 export class ReservationRequestDto {
@@ -43,6 +84,7 @@ export class ReservationRequestDto {
 
   @ApiProperty({ description: 'Email del cliente', example: 'juan@example.com', required: false })
   @IsEmail({}, { message: 'customer_email no tiene un formato válido' })
+  @MaxLength(160)
   @IsOptional()
   customer_email?: string;
 
@@ -51,6 +93,7 @@ export class ReservationRequestDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(30, { message: 'children no puede superar 30' })
   children?: number;
 
   @ApiPropertyOptional({ example: '0991234567' })
@@ -59,12 +102,17 @@ export class ReservationRequestDto {
   @Matches(/^\+?\d{7,15}$/, { message: 'customer_phone debe tener entre 7 y 15 dígitos' })
   customer_phone?: string;
 
-  @ApiPropertyOptional({ description: 'Cédula o pasaporte', example: '1712345678' })
+  @ApiPropertyOptional({ description: 'Cédula (10 dígitos) o pasaporte (1-2 letras y 6-9 dígitos)', example: '1712345678' })
   @IsOptional()
-  @Transform(trim)
-  @IsString()
-  @MaxLength(20)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @Matches(/^(\d{10}|[A-Z]{1,2}\d{6,9})$/, { message: 'customer_document debe ser una cédula de 10 dígitos o un pasaporte válido' })
   customer_document?: string;
+
+  @ApiPropertyOptional({ type: CardInfoDto, description: 'Solo con payment_method TARJETA' })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CardInfoDto)
+  card?: CardInfoDto;
 
   @ApiPropertyOptional({ enum: PaymentMethod, example: PaymentMethod.TARJETA })
   @IsOptional()
@@ -115,7 +163,7 @@ export class ReservationResponseDto {
   @ApiPropertyOptional() cancelled_at?: string;
   @ApiPropertyOptional() created_at?: string;
   @ApiPropertyOptional({ description: 'Si todavía puede cancelarse sin costo' }) can_cancel?: boolean;
-  @ApiPropertyOptional() _links?: any;
+  @ApiPropertyOptional() _links?: Record<string, Link>;
 }
 
 export class CancelReservationRequestDto {
@@ -156,14 +204,15 @@ export class ReservationsQueryDto {
   @ApiPropertyOptional({ description: 'Busca por código, cliente o email' })
   @IsOptional()
   @IsString()
+  @MaxLength(120, { message: 'q no puede superar 120 caracteres' })
   q?: string;
 
   @ApiPropertyOptional({ description: 'UUID de la atracción' })
   @IsOptional()
-  @IsString()
+  @IsUUID('4', { message: 'attraction_id debe ser un UUID' })
   attraction_id?: string;
 
-  @ApiPropertyOptional({ description: 'Solo admin/operador: true = todas las reservas, no solo las propias' })
+  @ApiPropertyOptional({ description: 'true = todas las reservas que el usuario puede gestionar (admin: todas; operador: las de su empresa)' })
   @IsOptional()
   @IsIn(['true', 'false'])
   all?: string;

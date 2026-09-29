@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://descubre-ec.vercel.app/</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/explorar</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/destinos</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/ayuda</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/contacto</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/explorar?region=GALAPAGOS</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/explorar?region=SIERRA</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/explorar?region=AMAZONIA</loc></url>
+  <url><loc>https://descubre-ec.vercel.app/explorar?region=COSTA</loc></url>
+</urlset>

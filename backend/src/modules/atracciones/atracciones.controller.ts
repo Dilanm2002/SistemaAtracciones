@@ -23,6 +23,7 @@ import { JwtAuthGuard, OptionalJwtGuard } from '../../common/auth/jwt-auth.guard
 import { AuthUser, SCOPES } from '../../common/auth/scopes';
 import { PaginatedResponseDto } from '../../common/dto/paginated-response.dto';
 import { IdempotencyKeyGuard } from '../../common/guards/idempotency-key.guard';
+import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 import { AtraccionesService } from './atracciones.service';
 import { AtraccionResponseDto } from './dto/atraccion-response.dto';
 import { AvailabilityQueryDto, AvailabilityResponseDto, BlockDateDto, CalendarDayDto, CalendarQueryDto } from './dto/availability.dto';
@@ -85,9 +86,11 @@ export class AtraccionesController {
   @Scopes(SCOPES.READ)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Historial de reservas del usuario (admin/operador: ?all=true para todas)' })
-  @ApiResponse({ status: 200, description: 'Listado de reservas.', type: [ReservationResponseDto] })
-  getReservations(@Query() query: ReservationsQueryDto, @CurrentUser() user: AuthUser) {
-    return this.reservasService.list(query, user);
+  @ApiResponse({ status: 200, description: 'Listado de reservas (máx. 500; total en la cabecera X-Total-Count).', type: [ReservationResponseDto] })
+  async getReservations(@Query() query: ReservationsQueryDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    const { rows, total } = await this.reservasService.list(query, user);
+    res.setHeader('X-Total-Count', String(total));
+    return rows;
   }
 
   @Get('reservations/:reservationId')
@@ -156,8 +159,8 @@ export class AtraccionesController {
   @ApiOperation({ summary: 'Registrar una nueva atracción' })
   @ApiResponse({ status: 201, description: 'Creada. Devuelve cabecera Location.', type: AtraccionResponseDto })
   @ApiResponse({ status: 400, description: 'Datos de entrada inválidos.' })
-  async create(@Body() dto: CreateAtraccionDto, @Res({ passthrough: true }) res: Response) {
-    const atraccion = await this.atraccionesService.create(dto);
+  async create(@Body() dto: CreateAtraccionDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+    const atraccion = await this.atraccionesService.create(dto, user);
     res.setHeader('Location', `/api/v1/atracciones/${atraccion.id}`);
     return atraccion;
   }
@@ -184,8 +187,8 @@ export class AtraccionesController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 204, description: 'Reemplazada correctamente.' })
   @ApiResponse({ status: 404, description: 'La atracción no existe.' })
-  replace(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateAtraccionDto) {
-    return this.atraccionesService.replace(id, dto);
+  replace(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateAtraccionDto, @CurrentUser() user: AuthUser) {
+    return this.atraccionesService.replace(id, dto, user);
   }
 
   @Patch(':id')
@@ -195,8 +198,8 @@ export class AtraccionesController {
   @ApiOperation({ summary: 'Actualizar parcialmente una atracción' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, type: AtraccionResponseDto })
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAtraccionDto) {
-    return this.atraccionesService.update(id, dto);
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAtraccionDto, @CurrentUser() user: AuthUser) {
+    return this.atraccionesService.update(id, dto, user);
   }
 
   @Delete(':id')
@@ -208,8 +211,8 @@ export class AtraccionesController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 204, description: 'Eliminada.' })
   @ApiResponse({ status: 409, description: 'Tiene reservas próximas; debe desactivarse en su lugar.' })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.atraccionesService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.atraccionesService.remove(id, user);
   }
 
   // ── Disponibilidad ────────────────────────────────────────────────────
@@ -235,8 +238,8 @@ export class AtraccionesController {
   @Scopes(SCOPES.MANAGE)
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Extensión] Fechas en que la atracción no opera' })
-  listBlocked(@Param('id', ParseUUIDPipe) id: string) {
-    return this.atraccionesService.listBloqueos(id);
+  listBlocked(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.atraccionesService.listBloqueos(id, user);
   }
 
   @Post(':id/blocked-dates')
@@ -244,8 +247,8 @@ export class AtraccionesController {
   @Scopes(SCOPES.MANAGE)
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Extensión] Bloquear una fecha (feriado, clima, mantenimiento)' })
-  block(@Param('id', ParseUUIDPipe) id: string, @Body() dto: BlockDateDto) {
-    return this.atraccionesService.bloquear(id, dto);
+  block(@Param('id', ParseUUIDPipe) id: string, @Body() dto: BlockDateDto, @CurrentUser() user: AuthUser) {
+    return this.atraccionesService.bloquear(id, dto, user);
   }
 
   @Delete(':id/blocked-dates/:blockId')
@@ -254,8 +257,8 @@ export class AtraccionesController {
   @Scopes(SCOPES.MANAGE)
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Extensión] Desbloquear una fecha' })
-  unblock(@Param('id', ParseUUIDPipe) id: string, @Param('blockId', ParseUUIDPipe) blockId: string) {
-    return this.atraccionesService.desbloquear(id, blockId);
+  unblock(@Param('id', ParseUUIDPipe) id: string, @Param('blockId', ParseIdPipe) blockId: string, @CurrentUser() user: AuthUser) {
+    return this.atraccionesService.desbloquear(id, blockId, user);
   }
 
   // ── Reservar ──────────────────────────────────────────────────────────

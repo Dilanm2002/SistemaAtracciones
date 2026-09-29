@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Eye, EyeOff, Mountain, Pencil, Plus, Search, Star, Trash2, Users } from 'lucide-react';
-import { Atracciones, Categorias, Destinos, Operadores } from '../api/client';
+import { Atracciones, Categorias, Destinos, Geo, Operadores } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { EmptyState, ErrorState, useConfirm, useDebounce } from '../components/ui';
 import { useToast } from '../context/ToastContext';
@@ -54,7 +54,7 @@ export default function AtraccionesAdmin() {
   const [params, setParams] = useSearchParams();
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
-  const [aux, setAux] = useState({ categorias: [], destinos: [], operadores: [] });
+  const [aux, setAux] = useState({ categorias: [], destinos: [], operadores: [], idiomas: [] });
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('all');
   const [cat, setCat] = useState('');
@@ -68,8 +68,8 @@ export default function AtraccionesAdmin() {
   };
   useEffect(() => {
     load();
-    Promise.all([Categorias.list(true), Destinos.list(true), Operadores.list(true)])
-      .then(([categorias, destinos, operadores]) => setAux({ categorias, destinos, operadores }))
+    Promise.all([Categorias.list(true), Destinos.list(true), Operadores.list(true), Geo.idiomas()])
+      .then(([categorias, destinos, operadores, idiomas]) => setAux({ categorias, destinos, operadores, idiomas }))
       .catch(() => {});
   }, []);
 

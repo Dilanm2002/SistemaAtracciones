@@ -103,8 +103,8 @@ export default function ReservasAdmin() {
         </div>
       </div>
 
-      <div className="tabs" role="tablist" style={{ marginBottom: 16 }}>
-        {TABS.map(([k, l]) => <button key={k} className="tab" role="tab" aria-selected={tab === k} onClick={() => setTab(k)}>{l}</button>)}
+      <div className="tabs" role="group" aria-label="Filtrar reservas por estado" style={{ marginBottom: 16 }}>
+        {TABS.map(([k, l]) => <button key={k} type="button" className="tab" aria-pressed={tab === k} onClick={() => setTab(k)}>{l}</button>)}
       </div>
 
       <div className="adm-toolbar">
@@ -127,10 +127,11 @@ export default function ReservasAdmin() {
       {error ? <ErrorState error={error} onRetry={load} /> : !rows ? <div className="skeleton" style={{ height: 320 }} /> : rows.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No hay reservas con estos filtros">Prueba con otra pestaña, fecha o término de búsqueda.</EmptyState>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
           <table className="table">
+<caption className="sr-only">Reservas</caption>
             <thead>
-              <tr><th>Código</th><th>Salida</th><th>Atracción</th><th>Cliente</th><th className="num">Pax</th><th className="num">Total</th><th>Pago</th><th>Estado</th><th className="num">Acciones</th></tr>
+              <tr><th scope="col">Código</th><th scope="col">Salida</th><th scope="col">Atracción</th><th scope="col">Cliente</th><th scope="col" className="num">Pax</th><th scope="col" className="num">Total</th><th scope="col">Pago</th><th scope="col">Estado</th><th scope="col" className="num">Acciones</th></tr>
             </thead>
             <tbody>
               {rows.map((r) => (

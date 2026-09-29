@@ -27,6 +27,12 @@ function ChartTooltip({ active, payload, label, fmt, extra }) {
   );
 }
 
+const resumen = (title, table) => {
+  if (!table?.rows?.length) return title;
+  const filas = table.rows.slice(0, 8).map((r) => table.columns.map((c) => (c.fmt ? c.fmt(r[c.key]) : r[c.key])).join(' '));
+  return `${title}. ${filas.join('; ')}${table.rows.length > 8 ? '; …' : ''}. Usa «Ver tabla» para el detalle.`;
+};
+
 /** Tarjeta con título, subtítulo y alternancia gráfica/tabla (alternativa accesible). */
 export function ChartCard({ title, subtitle, table, children, className = '' }) {
   const [asTable, setAsTable] = useState(false);
@@ -39,14 +45,15 @@ export function ChartCard({ title, subtitle, table, children, className = '' }) 
         </div>
         {table && (
           <button className="btn btn-ghost btn-sm" onClick={() => setAsTable((t) => !t)} aria-pressed={asTable}>
-            {asTable ? <><BarChart3 size={15} /> Ver gráfica</> : <><Table2 size={15} /> Ver tabla</>}
+            {asTable ? <><BarChart3 size={15} aria-hidden="true" /> Ver gráfica</> : <><Table2 size={15} aria-hidden="true" /> Ver tabla</>}
           </button>
         )}
       </div>
       {asTable ? (
-        <div className="table-wrap" style={{ margin: '4px 0 12px' }}>
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable" style={{ margin: '4px 0 12px' }}>
           <table className="table">
-            <thead><tr>{table.columns.map((c) => <th key={c.key} className={c.num ? 'num' : ''}>{c.label}</th>)}</tr></thead>
+            <caption className="sr-only">{title}</caption>
+            <thead><tr>{table.columns.map((c) => <th scope="col" key={c.key} className={c.num ? 'num' : ''}>{c.label}</th>)}</tr></thead>
             <tbody>
               {table.rows.map((r, i) => (
                 <tr key={i}>{table.columns.map((c) => <td key={c.key} className={c.num ? 'num' : ''}>{c.fmt ? c.fmt(r[c.key]) : r[c.key]}</td>)}</tr>
@@ -54,7 +61,10 @@ export function ChartCard({ title, subtitle, table, children, className = '' }) 
             </tbody>
           </table>
         </div>
-      ) : children}
+      ) : (
+        // El SVG de Recharts no tiene nombre: se resume el contenido de la tabla (ACC-033)
+        <div role="img" aria-label={resumen(title, table)}>{children}</div>
+      )}
     </section>
   );
 }

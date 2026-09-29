@@ -39,7 +39,7 @@ export default function Confirmation() {
   }, [id, r]);
 
   if (error) return <div className="container"><ErrorState error={error} /></div>;
-  if (!r) return <div className="container" style={{ paddingTop: 40 }}><Spinner /> Cargando tu reserva…</div>;
+  if (!r) return <div className="container" style={{ paddingTop: 40 }}><Spinner label="Cargando tu reserva…" /></div>;
 
   const ok = r.status === 'CONFIRMED';
   const copy = async () => {
@@ -58,8 +58,8 @@ export default function Confirmation() {
             ? `Enviamos los detalles a ${r.customer?.email}. Presenta este código en el punto de encuentro.`
             : 'Está pendiente de pago. La confirmaremos en cuanto verifiquemos tu transferencia o el operador reciba tu pago.'}
         </p>
-        <div className="code-box" aria-label={`Código de reserva ${r.code}`}>
-          {r.code}
+        <div className="code-box">
+          <span className="sr-only">Código de reserva: </span>{r.code}
           <button className="icon-btn sm" onClick={copy} aria-label="Copiar código"><Copy size={18} /></button>
         </div>
       </div>

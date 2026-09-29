@@ -1,8 +1,20 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
-import { extname, join } from 'path';
+import { join } from 'path';
+
+/** Tipos permitidos: la extensión sale del tipo detectado en los bytes, nunca del nombre del archivo. */
+const TIPOS: { mime: string; ext: string; firma: (b: Buffer) => boolean }[] = [
+  { mime: 'image/jpeg', ext: '.jpg', firma: (b) => b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  { mime: 'image/png', ext: '.png', firma: (b) => b.length > 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
+  { mime: 'image/webp', ext: '.webp', firma: (b) => b.length > 12 && b.toString('ascii', 0, 4) === 'RIFF' && b.toString('ascii', 8, 12) === 'WEBP' },
+];
+
+/** Detecta el tipo real por sus "magic bytes" (auditoría SEG-007). */
+export function detectarImagen(buffer: Buffer) {
+  return TIPOS.find((t) => t.firma(buffer)) ?? null;
+}
 
 /**
  * Guarda imágenes subidas desde el panel.
@@ -25,12 +37,14 @@ export class StorageService {
 
   /** Devuelve una ruta relativa (/uploads/x.jpg) o una URL absoluta pública. */
   async save(file: { buffer: Buffer; mimetype: string; originalname: string }): Promise<string> {
-    const name = `${randomUUID()}${extname(file.originalname).toLowerCase() || '.jpg'}`;
+    const tipo = detectarImagen(file.buffer);
+    if (!tipo) throw new BadRequestException('El archivo no es una imagen JPG, PNG o WebP válida.');
+    const name = `${randomUUID()}${tipo.ext}`;
 
     if (this.url && this.key) {
       const res = await fetch(`${this.url}/storage/v1/object/${this.bucket}/${name}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${this.key}`, apikey: this.key, 'Content-Type': file.mimetype, 'x-upsert': 'false' },
+        headers: { Authorization: `Bearer ${this.key}`, apikey: this.key, 'Content-Type': tipo.mime, 'x-upsert': 'false' },
         body: new Uint8Array(file.buffer),
       });
       if (!res.ok) {

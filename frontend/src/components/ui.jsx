@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronRight, Info, Minus, Plus, Star, X, XCircle } from 'lucide-react';
 import { STATUS } from '../utils/format';
@@ -19,14 +20,20 @@ export function useDebounce(value, ms = 350) {
   return v;
 }
 
-/** Carga asíncrona con estados loading/error/data y recarga manual. */
+/**
+ * Carga asíncrona con estados loading/error/data y recarga manual.
+ * `deps` decide cuándo recargar; la función se lee siempre en su versión más reciente
+ * (ref), así que no hay closures obsoletas aunque use valores que no estén en `deps` (WEB-010).
+ */
 export function useAsync(fn, deps = []) {
   const [state, setState] = useState({ loading: true, error: null, data: null });
   const [tick, setTick] = useState(0);
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
   useEffect(() => {
     let alive = true;
     setState((s) => ({ ...s, loading: true, error: null }));
-    fn()
+    fnRef.current()
       .then((data) => alive && setState({ loading: false, error: null, data }))
       .catch((error) => alive && setState({ loading: false, error, data: null }));
     return () => { alive = false; };
@@ -40,26 +47,26 @@ export function useAsync(fn, deps = []) {
 const modalStack = [];
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ open, onClose, title, description, children, footer, size = '', closeOnBackdrop = true }) {
-  const ref = useRef(null);
-  const titleId = useId();
-  const descId = useId();
-
+/**
+ * Atrapa el foco dentro de `ref` mientras `active`: enfoca el primer control al abrir,
+ * cicla con Tab, cierra con Escape y devuelve el foco al elemento que lo tenía (ACC-004).
+ */
+export function useFocusTrap(ref, active, onClose) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    if (!open) return;
+    if (!active) return undefined;
     const token = {};
     modalStack.push(token);
     const previous = document.activeElement;
     document.body.style.overflow = 'hidden';
-    const first =
-      ref.current?.querySelector('[data-autofocus]') ??
-      ref.current?.querySelector(`.modal-body :is(${FOCUSABLE})`) ??
-      ref.current?.querySelector(FOCUSABLE);
-    setTimeout(() => first?.focus(), 30);
-
+    const t = setTimeout(() => {
+      const el = ref.current;
+      (el?.querySelector('[data-autofocus]') ?? el?.querySelector(`.modal-body :is(${FOCUSABLE})`) ?? el?.querySelector(FOCUSABLE))?.focus();
+    }, 30);
     const onKey = (e) => {
       if (modalStack[modalStack.length - 1] !== token) return;
-      if (e.key === 'Escape') { e.stopPropagation(); onClose?.(); }
+      if (e.key === 'Escape') { e.stopPropagation(); closeRef.current?.(); }
       if (e.key === 'Tab' && ref.current) {
         const els = [...ref.current.querySelectorAll(FOCUSABLE)];
         if (!els.length) return;
@@ -70,17 +77,51 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     };
     document.addEventListener('keydown', onKey);
     return () => {
+      clearTimeout(t);
       document.removeEventListener('keydown', onKey);
-      modalStack.splice(modalStack.indexOf(token), 1);
-      if (!modalStack.length) document.body.style.overflow = '';
-      previous?.focus?.();
+      const i = modalStack.indexOf(token);
+      if (i >= 0) modalStack.splice(i, 1);
+      // El scroll se restaura siempre al cerrar el último, aunque devolver el foco falle (WEB-012)
+      try {
+        if (previous?.isConnected) previous.focus?.();
+      } finally {
+        if (!modalStack.length) document.body.style.overflow = '';
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [active, ref]);
+}
+
+/** Panel lateral modal (menú móvil, filtros): mismo contrato de foco que Modal. */
+export function Drawer({ open, onClose, label, id, className = '', side = 'right', children }) {
+  const ref = useRef(null);
+  useFocusTrap(ref, open, onClose);
+  if (!open) return null;
+  // Portal en <body>: ningún contenedor (max-width, overflow, transform) puede recortar el fondo
+  return createPortal(
+    <div className={`drawer-backdrop ${className}`} onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+      <div ref={ref} id={id} className={`drawer drawer-${side}`} role="dialog" aria-modal="true" aria-label={label}>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+export function Modal({ open, onClose, title, description, children, footer, size = '', closeOnBackdrop = true }) {
+  const ref = useRef(null);
+  const titleId = useId();
+  const descId = useId();
+  useFocusTrap(ref, open, onClose);
 
   if (!open) return null;
-  return (
-    <div className="modal-backdrop" onMouseDown={(e) => closeOnBackdrop && e.target === e.currentTarget && onClose?.()}>
+  // Portal en <body>: el fondo oscuro cubre toda la ventana aunque el modal se abra
+  // dentro del panel (antes `.adm-content > * { max-width }` lo recortaba en pantallas anchas)
+  return createPortal(
+    // .adm-modal conserva el estilo del panel aunque el modal ya no viva dentro de .adm-content
+    <div
+      className={`modal-backdrop ${document.querySelector('.adm-layout') ? 'adm-modal' : ''}`}
+      onMouseDown={(e) => closeOnBackdrop && e.target === e.currentTarget && onClose?.()}
+    >
       <div ref={ref} className={`modal ${size}`} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descId : undefined}>
         <div className="modal-head">
           <div>
@@ -94,7 +135,8 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -167,7 +209,19 @@ export function StatusBadge({ status }) {
   );
 }
 
-export const Spinner = ({ label = 'Cargando' }) => <span className="spinner" role="status" aria-label={label} />;
+/**
+ * Sin `label` es decorativo (va junto a un texto visible, p. ej. dentro de un botón).
+ * Con `label` muestra el texto visible y lo anuncia como estado (WEB-014).
+ */
+export function Spinner({ label }) {
+  if (!label) return <span className="spinner" aria-hidden="true" />;
+  return (
+    <span className="spinner-wrap" role="status">
+      <span className="spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </span>
+  );
+}
 
 export function EmptyState({ icon: Icon = Info, title, children, action }) {
   return (
@@ -191,7 +245,8 @@ export function ErrorState({ error, onRetry }) {
 export function Alert({ tone = 'info', title, children, icon }) {
   const Icon = icon ?? (tone === 'success' ? CheckCircle2 : tone === 'warning' ? AlertTriangle : tone === 'danger' ? XCircle : Info);
   return (
-    <div className={`alert alert-${tone}`} role={tone === 'danger' ? 'alert' : undefined}>
+    // danger/warning interrumpen (alert); info/success se anuncian con cortesía (status) — ACC-011
+    <div className={`alert alert-${tone}`} role={tone === 'danger' || tone === 'warning' ? 'alert' : 'status'}>
       <Icon size={20} aria-hidden="true" />
       <div>
         {title && <div className="alert-title">{title}</div>}
@@ -207,8 +262,17 @@ export function Field({ label, required, hint, error, children, className = '', 
   const id = idProp ?? autoId;
   const hintId = `${id}-hint`;
   const errId = `${id}-err`;
+  const showHint = hint && !error;
+  // required llega al control para que el lector de pantalla lo anuncie (ACC-010);
+  // describedby solo apunta a elementos que realmente se renderizan (ACC-027)
   const child = typeof children === 'function'
-    ? children({ id, 'aria-invalid': !!error, 'aria-describedby': [hint && hintId, error && errId].filter(Boolean).join(' ') || undefined })
+    ? children({
+        id,
+        required: required || undefined,
+        'aria-required': required || undefined,
+        'aria-invalid': error ? true : undefined,
+        'aria-describedby': [showHint && hintId, error && errId].filter(Boolean).join(' ') || undefined,
+      })
     : children;
   return (
     <div className={`field ${className}`}>
@@ -219,7 +283,7 @@ export function Field({ label, required, hint, error, children, className = '', 
         </label>
       )}
       {child}
-      {hint && !error && <span id={hintId} className="hint">{hint}</span>}
+      {showHint && <span id={hintId} className="hint">{hint}</span>}
       {error && (
         <span id={errId} className="error-text" role="alert">
           <AlertCircle size={15} aria-hidden="true" /> {error}
@@ -228,6 +292,13 @@ export function Field({ label, required, hint, error, children, className = '', 
     </div>
   );
 }
+
+/** Leyenda de campos obligatorios, una vez por formulario (ACC-010). */
+export const RequiredLegend = () => (
+  <p className="hint req-legend">
+    Los campos marcados con <span className="req" aria-hidden="true">*</span><span className="sr-only">asterisco</span> son obligatorios.
+  </p>
+);
 
 export function Breadcrumbs({ items }) {
   return (
@@ -258,10 +329,11 @@ export function Qty({ value, onChange, min = 0, max = 99, label }) {
   );
 }
 
-export function Switch({ checked, onChange, label, disabled }) {
+/** `ariaLabel` da un nombre único por fila cuando la etiqueta visible se repite (ACC-022). */
+export function Switch({ checked, onChange, label, disabled, ariaLabel }) {
   return (
     <label className="switch">
-      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />
+      <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} disabled={disabled} aria-label={ariaLabel} />
       <span className="track" aria-hidden="true" />
       {label && <span>{label}</span>}
     </label>

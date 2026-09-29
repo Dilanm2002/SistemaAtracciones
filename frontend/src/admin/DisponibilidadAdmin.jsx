@@ -17,7 +17,7 @@ const shift = (m, n) => {
 export default function DisponibilidadAdmin() {
   const toast = useToast();
   const confirm = useConfirm();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [list, setList] = useState([]);
   const [sel, setSel] = useState('');
   const [month, setMonth] = useState(todayEc().slice(0, 7));
@@ -27,13 +27,15 @@ export default function DisponibilidadAdmin() {
   const [err, setErr] = useState({});
 
   useEffect(() => {
-    Atracciones.list({ limit: 200 }).then((r) => { setList(r.data); if (r.data[0]) setSel(r.data[0].id); }).catch(() => {});
-  }, []);
+    // Un operador solo gestiona las atracciones de su empresa (el backend también lo exige)
+    const filtro = isAdmin ? {} : { operator: user?.operadorCodigo ?? -1 };
+    Atracciones.list({ limit: 200, ...filtro }).then((r) => { setList(r.data); if (r.data[0]) setSel(r.data[0].id); }).catch(() => {});
+  }, [isAdmin, user?.operadorCodigo]);
 
   const a = list.find((x) => x.id === sel);
   const loadCal = () => { if (sel) { setDays(null); Atracciones.calendar(sel, month).then(setDays).catch(() => setDays([])); } };
   const loadBlocked = () => sel && Atracciones.blocked(sel).then(setBlocked).catch(() => setBlocked([]));
-  useEffect(loadCal, [sel, month]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadCal(); }, [sel, month]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { loadBlocked(); }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const block = async (e) => {
@@ -66,7 +68,13 @@ export default function DisponibilidadAdmin() {
   const offset = (new Date(y, m - 1, 1).getDay() + 6) % 7;
   const capacity = a ? a.capacity_per_slot * a.times.length : 0;
 
-  if (!list.length) return <EmptyState icon={CalendarClock} title="No hay atracciones activas" />;
+  if (!list.length) {
+    return (
+      <EmptyState icon={CalendarClock} title="No hay atracciones activas">
+        {isAdmin ? null : 'Tu usuario no tiene atracciones asignadas. Pide a un administrador que te vincule con tu empresa operadora.'}
+      </EmptyState>
+    );
+  }
 
   return (
     <>
@@ -92,8 +100,8 @@ export default function DisponibilidadAdmin() {
             <button className="icon-btn sm" onClick={() => setMonth(shift(month, 1))} aria-label="Mes siguiente"><ChevronRight size={20} /></button>
           </div>
           <div className="occupancy" aria-busy={!days}>
-            {DOW.map((d) => <div key={d} className="cal-dow">{d}</div>)}
-            {Array.from({ length: offset }, (_, i) => <div key={`e${i}`} />)}
+            {DOW.map((d) => <div key={d} className="cal-dow" aria-hidden="true">{d}</div>)}
+            {Array.from({ length: offset }, (_, i) => <div key={`e${i}`} aria-hidden="true" />)}
             {(days ?? []).map((d) => {
               const used = Math.max(0, capacity - d.available_spots);
               const pct = capacity ? Math.round((used / capacity) * 100) : 0;
@@ -102,7 +110,7 @@ export default function DisponibilidadAdmin() {
                 <div key={d.date} className={`occ-day ${d.status}`} title={d.reason ?? `${pct}% ocupado`}>
                   <strong>{Number(d.date.slice(8))}</strong>
                   <span className="muted">{d.status === 'blocked' ? <><Ban size={12} aria-hidden="true" /> {label}</> : label}</span>
-                  {d.status !== 'past' && d.status !== 'blocked' && <div className="occ-bar" aria-label={`${pct}% ocupado`}><span style={{ width: `${pct}%` }} /></div>}
+                  {d.status !== 'past' && d.status !== 'blocked' && <><span className="sr-only">{pct}% ocupado</span><div className="occ-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></div></>}
                 </div>
               );
             })}

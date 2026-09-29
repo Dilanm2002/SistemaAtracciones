@@ -2,13 +2,13 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { link } from '../../common/utils/hateoas';
 import { AtraccionResponseDto } from './dto/atraccion-response.dto';
+import { ProductType } from './dto/create-atraccion.dto';
 import { ReservationResponseDto, ReservationStatus } from './dto/reservation.dto';
-import { Atraccion } from './entities/atraccion.entity';
-import { Reserva } from './entities/reserva.entity';
+import { ESTADO_A_STATUS, FilaAtraccion, FilaReserva, TIPO_A_CONTRATO } from './modelo';
 import { fechaHoraEc, horasAIso } from './utils/fechas';
 
 /**
- * Traduce las entidades (modelo interno en español) a los esquemas
+ * Traduce las filas del modelo relacional (en español) a los esquemas
  * del contrato OpenAPI (en inglés). Si el contrato cambia, solo se toca aquí.
  */
 @Injectable()
@@ -31,47 +31,61 @@ export class AtraccionMapper {
     return url.startsWith(this.publicUrl) ? url.slice(this.publicUrl.length) : url;
   }
 
-  toResponse(a: Atraccion): AtraccionResponseDto {
-    const self = `/atracciones/${a.id}`;
+  /**
+   * Insignias calculadas a partir de los datos (no se guardan: dependerían de
+   * otros datos y romperían la 3FN).
+   */
+  insignias(a: FilaAtraccion): string[] {
+    const out: string[] = [];
+    if (a.vendidos_60d >= 20) out.push('best_seller');
+    if ((a.ocupacion_14d ?? 0) >= 0.7) out.push('likely_to_sell_out');
+    if (Date.now() - new Date(a.creado_en).getTime() < 30 * 86400_000 && a.numero_resenas === 0) out.push('new');
+    return out;
+  }
+
+  toResponse(a: FilaAtraccion): AtraccionResponseDto {
+    const self = `/atracciones/${a.uuid}`;
+    const lista = (tipo: string) => a.inclusiones.filter((i) => i.tipo === tipo).map((i) => i.nombre);
+    const precio = a.precio_adulto ?? 0;
     return {
-      id: a.id,
+      id: a.uuid,
       name: a.nombre,
-      short_description: a.descripcionCorta ?? a.descripcion.slice(0, 160),
+      slug: a.slug,
+      short_description: a.descripcion_corta ?? a.descripcion.slice(0, 160),
       long_description: a.descripcion,
-      duration: horasAIso(a.duracionHoras),
-      duration_hours: a.duracionHoras,
-      price: { currency: a.moneda, total: a.precioTicket },
-      child_price: { currency: a.moneda, total: a.precioNino ?? a.precioTicket },
-      operator: a.operador ? { id: a.operador.codigo, name: a.operador.nombre } : null,
-      product_type: a.tipoProducto,
-      includes: a.incluye ?? [],
-      not_includes: a.noIncluye ?? [],
-      recommendations: a.recomendaciones ?? [],
-      categories: (a.categorias ?? []).map((c) => c.slug),
-      badges: a.insignias ?? [],
+      duration: horasAIso(a.duracion_horas),
+      duration_hours: a.duracion_horas,
+      price: { currency: a.moneda, total: precio },
+      child_price: { currency: a.moneda, total: a.precio_nino ?? precio },
+      operator: { id: a.ope_codigo, name: a.operador },
+      product_type: TIPO_A_CONTRATO[a.tipo] ?? ProductType.GUIDED_TOUR,
+      includes: lista('INCLUYE'),
+      not_includes: lista('NO_INCLUYE'),
+      recommendations: lista('RECOMENDACION'),
+      categories: a.categorias,
+      badges: this.insignias(a),
       locations: [
         {
           address: a.direccion ?? a.ciudad,
-          city: a.destino?.codigo,
+          city: a.ciu_id,
           country: 'ec',
           coordinates: { latitude: a.latitud, longitude: a.longitud },
           type: 'attraction',
         },
       ],
-      destination: a.destino
-        ? { code: a.destino.codigo, name: a.destino.nombre, province: a.destino.provincia, region: a.destino.region }
-        : undefined,
-      photos: (a.fotos ?? []).map((f) => ({ url: this.absUrl(f) })),
-      supported_languages: a.idiomas ?? [],
-      free_cancellation: a.cancelacionGratuita,
-      cancellation_hours: a.horasCancelacion,
-      times: a.horarios ?? [],
-      capacity_per_slot: a.cupoPorHorario,
-      meeting_point: a.puntoEncuentro ?? undefined,
-      featured: a.destacado,
-      is_active: a.estaActivo,
-      ratings: { number_of_reviews: a.numeroResenas, score: a.ratingPromedio },
-      url: { web: `${this.frontendUrl}/atraccion/${a.id}`, app: `descubreec://attractions/${a.id}` },
+      destination: { code: a.ciu_id, name: a.ciudad, province: a.provincia, region: a.region },
+      photos: a.fotos.map((f) => ({ url: this.absUrl(f.url), alt: f.alt })),
+      supported_languages: a.idiomas,
+      free_cancellation: a.cancelacion_gratuita,
+      cancellation_hours: a.horas_cancelacion,
+      times: a.horarios.map((h) => h.hora),
+      capacity_per_slot: a.horarios.reduce((m, h) => Math.max(m, h.cupo), 0),
+      meeting_point: a.punto_encuentro ?? undefined,
+      featured: a.destacada,
+      is_active: a.estado === 'PUBLICADA',
+      status: a.estado,
+      ratings: { number_of_reviews: a.numero_resenas, score: a.rating },
+      url: { web: `${this.frontendUrl}/atraccion/${a.uuid}`, app: `descubreec://attractions/${a.uuid}` },
       _links: {
         self: link(self),
         availability: link(`${self}/availability`),
@@ -84,54 +98,51 @@ export class AtraccionMapper {
   }
 
   /** Una reserva se puede cancelar sin costo si no está cancelada y falta más que el margen configurado. */
-  canCancel(r: Reserva): boolean {
-    if (r.estado === ReservationStatus.CANCELLED) return false;
-    const inicio = fechaHoraEc(r.fecha, r.hora).getTime();
-    if (!r.atraccion?.cancelacionGratuita) return false;
-    return inicio - Date.now() > (r.atraccion.horasCancelacion ?? 24) * 3600_000;
+  canCancel(r: Pick<FilaReserva, 'estado' | 'fecha' | 'hora' | 'cancelacion_gratuita' | 'horas_cancelacion'>): boolean {
+    if (ESTADO_A_STATUS[r.estado] === ReservationStatus.CANCELLED || r.estado === 'COMPLETADA') return false;
+    if (!r.cancelacion_gratuita) return false;
+    return fechaHoraEc(r.fecha, r.hora).getTime() - Date.now() > (r.horas_cancelacion ?? 24) * 3600_000;
   }
 
-  toReservation(r: Reserva): ReservationResponseDto {
+  toReservation(r: FilaReserva): ReservationResponseDto {
     const self = `/atracciones/reservations/${r.id}`;
-    const canCancel = this.canCancel(r);
+    const status = ESTADO_A_STATUS[r.estado] ?? ReservationStatus.PENDING;
     return {
       reservation_id: r.id,
       code: r.codigo,
-      status: r.estado,
-      ticket_count: r.ticketCount,
+      status,
+      ticket_count: r.tickets,
       adults: r.adultos,
       children: r.ninos,
       total_price: { currency: r.moneda, total: r.total },
       date: r.fecha,
       time: r.hora,
-      attraction: r.atraccion
-        ? {
-            id: r.atraccion.id,
-            name: r.atraccion.nombre,
-            city: r.atraccion.ciudad,
-            photo: this.absUrl(r.atraccion.fotos?.[0]),
-            meeting_point: r.atraccion.puntoEncuentro ?? r.atraccion.direccion ?? undefined,
-            free_cancellation: r.atraccion.cancelacionGratuita,
-            cancellation_hours: r.atraccion.horasCancelacion,
-          }
-        : undefined,
-      customer: {
-        name: r.clienteNombre,
-        email: r.clienteEmail ?? undefined,
-        phone: r.clienteTelefono ?? undefined,
-        document: r.clienteDocumento ?? undefined,
+      attraction: {
+        id: r.atr_uuid,
+        name: r.atr_nombre,
+        city: r.ciudad,
+        photo: this.absUrl(r.foto),
+        meeting_point: r.punto_encuentro ?? r.direccion ?? undefined,
+        free_cancellation: r.cancelacion_gratuita,
+        cancellation_hours: r.horas_cancelacion,
       },
-      payment_method: r.metodoPago as any,
-      notes: r.notas ?? undefined,
-      cancellation_reason: r.motivoCancelacion ?? undefined,
-      cancelled_at: r.canceladaEn?.toISOString(),
-      created_at: r.createdAt?.toISOString(),
-      can_cancel: canCancel,
+      customer: {
+        name: r.pax_nombre ?? '',
+        email: r.correo,
+        phone: r.telefono ?? undefined,
+        document: r.pax_documento ?? undefined,
+      },
+      payment_method: r.metodo ?? undefined,
+      notes: r.observaciones ?? undefined,
+      cancellation_reason: r.motivo_cancelacion ?? undefined,
+      cancelled_at: r.cancelado_en ? new Date(r.cancelado_en).toISOString() : undefined,
+      created_at: new Date(r.creado_en).toISOString(),
+      can_cancel: this.canCancel(r),
       _links: {
         self: link(self),
-        attraction: link(`/atracciones/${r.atraccion?.id}`),
-        ...(r.estado !== ReservationStatus.CANCELLED ? { cancel: link(`${self}/cancel`, 'POST') } : {}),
-        ...(r.estado === ReservationStatus.PENDING ? { confirm: link(`${self}/confirm`, 'POST') } : {}),
+        attraction: link(`/atracciones/${r.atr_uuid}`),
+        ...(status !== ReservationStatus.CANCELLED ? { cancel: link(`${self}/cancel`, 'POST') } : {}),
+        ...(status === ReservationStatus.PENDING ? { confirm: link(`${self}/confirm`, 'POST') } : {}),
       },
     };
   }

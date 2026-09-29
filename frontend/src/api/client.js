@@ -30,8 +30,20 @@ export const newIdempotencyKey = () =>
     return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
   });
 
+const RETRIABLE = new Set([502, 503, 504]);
+const MAX_RETRIES = 2;
+
+/** Espera `ms` salvo que la petición se cancele. */
+const wait = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Abortado', 'AbortError')); }, { once: true });
+  });
+
 /**
  * fetch con JSON, token Bearer y errores normalizados.
+ * Los GET (idempotentes) se reintentan con backoff exponencial ante fallos de red
+ * o 502/503/504 transitorios, p. ej. un arranque en frío de la función serverless (WEB-011).
  * @param {string} path  ruta relativa a /api/v1
  * @param {{method?:string, body?:any, idempotencyKey?:string, signal?:AbortSignal, form?:FormData}} opts
  */
@@ -41,30 +53,41 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+  const retries = method === 'GET' ? MAX_RETRIES : 0;
 
   let res;
-  try {
-    res = await fetch(`${API_URL}${path}`, {
-      method,
-      headers,
-      body: form ?? (body !== undefined ? JSON.stringify(body) : undefined),
-      signal,
-      // Con sesión (admin/cliente) evitamos respuestas cacheadas para ver cambios al instante
-      cache: token ? 'no-store' : 'default',
-    });
-  } catch (e) {
-    if (e.name === 'AbortError') throw e;
-    throw new ApiError({ status: 0, title: 'Sin conexión', detail: 'No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.' });
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await fetch(`${API_URL}${path}`, {
+        method,
+        headers,
+        body: form ?? (body !== undefined ? JSON.stringify(body) : undefined),
+        signal,
+        // Con sesión (admin/cliente) evitamos respuestas cacheadas para ver cambios al instante
+        cache: token ? 'no-store' : 'default',
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') throw e;
+      if (attempt < retries) { await wait(400 * 2 ** attempt, signal); continue; }
+      throw new ApiError({ status: 0, title: 'Sin conexión', detail: 'No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.' });
+    }
+    if (!RETRIABLE.has(res.status) || attempt >= retries) break;
+    const retryAfter = Number(res.headers.get('Retry-After'));
+    await wait(retryAfter > 0 && retryAfter <= 5 ? retryAfter * 1000 : 400 * 2 ** attempt, signal);
   }
 
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     if (res.status === 401 && token) window.dispatchEvent(new CustomEvent('auth:expired'));
+    const espera = Number(res.headers.get('Retry-After'));
     throw new ApiError({
       status: res.status,
       title: data?.title,
-      detail: data?.detail ?? data?.message ?? 'Ocurrió un error inesperado.',
+      detail:
+        res.status === 429
+          ? `Hiciste demasiados intentos seguidos. Espera ${espera > 0 ? `${Math.ceil(espera / 60) > 1 ? `${Math.ceil(espera / 60)} minutos` : `${espera} segundos`}` : 'un momento'} y vuelve a intentarlo.`
+          : data?.detail ?? data?.message ?? 'Ocurrió un error inesperado.',
       errors: data?.errors,
       code: data?.code,
     });
@@ -85,6 +108,20 @@ export const Auth = {
   me: () => api('/auth/me'),
   updateMe: (data) => api('/auth/me', { method: 'PATCH', body: data }),
   changePassword: (actual, nueva) => api('/auth/me/password', { method: 'POST', body: { actual, nueva } }),
+  logout: () => api('/auth/logout', { method: 'POST' }),
+};
+
+/** Catálogos del modelo relacional (tablas provincia e idioma). */
+export const Geo = {
+  provincias: () => api('/provincias'),
+  idiomas: () => api('/idiomas'),
+};
+
+/** Favoritos del usuario autenticado (tabla favorito). */
+export const Favoritos = {
+  list: () => api('/favoritos'),
+  add: (id) => api(`/favoritos/${id}`, { method: 'PUT' }),
+  remove: (id) => api(`/favoritos/${id}`, { method: 'DELETE' }),
 };
 
 export const Atracciones = {

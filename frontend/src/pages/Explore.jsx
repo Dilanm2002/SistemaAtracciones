@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Compass, Search, SlidersHorizontal, X } from 'lucide-react';
 import { Atracciones, Categorias, Destinos } from '../api/client';
 import AttractionCard from '../components/AttractionCard';
-import { Breadcrumbs, CardSkeleton, EmptyState, ErrorState, useDebounce, usePageTitle } from '../components/ui';
+import { Breadcrumbs, CardSkeleton, EmptyState, ErrorState, useDebounce, useFocusTrap, usePageTitle } from '../components/ui';
 import { fmtDate, fmtMoney, PRODUCT_TYPE, REGION } from '../utils/format';
 
 const DURACIONES = {
@@ -35,6 +35,11 @@ export default function Explore() {
   const [text, setText] = useState(params.get('q') ?? '');
   const debounced = useDebounce(text, 400);
   const abort = useRef(null);
+  const filtersRef = useRef(null);
+  const gridRef = useRef(null);
+  const focusFrom = useRef(null);
+  // En móvil los filtros son un diálogo: foco atrapado, Esc cierra y vuelve al botón (ACC-004)
+  useFocusTrap(filtersRef, drawer, () => setDrawer(false));
 
   // Estado de filtros derivado de la URL (compartible y funciona con "atrás")
   const f = {
@@ -105,6 +110,7 @@ export default function Explore() {
     const ctrl = new AbortController();
     abort.current = ctrl;
     setStatus({ loading: !append, more: append, error: null });
+    focusFrom.current = append ? items.length : null;
     Atracciones.search(append ? { ...body, next_page: meta.next } : body, ctrl.signal)
       .then((r) => {
         setItems((prev) => (append ? [...prev, ...r.data] : r.data));
@@ -118,6 +124,13 @@ export default function Explore() {
     run(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [body]);
+
+  // Tras "Cargar más", el foco pasa a la primera tarjeta nueva (ACC-017)
+  useEffect(() => {
+    if (focusFrom.current == null || status.more) return;
+    gridRef.current?.querySelectorAll('.a-card-link')[focusFrom.current]?.focus();
+    focusFrom.current = null;
+  }, [items, status.more]);
 
   const destino = destinos.find((d) => String(d.codigo) === f.destino);
   const titulo = destino ? `Experiencias en ${destino.nombre}` : f.regions.length === 1 ? `Experiencias en ${REGION[f.regions[0]]}` : 'Todas las experiencias';
@@ -141,10 +154,16 @@ export default function Explore() {
   const detailQuery = f.fecha || f.personas ? `?${new URLSearchParams({ ...(f.fecha && { fecha: f.fecha }), ...(f.personas && { personas: f.personas }) })}` : '';
 
   const Filters = (
-    <aside className={`filters ${drawer ? 'open' : ''}`} aria-label="Filtros">
+    <aside
+      ref={filtersRef}
+      id="filtros"
+      className={`filters ${drawer ? 'open' : ''}`}
+      aria-label="Filtros"
+      {...(drawer ? { role: 'dialog', 'aria-modal': true } : {})}
+    >
       <div className="filters-drawer-head">
         <strong>Filtros</strong>
-        <button className="icon-btn" onClick={() => setDrawer(false)} aria-label="Cerrar filtros"><X size={22} /></button>
+        <button className="icon-btn" onClick={() => setDrawer(false)} aria-label="Cerrar filtros"><X size={22} aria-hidden="true" /></button>
       </div>
       <div className="card">
         <div className="filter-group">
@@ -270,8 +289,8 @@ export default function Explore() {
               </p>
             </div>
             <div className="row">
-              <button className="btn filters-toggle" onClick={() => setDrawer(true)}>
-                <SlidersHorizontal size={18} /> Filtros {chips.length > 0 && <span className="badge badge-primary">{chips.length}</span>}
+              <button className="btn filters-toggle" onClick={() => setDrawer(true)} aria-expanded={drawer} aria-controls="filtros" aria-haspopup="dialog">
+                <SlidersHorizontal size={18} aria-hidden="true" /> Filtros {chips.length > 0 && <span className="badge badge-primary">{chips.length}</span>}
               </button>
               <label className="sr-only" htmlFor="sort">Ordenar por</label>
               <select id="sort" className="select sort-select" value={f.sort} onChange={(e) => update({ sort: e.target.value === 'most_popular' ? '' : e.target.value })}>
@@ -305,15 +324,15 @@ export default function Explore() {
             </EmptyState>
           ) : (
             <>
-              <div className="grid-cards">
+              <div className="grid-cards" ref={gridRef}>
                 {items.map((a) => <AttractionCard key={a.id} a={a} query={detailQuery} />)}
               </div>
               <div className="load-more">
-                <span className="muted small">Mostrando {items.length} de {meta.total}</span>
+                <span className="muted small" aria-live="polite">Mostrando {items.length} de {meta.total}</span>
                 <div className="progress" aria-hidden="true"><span style={{ width: `${(items.length / meta.total) * 100}%` }} /></div>
                 {meta.next && (
                   <button className="btn" onClick={() => run(true)} disabled={status.more}>
-                    {status.more ? <><span className="spinner" /> Cargando…</> : 'Cargar más experiencias'}
+                    {status.more ? <><span className="spinner" aria-hidden="true" /> Cargando…</> : 'Cargar más experiencias'}
                   </button>
                 )}
               </div>

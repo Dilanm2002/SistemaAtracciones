@@ -3,7 +3,8 @@
    (app a pantalla completa: sidebar fijo de alto completo + topbar + área
    de contenido con scroll propio), adaptada a la paleta "Andes y Selva".
    ========================================================================== */
-.adm-layout {
+/* Variables del panel: también en .adm-modal (los modales se renderizan en <body>) */
+.adm-layout, .adm-modal {
   --adm-brand: #0f766e;
   --adm-brand-2: #0b5f58;
   --adm-accent: #14b8a6;
@@ -11,6 +12,8 @@
   --adm-dark-2: #062a26;
   --adm-bg: #ece6dc;
   --adm-line: rgba(15, 118, 110, 0.14);
+}
+.adm-layout {
   position: fixed; inset: 0; z-index: 10;
   display: flex; overflow: hidden;
   background: var(--adm-bg);
@@ -42,7 +45,7 @@
 .adm-nav { flex: 1; overflow-y: auto; padding: 12px 0 16px; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.18) transparent; }
 .adm-nav-group { padding: 10px 0 6px; }
 .adm-nav-group + .adm-nav-group { border-top: 1px solid rgba(255, 255, 255, 0.05); margin-top: 4px; }
-.adm-nav-label { display: block; padding: 4px 20px 6px; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.14em; color: rgba(153, 246, 228, 0.5); user-select: none; }
+.adm-nav-label { display: block; padding: 4px 20px 6px; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.14em; color: rgba(153, 246, 228, 0.72); user-select: none; }
 .adm-nav-item {
   display: flex; align-items: center; gap: 11px;
   margin: 2px 10px; padding: 10px 14px; min-height: 42px;
@@ -101,7 +104,7 @@
 .adm-topbar h1 { flex: 1; margin: 0; font-size: 1.4rem; font-weight: 700; color: var(--adm-dark); letter-spacing: -0.01em; }
 .adm-topbar-right { display: flex; align-items: center; gap: 10px; }
 .adm-topbar-user {
-  font-size: 0.82rem; font-weight: 600; color: var(--adm-brand);
+  font-size: 0.82rem; font-weight: 600; color: #0b4f49;
   background: rgba(15, 118, 110, 0.1); border: 1px solid rgba(15, 118, 110, 0.22);
   padding: 5px 14px; border-radius: 999px; white-space: nowrap;
 }
@@ -115,8 +118,9 @@
 .kbd { display: inline-block; padding: 1px 7px; border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 6px; font-size: 0.75rem; font-family: ui-monospace, monospace; background: var(--surface); color: var(--text-2); }
 
 @media (max-width: 1024px) {
-  .adm-sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); }
-  .adm-sidebar.open { transform: none; box-shadow: var(--shadow-lg); }
+  /* Cerrado queda fuera del orden de tabulación (ACC-005) */
+  .adm-sidebar { position: fixed; left: 0; top: 0; bottom: 0; transform: translateX(-100%); visibility: hidden; transition: transform 0.25s, visibility 0s 0.25s; }
+  .adm-sidebar.open { transform: none; visibility: visible; transition: transform 0.25s; box-shadow: var(--shadow-lg); }
   .adm-overlay.open { display: block; position: fixed; inset: 0; background: rgba(6, 20, 18, 0.55); z-index: calc(var(--z-drawer) - 1); }
   .adm-menu-toggle { display: inline-grid; }
   .adm-topbar { padding: 0 16px; }
@@ -125,13 +129,13 @@
 }
 
 /* ── Botones propios del panel ───────────────────────────────────────── */
-.adm-content .btn-primary {
+.adm-content .btn-primary, .adm-modal .btn-primary {
   --btn-bg: linear-gradient(135deg, var(--adm-brand), var(--adm-brand-2));
   background: linear-gradient(135deg, var(--adm-brand), var(--adm-brand-2)); border-color: transparent;
   box-shadow: 0 2px 10px rgba(15, 118, 110, 0.28);
   transition: box-shadow 0.15s, transform 0.12s;
 }
-.adm-content .btn-primary:hover { box-shadow: 0 5px 18px rgba(15, 118, 110, 0.42); transform: translateY(-1px); }
+.adm-content .btn-primary:hover, .adm-modal .btn-primary:hover { box-shadow: 0 5px 18px rgba(15, 118, 110, 0.42); transform: translateY(-1px); }
 
 /* ── Encabezado de módulo ────────────────────────────────────────────── */
 .adm-module-head {
@@ -170,7 +174,7 @@
 .adm-welcome::after { content: ''; position: absolute; bottom: -80px; right: 120px; width: 170px; height: 170px; border-radius: 50%; background: radial-gradient(circle, rgba(245, 158, 11, 0.14) 0%, transparent 70%); }
 .adm-welcome > * { position: relative; z-index: 1; }
 .adm-welcome h2 { color: #fff; margin: 0 0 4px; font-size: 1.5rem; }
-.adm-welcome p { margin: 0; color: rgba(236, 253, 250, 0.65); }
+.adm-welcome p { margin: 0; color: rgba(236, 253, 250, 0.78); }
 .adm-welcome-badge {
   padding: 7px 15px; border-radius: 999px; white-space: nowrap;
   background: rgba(20, 184, 166, 0.22); border: 1px solid rgba(20, 184, 166, 0.45);
@@ -206,7 +210,7 @@ a.adm-kpi:hover { transform: translateY(-5px); }
 .adm-kpi-val { display: block; font-family: var(--font-head); font-size: 2.2rem; font-weight: 800; line-height: 1; letter-spacing: -0.03em; color: var(--adm-dark); font-variant-numeric: tabular-nums; }
 .adm-kpi-lbl { display: block; margin-top: 7px; font-size: 0.72rem; line-height: 1.35; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #5b746f; }
 
-.adm-section-title { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(11, 59, 54, 0.55); margin: 0 0 14px; }
+.adm-section-title { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(11, 59, 54, 0.8); margin: 0 0 14px; }
 .adm-quick-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 18px; margin-bottom: 30px; }
 .adm-quick-card {
   position: relative; overflow: hidden;
@@ -319,7 +323,7 @@ a.adm-kpi:hover { transform: translateY(-5px); }
 .occupancy { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .occ-day { border-radius: 10px; padding: 8px; min-height: 74px; font-size: 0.8rem; border: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .occ-day strong { font-size: 0.92rem; }
-.occ-day.past { opacity: 0.45; }
+.occ-day.past { background: var(--surface-2); color: var(--muted); border-style: dashed; }
 .occ-day.blocked { background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, var(--surface) 6px, var(--surface) 12px); }
 .occ-bar { height: 6px; border-radius: 3px; background: var(--surface-3); overflow: hidden; margin-top: auto; }
 .occ-bar span { display: block; height: 100%; background: var(--adm-brand); }
@@ -339,8 +343,14 @@ a.adm-kpi:hover { transform: translateY(-5px); }
 .list-editor-item { display: flex; gap: 6px; align-items: center; }
 .list-editor-item .input { min-height: 40px; }
 .tag-input { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px; border: 1.5px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); min-height: 46px; }
-.tag-input:focus-within { border-color: var(--secondary); box-shadow: var(--ring); }
+.tag-input:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.35); }
 .tag-input input { border: 0; outline: 0; flex: 1; min-width: 90px; padding: 6px; background: transparent; }
 .form-section { padding: 18px 0; border-top: 1px solid var(--border); }
 .form-section:first-child { border-top: 0; padding-top: 0; }
 .form-section > h3 { font-size: 1rem; margin-bottom: 12px; display: flex; gap: 8px; align-items: center; color: var(--primary-strong); }
+
+/* Reseña oculta: se distingue sin bajar el contraste del texto (ACC-016) */
+.msg.msg-hidden { background: var(--surface-2); border-left: 4px solid var(--warning, #b45309); }
+/* Sobre el fondo arena del panel el teal base queda en 4.4:1: se oscurece para texto (≥5:1) */
+.adm-content, .adm-modal { --primary: #0d6b63; }
+

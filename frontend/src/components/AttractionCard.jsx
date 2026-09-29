@@ -20,7 +20,7 @@ export default function AttractionCard({ a, query = '' }) {
   return (
     <article className="a-card">
       <div className="a-card-img">
-        <img src={a.photos?.[0]?.url ?? FALLBACK_IMG} alt="" loading="lazy" width="400" height="300" onError={onImgError} />
+        <img src={a.photos?.[0]?.url ?? FALLBACK_IMG} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
         <div className="a-card-badges">
           {a.badges?.slice(0, 1).map((b) => (
             <span key={b} className={`badge ${b === 'likely_to_sell_out' ? 'badge-dark' : 'badge-cta'}`}>{BADGE[b] ?? b}</span>

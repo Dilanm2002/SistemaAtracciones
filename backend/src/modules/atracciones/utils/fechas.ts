@@ -31,7 +31,8 @@ export function diasDelMes(month: string): string[] {
 export function horasAIso(horas: number): string {
   const h = Math.floor(horas);
   const m = Math.round((horas - h) * 60);
-  return `PT${h ? `${h}H` : ''}${m ? `${m}M` : ''}` || 'PT0H';
+  if (!h && !m) return 'PT0H';
+  return `PT${h ? `${h}H` : ''}${m ? `${m}M` : ''}`;
 }
 
 export function isoAHoras(iso: string): number {

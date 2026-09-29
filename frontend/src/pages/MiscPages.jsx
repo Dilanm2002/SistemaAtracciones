@@ -4,7 +4,7 @@ import { ChevronDown, Clock, Compass, Heart, Mail, MapPin, Phone, Send, User } f
 import { Atracciones, Auth, Destinos, Mensajes } from '../api/client';
 import AttractionCard, { onImgError } from '../components/AttractionCard';
 import { LoginForm, RegisterForm } from '../components/AuthForms';
-import { Alert, Breadcrumbs, CardSkeleton, EmptyState, ErrorState, Field, Spinner, useAsync, usePageTitle } from '../components/ui';
+import { Alert, Breadcrumbs, CardSkeleton, EmptyState, ErrorState, Field, RequiredLegend, Spinner, useAsync, usePageTitle } from '../components/ui';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
@@ -199,6 +199,7 @@ export function Contact() {
             </EmptyState>
           ) : (
             <form onSubmit={submit} noValidate className="form-grid">
+              <div className="span-2"><RequiredLegend /></div>
               <Field label="Nombre" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="name" value={form.nombre} onChange={set('nombre')} />}</Field>
               <Field label="Correo electrónico" required error={errors.email}>{(p) => <input {...p} className="input" type="email" autoComplete="email" value={form.email} onChange={set('email')} />}</Field>
               <Field label="Asunto" className="span-2">
@@ -282,7 +283,7 @@ export function Profile() {
   usePageTitle('Mi perfil');
   const { user, refresh } = useAuth();
   const toast = useToast();
-  const [form, setForm] = useState({ nombre: user.nombre, telefono: user.telefono ?? '', documento: user.documento ?? '' });
+  const [form, setForm] = useState({ nombre: user.nombres ?? user.nombre, apellido: user.apellidos ?? '', telefono: user.telefono ?? '', documento: user.documento ?? '' });
   const [pw, setPw] = useState({ actual: '', nueva: '', repetir: '' });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
@@ -291,7 +292,8 @@ export function Profile() {
     e.preventDefault();
     setSaving(true);
     try {
-      await Auth.updateMe({ nombre: form.nombre.trim(), ...(form.telefono ? { telefono: form.telefono } : {}), ...(form.documento ? { documento: form.documento } : {}) });
+      // Vacío = quitar el dato (teléfono y documento son opcionales)
+      await Auth.updateMe({ nombre: form.nombre.trim(), apellido: form.apellido.trim(), telefono: form.telefono.trim(), documento: form.documento.trim() });
       await refresh();
       toast('Perfil actualizado', 'success');
       setErrors({});
@@ -327,15 +329,18 @@ export function Profile() {
         <p>{user.email} · {ROL_LABEL[user.rol]}</p>
       </div>
       <form className="card card-pad" onSubmit={save} noValidate style={{ marginBottom: 20 }}>
+        <RequiredLegend />
         <h2 className="panel-title"><User size={20} aria-hidden="true" /> Datos personales</h2>
         <div className="form-grid">
-          <Field label="Nombre completo" required error={errors.nombre} className="span-2">{(p) => <input {...p} className="input" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />}</Field>
+          <Field label="Nombres" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="given-name" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />}</Field>
+          <Field label="Apellidos" required error={errors.apellido}>{(p) => <input {...p} className="input" autoComplete="family-name" value={form.apellido} onChange={(e) => setForm({ ...form, apellido: e.target.value })} />}</Field>
           <Field label="Teléfono" error={errors.telefono}>{(p) => <input {...p} className="input" type="tel" value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value })} />}</Field>
-          <Field label="Cédula o pasaporte" hint="Se usará para autocompletar tus reservas" error={errors.documento}>{(p) => <input {...p} className="input" value={form.documento} onChange={(e) => setForm({ ...form, documento: e.target.value })} />}</Field>
+          <Field label="Cédula o pasaporte" hint="Cédula de 10 dígitos o pasaporte (ej. AB1234567). Se usa para autocompletar tus reservas" error={errors.documento}>{(p) => <input {...p} className="input" value={form.documento} onChange={(e) => setForm({ ...form, documento: e.target.value })} />}</Field>
         </div>
         <button className="btn btn-primary" style={{ marginTop: 18 }} disabled={saving}>{saving && <Spinner />} Guardar cambios</button>
       </form>
       <form className="card card-pad" onSubmit={changePw} noValidate>
+        <RequiredLegend />
         <h2 className="panel-title">Cambiar contraseña</h2>
         <div className="form-grid">
           <Field label="Contraseña actual" required error={errors.actual} className="span-2">{(p) => <input {...p} className="input" type="password" autoComplete="current-password" value={pw.actual} onChange={(e) => setPw({ ...pw, actual: e.target.value })} />}</Field>
@@ -371,7 +376,7 @@ export function RequireAuth({ children, staff = false }) {
   useEffect(() => {
     if (!loading && !isAuth) navigate('/ingresar', { replace: true, state: { from: location.pathname + location.search } });
   }, [loading, isAuth, navigate, location]);
-  if (loading || !isAuth) return <div className="container" style={{ padding: 60 }}><Spinner /> Verificando tu sesión…</div>;
+  if (loading || !isAuth) return <div className="container" style={{ padding: 60 }}><Spinner label="Verificando tu sesión…" /></div>;
   if (staff && !isStaff) {
     return (
       <div className="container" style={{ padding: 40 }}>

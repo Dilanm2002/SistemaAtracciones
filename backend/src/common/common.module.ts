@@ -1,27 +1,41 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtAuthGuard, OptionalJwtGuard } from './auth/jwt-auth.guard';
+import { SessionService } from './auth/session.service';
+import { BitacoraService } from './db/bitacora.service';
+import { CatalogosService } from './db/catalogos.service';
+import { DbService } from './db/db.service';
 import { IdempotencyKeyGuard } from './guards/idempotency-key.guard';
-import { IdempotencyRecord } from './idempotency/idempotency-record.entity';
 import { IdempotencyService } from './idempotency/idempotency.service';
 import { StorageService } from './storage/storage.service';
+
+const PROVIDERS = [
+  DbService,
+  CatalogosService,
+  BitacoraService,
+  IdempotencyService,
+  IdempotencyKeyGuard,
+  JwtAuthGuard,
+  OptionalJwtGuard,
+  StorageService,
+  SessionService,
+];
 
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([IdempotencyRecord]),
     JwtModule.registerAsync({
       global: true,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'cambia-este-secreto-en-produccion'),
-        signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '8h') },
+        // Sin valor por defecto: env.validation.ts impide arrancar sin un secreto fuerte
+        secret: config.getOrThrow<string>('JWT_SECRET'),
+        signOptions: { expiresIn: config.get<string>('JWT_EXPIRES_IN', '2h') },
       }),
     }),
   ],
-  providers: [IdempotencyService, IdempotencyKeyGuard, JwtAuthGuard, OptionalJwtGuard, StorageService],
-  exports: [StorageService, IdempotencyService, IdempotencyKeyGuard, JwtAuthGuard, OptionalJwtGuard, JwtModule],
+  providers: PROVIDERS,
+  exports: [...PROVIDERS, JwtModule],
 })
 export class CommonModule {}

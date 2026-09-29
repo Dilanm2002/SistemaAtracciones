@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, Eye, EyeOff, Lock, Mail, Phone, User, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { Alert, Field, Spinner } from './ui';
+import { Alert, Field, RequiredLegend, Spinner } from './ui';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -55,6 +55,7 @@ export function LoginForm({ onSuccess, showDemo = true }) {
 
   return (
     <form onSubmit={submit} className="stack" noValidate>
+        <RequiredLegend />
       {error && <Alert tone="danger">{error}</Alert>}
       <Field label="Correo electrónico" required error={errors.email}>
         {(p) => (
@@ -87,7 +88,7 @@ export function LoginForm({ onSuccess, showDemo = true }) {
 export function RegisterForm({ onSuccess }) {
   const { register } = useAuth();
   const toast = useToast();
-  const [form, setForm] = useState({ nombre: '', email: '', telefono: '', password: '', terms: false });
+  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', telefono: '', password: '', terms: false });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
@@ -102,7 +103,8 @@ export function RegisterForm({ onSuccess }) {
   const submit = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (form.nombre.trim().length < 3) errs.nombre = 'Escribe tu nombre completo';
+    if (form.nombre.trim().length < 2) errs.nombre = 'Escribe tu nombre';
+    if (form.apellido.trim().length < 2) errs.apellido = 'Escribe tu apellido';
     if (!EMAIL_RE.test(form.email.trim())) errs.email = 'Ingresa un correo válido, ej. nombre@correo.com';
     if (form.telefono && !/^\+?\d{7,15}$/.test(form.telefono.replace(/\s/g, ''))) errs.telefono = 'Usa solo números (7 a 15 dígitos), ej. 0991234567';
     if (!rules.every(([ok]) => ok)) errs.password = 'La contraseña no cumple los requisitos';
@@ -114,6 +116,7 @@ export function RegisterForm({ onSuccess }) {
     try {
       const u = await register({
         nombre: form.nombre.trim(),
+        apellido: form.apellido.trim(),
         email: form.email.trim(),
         password: form.password,
         ...(form.telefono ? { telefono: form.telefono.replace(/\s/g, '') } : {}),
@@ -130,14 +133,20 @@ export function RegisterForm({ onSuccess }) {
 
   return (
     <form onSubmit={submit} className="stack" noValidate>
+        <RequiredLegend />
       {error && <Alert tone="danger">{error}</Alert>}
-      <Field label="Nombre completo" required error={errors.nombre}>
-        {(p) => (
-          <div className="input-icon"><User size={18} aria-hidden="true" />
-            <input {...p} className="input" autoComplete="name" value={form.nombre} onChange={set('nombre')} placeholder="Como aparece en tu documento" />
-          </div>
-        )}
-      </Field>
+      <div className="form-grid">
+        <Field label="Nombres" required error={errors.nombre}>
+          {(p) => (
+            <div className="input-icon"><User size={18} aria-hidden="true" />
+              <input {...p} className="input" autoComplete="given-name" value={form.nombre} onChange={set('nombre')} placeholder="Como en tu documento" />
+            </div>
+          )}
+        </Field>
+        <Field label="Apellidos" required error={errors.apellido}>
+          {(p) => <input {...p} className="input" autoComplete="family-name" value={form.apellido} onChange={set('apellido')} />}
+        </Field>
+      </div>
       <Field label="Correo electrónico" required error={errors.email} hint="Aquí te enviaremos la confirmación de tus reservas">
         {(p) => (
           <div className="input-icon"><Mail size={18} aria-hidden="true" />

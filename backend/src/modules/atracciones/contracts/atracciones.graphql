@@ -1,18 +1,118 @@
-# Esquema federado GraphQL (Reto 3 - Apollo Federation)
+# Esquema federado GraphQL del subgrafo de Atracciones (Reto 3 - Apollo Federation 2)
+#
+# Refleja el modelo relacional de database/01_esquema.sql y el contrato REST
+# contracts/atracciones-openapi.yaml. Los campos del esquema original de la
+# plantilla (nombre, descripcion, ciudad, latitud, longitud, precioTicket,
+# duracionHoras, estaActivo) se conservan con el mismo nombre.
+#
+# Puntos de integración con otros subgrafos (vuelos, alojamientos, autos):
+#   - Atraccion @key(fields: "id")          → id = atr_uuid (UUID público)
+#   - Ciudad    @key(fields: "codigoInec")  → otro subgrafo (p. ej. vuelos) puede
+#     extender Ciudad para ofrecer vuelos hacia el destino de una atracción.
+#   - Reserva   @key(fields: "id")          → id = res_uuid
+
+extend schema @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key", "@shareable"])
+
+enum TipoProducto {
+  SINGLE_TICKET
+  GUIDED_TOUR
+  PACKAGE
+}
+
+enum Region {
+  SIERRA
+  COSTA
+  AMAZONIA
+  GALAPAGOS
+}
+
+enum EstadoReserva {
+  CONFIRMED
+  PENDING
+  CANCELLED
+}
+
+type Ciudad @key(fields: "codigoInec") {
+  "ciu_codigo (INEC, 6 dígitos)"
+  codigoInec: ID!
+  "ciu_id: es el `city` del contrato REST"
+  id: Int!
+  nombre: String!
+  provincia: String!
+  region: Region!
+  atracciones: [Atraccion!]!
+}
+
+type Operador {
+  "ope_codigo"
+  codigo: Int!
+  nombre: String!
+}
+
+type Precio @shareable {
+  moneda: String!
+  total: Float!
+}
+
+type Horario {
+  hora: String!
+  cupo: Int!
+}
 
 type Atraccion @key(fields: "id") {
+  "atr_uuid"
   id: ID!
+  slug: String!
   nombre: String!
   descripcion: String!
+  descripcionCorta: String
+  "Nombre de la ciudad (ciudad.ciu_nombre)"
   ciudad: String!
+  destino: Ciudad!
   latitud: Float!
   longitud: Float!
+  "Tarifa ADULTO vigente"
   precioTicket: Float!
-  duracionHoras: Int!
+  precio: Precio!
+  precioNino: Precio
+  "Puede tener decimales (2.5 = 2 h 30 min) y llegar a 720 h en paquetes de varios días"
+  duracionHoras: Float!
+  tipo: TipoProducto!
   estaActivo: Boolean!
+  operador: Operador!
+  categorias: [String!]!
+  idiomas: [String!]!
+  incluye: [String!]!
+  noIncluye: [String!]!
+  horarios: [Horario!]!
+  cancelacionGratuita: Boolean!
+  calificacion: Float!
+  numeroResenas: Int!
+}
+
+type Disponibilidad {
+  fecha: String!
+  cuposDisponibles: Int!
+  horarios: [String!]!
+}
+
+type Reserva @key(fields: "id") {
+  "res_uuid"
+  id: ID!
+  codigo: String!
+  estado: EstadoReserva!
+  atraccion: Atraccion!
+  fecha: String!
+  hora: String!
+  adultos: Int!
+  ninos: Int!
+  total: Precio!
 }
 
 extend type Query {
   atraccion(id: ID!): Atraccion
-  atracciones: [Atraccion!]!
+  atracciones(ciudad: Int, region: Region, categoria: String, limite: Int = 20, desplazamiento: Int = 0): [Atraccion!]!
+  disponibilidad(atraccionId: ID!, fecha: String!): Disponibilidad!
+  "Requiere token con attractions:read; devuelve solo reservas propias"
+  reserva(id: ID!): Reserva
 }

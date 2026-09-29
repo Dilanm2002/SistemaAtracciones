@@ -76,21 +76,21 @@ export default function ReportesAdmin() {
 
       <div className="adm-toolbar">
         <div className="segmented" role="group" aria-label="Período">
-          {Object.entries(PERIODOS).map(([k, p]) => <button key={k} aria-pressed={periodo === k} onClick={() => setPeriodo(k)}>{p.label}</button>)}
+          {Object.entries(PERIODOS).map(([k, p]) => <button key={k} type="button" aria-pressed={periodo === k} onClick={() => setPeriodo(k)}>{p.label}</button>)}
         </div>
         {periodo === 'custom' ? (
           <div className="row" style={{ gap: 8 }}>
             <label className="sr-only" htmlFor="rep-from">Desde</label>
-            <input id="rep-from" type="date" className="input" value={custom.from} max={today} onChange={(e) => setCustom({ ...custom, from: e.target.value })} />
+            <input id="rep-from" type="date" className="input" value={custom.from} max={today} onChange={(e) => setCustom({ ...custom, from: e.target.value })} aria-invalid={invalid || undefined} aria-describedby={invalid ? 'rango-err' : undefined} />
             <span className="muted">a</span>
             <label className="sr-only" htmlFor="rep-to">Hasta</label>
-            <input id="rep-to" type="date" className="input" value={custom.to} max={today} onChange={(e) => setCustom({ ...custom, to: e.target.value })} />
+            <input id="rep-to" type="date" className="input" value={custom.to} max={today} onChange={(e) => setCustom({ ...custom, to: e.target.value })} aria-invalid={invalid || undefined} aria-describedby={invalid ? 'rango-err' : undefined} />
           </div>
         ) : (
           <span className="muted small"><CalendarRange size={15} style={{ verticalAlign: '-3px' }} aria-hidden="true" /> {fmtDate(from)} – {fmtDate(to)}</span>
         )}
       </div>
-      {invalid && <Alert tone="warning">La fecha final debe ser igual o posterior a la inicial.</Alert>}
+      {invalid && <div id="rango-err"><Alert tone="warning">La fecha final («Hasta») debe ser igual o posterior a la inicial («Desde»).</Alert></div>}
 
       {error ? <ErrorState error={error} onRetry={load} /> : !data ? <div className="skeleton" style={{ height: 420 }} /> : (
         <>
@@ -99,7 +99,7 @@ export default function ReportesAdmin() {
             <div className="adm-kpi tone-brand"><span className="adm-kpi-icon brand"><Receipt size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{data.kpis.reservations}</span><span className="adm-kpi-lbl">Reservas</span></span></div>
             <div className="adm-kpi tone-info"><span className="adm-kpi-icon info"><Ticket size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{data.kpis.tickets}</span><span className="adm-kpi-lbl">Tickets vendidos</span></span></div>
             <div className="adm-kpi tone-cta"><span className="adm-kpi-icon cta"><BarChart3 size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{fmtMoney(data.kpis.average_ticket, { compact: true })}</span><span className="adm-kpi-lbl">Valor promedio por reserva</span></span></div>
-            <div className="adm-kpi tone-warn"><span className="adm-kpi-icon warn"><Percent size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{data.kpis.cancellation_rate}%</span><span className="adm-kpi-lbl">Cancelaciones ({data.kpis.cancellations})</span></span></div>
+            <div className="adm-kpi tone-warn"><span className="adm-kpi-icon warn"><Percent size={22} /></span><span><span className="adm-kpi-val" style={{ display: 'block' }}>{Number(data.kpis.cancellation_rate).toLocaleString('es-EC', { maximumFractionDigits: 1 })} %</span><span className="adm-kpi-lbl">Cancelaciones ({data.kpis.cancellations})</span></span></div>
           </div>
 
           {data.kpis.reservations === 0 ? (
@@ -135,9 +135,10 @@ export default function ReportesAdmin() {
 
           <section aria-labelledby="det-title">
             <h3 id="det-title" className="adm-section-title">Detalle de reservas ({data.rows.length})</h3>
-            <div className="table-wrap" style={{ maxHeight: 480, overflowY: 'auto' }}>
+            <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable" style={{ maxHeight: 480, overflowY: 'auto' }}>
               <table className="table">
-                <thead><tr><th>Código</th><th>Creada</th><th>Atracción</th><th>Tour</th><th>Cliente</th><th className="num">Total</th><th>Estado</th></tr></thead>
+<caption className="sr-only">Detalle de ventas del período</caption>
+                <thead><tr><th scope="col">Código</th><th scope="col">Creada</th><th scope="col">Atracción</th><th scope="col">Tour</th><th scope="col">Cliente</th><th scope="col" className="num">Total</th><th scope="col">Estado</th></tr></thead>
                 <tbody>
                   {data.rows.map((r) => (
                     <tr key={r.code}>

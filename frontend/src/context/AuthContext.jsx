@@ -12,6 +12,8 @@ export function AuthProvider({ children }) {
   const toast = useToast();
 
   const logout = useCallback((silent = false) => {
+    // Revoca la sesión en el servidor (tabla sesion); si falla, igual se cierra localmente
+    if (tokenStore.get() && !silent) Auth.logout().catch(() => {});
     tokenStore.set(null);
     setUser(null);
     if (!silent) toast('Cerraste sesión. ¡Hasta pronto!', 'info');
