@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { AuthUser, esAdmin } from '../../common/auth/scopes';
+import { API_VERSION } from '../../config/version';
 import { BitacoraService } from '../../common/db/bitacora.service';
 import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
 import { emitirEvento, EVENTOS, TipoEvento } from '../../common/db/eventos';
@@ -48,11 +49,12 @@ export class AtraccionesService {
       return {
         status: 'UP',
         service: 'atracciones',
+        version: API_VERSION,
         timestamp: new Date().toISOString(),
         database: { status: 'UP', latency_ms: Date.now() - inicio, model: 'database/01_esquema.sql', ...r },
       };
     } catch (e) {
-      return { status: 'DEGRADED', service: 'atracciones', timestamp: new Date().toISOString(), database: { status: 'DOWN', error: (e as Error).message } };
+      return { status: 'DEGRADED', service: 'atracciones', version: API_VERSION, timestamp: new Date().toISOString(), database: { status: 'DOWN', error: (e as Error).message } };
     }
   }
 

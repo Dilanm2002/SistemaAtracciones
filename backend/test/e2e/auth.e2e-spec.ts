@@ -1,6 +1,7 @@
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'crypto';
+import { API_VERSION } from '../../src/config/version';
 import { bearer, createTestApp, db, describeDb, http, login, nombreUnico, USERS } from './helpers';
 
 /** Identidad y seguridad: registro, login, sesiones revocables, scopes y administración de usuarios. */
@@ -218,7 +219,7 @@ describeDb('Autenticación y seguridad (E2E)', () => {
     it('cabeceras de seguridad, X-Request-Id y sin X-Powered-By', async () => {
       const r = await http(app).get('/atracciones/health');
       expect(r.status).toBe(200);
-      expect(r.body).toMatchObject({ status: 'UP', database: { status: 'UP' } });
+      expect(r.body).toMatchObject({ status: 'UP', version: API_VERSION, database: { status: 'UP' } });
       expect(r.headers['x-powered-by']).toBeUndefined();
       expect(r.headers['x-content-type-options']).toBe('nosniff');
       expect(r.headers['content-security-policy']).toMatch(/frame-ancestors 'none'/);

@@ -9,9 +9,10 @@ import { join } from 'path';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 import { confianzaProxy } from './config/proxy';
+import { API_VERSION } from './config/version';
 
 const SWAGGER_CDN = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14';
-export const API_VERSION = '2.0.0';
+export { API_VERSION };
 
 /**
  * Crea y configura la aplicación. Lo usan tanto `main.ts` (servidor local)

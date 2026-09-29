@@ -84,6 +84,32 @@ npm run lint
 
 Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha futura y CVV.
 
+## Control de versiones
+
+Versión actual: **1.0.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+
+Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
+
+| Cambio | Ejemplo | Nueva versión |
+|---|---|---|
+| Corrección de un error, sin cambiar la API | arreglar un cálculo | 1.0.**1** |
+| Funcionalidad nueva compatible con lo anterior | un filtro nuevo en la búsqueda | 1.**1**.0 |
+| Cambio que rompe el contrato de la API | renombrar un campo de la respuesta | **2**.0.0 |
+
+El trabajo del día a día se anota en `CHANGELOG.md` bajo **[Sin publicar]**. Para publicar una versión:
+
+1. Mover lo de *[Sin publicar]* a una sección `## [X.Y.Z] - AAAA-MM-DD` en `CHANGELOG.md`.
+2. Subir el número en `backend/src/config/version.ts` y ejecutar `npm version X.Y.Z --no-git-tag-version` en `backend/` y en `frontend/`, que actualiza `package.json` y el lockfile. La prueba `version.spec.ts` falla si alguno queda desalineado.
+3. Fusionar el PR en `main` y marcar ese commit con una etiqueta:
+   ```bash
+   git checkout main && git pull
+   git tag -a vX.Y.Z -m "Descubre EC X.Y.Z"
+   git push origin vX.Y.Z
+   ```
+4. En GitHub, en **Releases → Draft a new release**, elegir la etiqueta `vX.Y.Z` y pegar su sección del CHANGELOG.
+
+Para volver a una versión anterior: `git checkout v1.0.0` (solo lectura) o crear una rama desde la etiqueta: `git switch -c arreglo-1.0 v1.0.0`.
+
 ## Páginas
 
 **Sitio público**: Inicio (buscador, categorías, destacadas, regiones, destinos, vistos recientemente) · Explorar (filtros por destino, región, categoría, precio, duración, tipo, calificación y cancelación gratis; orden; paginación por token) · Detalle (galería, calendario de disponibilidad real, horarios con cupos, adultos/niños, mapa, reseñas) · Checkout en 3 pasos (login dentro del flujo, datos, pago con tarjeta/transferencia/en sitio) · Confirmación (código, .ics, imprimir) · Mis reservas (próximas/pasadas/canceladas, cancelar, reseñar) · Favoritos · Destinos · Ayuda (FAQ) · Contacto · Ingresar/Registro · Perfil · 404.
