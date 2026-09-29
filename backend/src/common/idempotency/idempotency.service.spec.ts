@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { ConflictException } from '@nestjs/common';
 import { DbService } from '../db/db.service';
 import { IdempotencyService } from './idempotency.service';
@@ -30,7 +31,7 @@ function fakeDb() {
 }
 
 describe('IdempotencyService (tabla idempotencia; CON-001, DAT-003)', () => {
-  const KEY = '123e4567-e89b-42d3-a456-426614174000';
+  const KEY = randomUUID(); // clave de prueba generada: sin valores fijos que parezcan secretos
   let svc: IdempotencyService;
 
   beforeEach(() => {
