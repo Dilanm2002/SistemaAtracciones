@@ -34,7 +34,8 @@ module.exports = async (req, res) => {
         type: 'https://api.descubre-ec.com/errors/unavailable',
         title: 'Servicio no disponible',
         status: 503,
-        detail: 'La API no pudo conectarse a sus dependencias. Revisa los logs del despliegue.',
+        detail: 'La API no pudo iniciar. Revisa los logs del despliegue.',
+        cause: String(err?.message ?? err).replace(/postgres(ql)?:\/\/[^\s]+/g, '[DATABASE_URL]'),
       }),
     );
   }

@@ -13,7 +13,8 @@ const SWAGGER_CDN = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14';
  * como `api/index.js` (función serverless de Vercel).
  */
 export async function createApp(): Promise<NestExpressApplication> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // abortOnError=false: si falla el arranque se lanza la excepción en vez de hacer process.exit(1)
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { abortOnError: false });
 
   app.setGlobalPrefix('api/v1');
 
