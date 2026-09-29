@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsDateString, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { trim } from '../../../common/utils/transform';
+import { ContieneLetras, FechaFutura } from '../../../common/utils/validators';
 
 export class SlotDto {
   @ApiProperty({ example: '10:00' }) time: string;
@@ -47,12 +50,15 @@ export class CalendarDayDto {
 export class BlockDateDto {
   @ApiProperty({ example: '2026-12-25' })
   @IsDateString({}, { message: 'date debe tener formato AAAA-MM-DD' })
+  @FechaFutura(365, { message: 'date debe ser desde hoy y hasta un año adelante' })
   date: string;
 
   @ApiProperty({ example: 'Feriado de Navidad' })
+  @Transform(trim)
   @IsString()
-  @MinLength(3, { message: 'reason debe tener al menos 3 caracteres' })
+  @MinLength(5, { message: 'reason debe tener al menos 5 caracteres' })
   @MaxLength(200)
+  @ContieneLetras({ message: 'reason debe explicar el motivo con texto' })
   reason: string;
 }
 

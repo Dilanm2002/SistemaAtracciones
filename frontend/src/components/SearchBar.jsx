@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarDays, MapPin, Search, Users } from 'lucide-react';
 import { todayEc } from '../utils/format';
+import { enDias, fecha as validarFecha, LIMITES } from '../utils/validation';
 import { Qty } from './ui';
 
 /** Buscador principal: destino/texto, fecha y personas. */
@@ -10,9 +11,13 @@ export default function SearchBar({ destinos = [] }) {
   const [q, setQ] = useState('');
   const [fecha, setFecha] = useState('');
   const [personas, setPersonas] = useState(2);
+  const [errFecha, setErrFecha] = useState(null);
 
   const submit = (e) => {
     e.preventDefault();
+    const err = validarFecha(fecha, { min: todayEc(), max: enDias(365), requerido: false, que: 'La fecha' });
+    setErrFecha(err);
+    if (err) return;
     const params = new URLSearchParams();
     const destino = destinos.find((d) => d.nombre.toLowerCase() === q.trim().toLowerCase());
     if (destino) params.set('destino', destino.codigo);
@@ -34,6 +39,7 @@ export default function SearchBar({ destinos = [] }) {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           autoComplete="off"
+          maxLength={LIMITES.busqueda}
         />
         <datalist id="sb-destinos">
           {destinos.map((d) => <option key={d.id} value={d.nombre}>{d.provincia}</option>)}
@@ -41,7 +47,9 @@ export default function SearchBar({ destinos = [] }) {
       </div>
       <div className="sb-field">
         <label htmlFor="sb-fecha"><CalendarDays size={14} aria-hidden="true" /> Fecha</label>
-        <input id="sb-fecha" type="date" className="sb-input" min={todayEc()} value={fecha} onChange={(e) => setFecha(e.target.value)} />
+        <input id="sb-fecha" type="date" className="sb-input" min={todayEc()} max={enDias(365)} value={fecha} onChange={(e) => setFecha(e.target.value)}
+          aria-invalid={errFecha ? true : undefined} aria-describedby={errFecha ? 'sb-fecha-err' : undefined} />
+        {errFecha && <span id="sb-fecha-err" className="error-text small" role="alert">{errFecha}</span>}
       </div>
       <div className="sb-field">
         <span className="label" id="sb-pers" style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', gap: 6, alignItems: 'center' }}>

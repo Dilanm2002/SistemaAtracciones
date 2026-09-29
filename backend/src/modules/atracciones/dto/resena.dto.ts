@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { ContieneLetras } from '../../../common/utils/validators';
 
 export class CreateResenaDto {
   @ApiProperty({ example: 5, minimum: 1, maximum: 5 })
@@ -15,6 +16,7 @@ export class CreateResenaDto {
   @IsString()
   @MinLength(10, { message: 'comment debe tener al menos 10 caracteres' })
   @MaxLength(1000)
+  @ContieneLetras({ message: 'comment debe contener tu opinión con texto' })
   comment: string;
 }
 

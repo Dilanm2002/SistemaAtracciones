@@ -3,15 +3,15 @@ import { Check, Eye, EyeOff, Lock, Mail, Phone, User, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Alert, Field, RequiredLegend, Spinner } from './ui';
+import { correo, LIMITES, limpiar, nombrePersona, password, telefono } from '../utils/validation';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function PasswordInput({ value, onChange, autoComplete, ...p }) {
   const [show, setShow] = useState(false);
   return (
     <div className="input-icon">
       <Lock size={18} aria-hidden="true" />
-      <input {...p} className="input" type={show ? 'text' : 'password'} value={value} onChange={onChange} autoComplete={autoComplete} style={{ paddingRight: 48 }} />
+      <input {...p} className="input" type={show ? 'text' : 'password'} maxLength={LIMITES.password} value={value} onChange={onChange} autoComplete={autoComplete} style={{ paddingRight: 48 }} />
       <button type="button" className="icon-btn sm" onClick={() => setShow((s) => !s)} aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'} aria-pressed={show}>
         {show ? <EyeOff size={18} /> : <Eye size={18} />}
       </button>
@@ -36,7 +36,8 @@ export function LoginForm({ onSuccess, showDemo = true }) {
   const submit = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (!EMAIL_RE.test(form.email.trim())) errs.email = 'Ingresa un correo válido, ej. nombre@correo.com';
+    const eCorreo = correo(form.email);
+    if (eCorreo) errs.email = eCorreo;
     if (!form.password) errs.password = 'Ingresa tu contraseña';
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -61,7 +62,7 @@ export function LoginForm({ onSuccess, showDemo = true }) {
         {(p) => (
           <div className="input-icon">
             <Mail size={18} aria-hidden="true" />
-            <input {...p} className="input" type="email" autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="nombre@correo.com" />
+            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="nombre@correo.com" />
           </div>
         )}
       </Field>
@@ -103,11 +104,13 @@ export function RegisterForm({ onSuccess }) {
   const submit = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (form.nombre.trim().length < 2) errs.nombre = 'Escribe tu nombre';
-    if (form.apellido.trim().length < 2) errs.apellido = 'Escribe tu apellido';
-    if (!EMAIL_RE.test(form.email.trim())) errs.email = 'Ingresa un correo válido, ej. nombre@correo.com';
-    if (form.telefono && !/^\+?\d{7,15}$/.test(form.telefono.replace(/\s/g, ''))) errs.telefono = 'Usa solo números (7 a 15 dígitos), ej. 0991234567';
-    if (!rules.every(([ok]) => ok)) errs.password = 'La contraseña no cumple los requisitos';
+    Object.assign(errs, limpiar({
+      nombre: nombrePersona(form.nombre, { que: 'Tus nombres' }),
+      apellido: nombrePersona(form.apellido, { que: 'Tus apellidos' }),
+      email: correo(form.email),
+      telefono: telefono(form.telefono),
+      password: rules.every(([ok]) => ok) ? password(form.password) : 'La contraseña no cumple los requisitos',
+    }));
     if (!form.terms) errs.terms = 'Debes aceptar los términos para continuar';
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -139,25 +142,25 @@ export function RegisterForm({ onSuccess }) {
         <Field label="Nombres" required error={errors.nombre}>
           {(p) => (
             <div className="input-icon"><User size={18} aria-hidden="true" />
-              <input {...p} className="input" autoComplete="given-name" value={form.nombre} onChange={set('nombre')} placeholder="Como en tu documento" />
+              <input {...p} className="input" autoComplete="given-name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={set('nombre')} placeholder="Como en tu documento" />
             </div>
           )}
         </Field>
         <Field label="Apellidos" required error={errors.apellido}>
-          {(p) => <input {...p} className="input" autoComplete="family-name" value={form.apellido} onChange={set('apellido')} />}
+          {(p) => <input {...p} className="input" autoComplete="family-name" maxLength={LIMITES.nombrePersona} value={form.apellido} onChange={set('apellido')} />}
         </Field>
       </div>
       <Field label="Correo electrónico" required error={errors.email} hint="Aquí te enviaremos la confirmación de tus reservas">
         {(p) => (
           <div className="input-icon"><Mail size={18} aria-hidden="true" />
-            <input {...p} className="input" type="email" autoComplete="email" value={form.email} onChange={set('email')} placeholder="nombre@correo.com" />
+            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} placeholder="nombre@correo.com" />
           </div>
         )}
       </Field>
       <Field label="Teléfono (opcional)" error={errors.telefono}>
         {(p) => (
           <div className="input-icon"><Phone size={18} aria-hidden="true" />
-            <input {...p} className="input" type="tel" autoComplete="tel" inputMode="tel" value={form.telefono} onChange={set('telefono')} placeholder="0991234567" />
+            <input {...p} className="input" type="tel" autoComplete="tel" inputMode="tel" maxLength={LIMITES.telefono} value={form.telefono} onChange={set('telefono')} placeholder="0991234567" />
           </div>
         )}
       </Field>

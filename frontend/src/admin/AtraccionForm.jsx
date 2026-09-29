@@ -5,6 +5,7 @@ import { onImgError } from '../components/AttractionCard';
 import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
+import { ECUADOR, LIMITES, limpiar, numero, PRECIO_MAX, texto } from '../utils/validation';
 
 const MAX_HORAS = 720; // 30 días: mismo límite que la base (atraccion_duracion_valida)
 
@@ -67,7 +68,7 @@ function ListEditor({ items, onChange, placeholder, addLabel, name }) {
     <div className="list-editor" role="group" aria-label={name}>
       {items.map((v, i) => (
         <div key={i} className="list-editor-item">
-          <input className="input" value={v} placeholder={placeholder} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`${name}, elemento ${i + 1}`} />
+          <input className="input" value={v} placeholder={placeholder} maxLength={150} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`${name}, elemento ${i + 1}`} />
           <button type="button" className="icon-btn sm" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label={`Quitar «${v || `elemento ${i + 1}`}» de ${name}`}><X size={18} aria-hidden="true" /></button>
         </div>
       ))}
@@ -130,6 +131,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     setUploading(true);
     try {
       for (const file of files) {
+        if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { toast(`"${file.name}" no es una imagen JPG, PNG o WebP`, 'error'); continue; }
         if (file.size > 4 * 1024 * 1024) { toast(`"${file.name}" supera los 4 MB`, 'error'); continue; }
         const r = await Uploads.image(file);
         setF((p) => ({ ...p, photos: [...p.photos, r.url] }));
@@ -147,24 +149,44 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     return { ...p, photos: ph };
   });
 
+  /** Valida los ítems de una lista (Incluye, No incluye, Recomendaciones). */
+  const validarLista = (items, que, obligatoria) => {
+    const llenos = items.map((x) => x.trim()).filter(Boolean);
+    if (obligatoria && !llenos.length) return `Indica al menos un elemento en "${que}"`;
+    const malo = llenos.map((x) => texto(x, { min: 2, max: LIMITES.item, que: `Cada elemento de "${que}"` })).find(Boolean);
+    if (malo) return malo;
+    if (new Set(llenos.map((x) => x.toLowerCase())).size !== llenos.length) return `Hay elementos repetidos en "${que}"`;
+    return null;
+  };
+
   const validate = () => {
-    const e = {};
-    if (f.name.trim().length < 3) e.name = 'Escribe un nombre (mínimo 3 caracteres)';
-    if (f.long_description.trim().length < 10) e.long_description = 'Describe la experiencia (mínimo 10 caracteres)';
-    if (!(Number(f.price) > 0)) e.price = 'Ingresa un precio mayor a 0';
-    if (f.child_price !== '' && Number(f.child_price) < 0) e.child_price = 'No puede ser negativo';
-    if (!(Number(f.duration_hours) > 0)) e.duration_hours = 'Ingresa la duración en horas (ej. 4 o 2.5)';
-    else if (Number(f.duration_hours) > MAX_HORAS) e.duration_hours = `Máximo ${MAX_HORAS} horas (30 días)`;
-    if (!f.times.length) e.times = 'Agrega al menos un horario de salida';
-    if (!(Number(f.capacity_per_slot) >= 1)) e.capacity_per_slot = 'Mínimo 1 cupo';
-    if (!f.categories.length) e.categories = 'Selecciona al menos una categoría';
-    if (!f.city) e.city = 'Selecciona el destino';
-    if (!f.operator) e.operator = 'Selecciona el operador';
-    if (!f.address.trim()) e.address = 'Indica dónde se realiza la actividad';
-    if (f.latitude === '' || Math.abs(f.latitude) > 90) e.latitude = 'Latitud entre -90 y 90';
-    if (f.longitude === '' || Math.abs(f.longitude) > 180) e.longitude = 'Longitud entre -180 y 180';
-    if (!f.includes.some((x) => x.trim())) e.includes = 'Indica al menos un elemento incluido';
-    if (!f.supported_languages.length) e.supported_languages = 'Selecciona al menos un idioma';
+    const precioErr = numero(f.price, { min: 0.5, max: PRECIO_MAX, que: 'El precio' });
+    const ninoErr =
+      numero(f.child_price, { min: 0, max: PRECIO_MAX, requerido: false, que: 'El precio de niño' }) ??
+      (f.child_price !== '' && !precioErr && Number(f.child_price) > Number(f.price) ? 'No puede ser mayor que el precio de adulto' : null);
+    const e = limpiar({
+      name: texto(f.name, { min: 3, max: LIMITES.nombreAtraccion, que: 'El nombre' }),
+      short_description: texto(f.short_description, { min: 10, max: LIMITES.resumen, requerido: false, que: 'El resumen' }),
+      long_description: texto(f.long_description, { min: 20, max: LIMITES.descripcion, que: 'La descripción' }),
+      price: precioErr,
+      child_price: ninoErr,
+      duration_hours: numero(f.duration_hours, { min: 0.5, max: MAX_HORAS, decimales: 2, que: 'La duración' }),
+      capacity_per_slot: numero(f.capacity_per_slot, { min: 1, max: 500, decimales: 0, que: 'El cupo' }),
+      cancellation_hours: f.free_cancellation ? numero(f.cancellation_hours, { min: 0, max: 720, decimales: 0, que: 'La anticipación en horas' }) : null,
+      times: f.times.length ? null : 'Agrega al menos un horario de salida',
+      categories: f.categories.length ? null : 'Selecciona al menos una categoría',
+      supported_languages: f.supported_languages.length ? null : 'Selecciona al menos un idioma',
+      city: f.city ? null : 'Selecciona el destino',
+      operator: f.operator ? null : 'Selecciona el operador',
+      address: texto(f.address, { min: 5, max: LIMITES.direccion, que: 'La dirección' }),
+      meeting_point: texto(f.meeting_point, { min: 5, max: LIMITES.direccion, requerido: false, que: 'El punto de encuentro' }),
+      latitude: numero(f.latitude, { min: ECUADOR.latMin, max: ECUADOR.latMax, decimales: 6, que: 'La latitud (dentro del Ecuador)' }),
+      longitude: numero(f.longitude, { min: ECUADOR.lngMin, max: ECUADOR.lngMax, decimales: 6, que: 'La longitud (dentro del Ecuador)' }),
+      includes: validarLista(f.includes, 'Incluye', true),
+      not_includes: validarLista(f.not_includes, 'No incluye', false),
+      recommendations: validarLista(f.recommendations, 'Recomendaciones', false),
+      photos: f.photos.length > 12 ? 'Máximo 12 fotos' : null,
+    });
     setErrors(e);
     if (Object.keys(e).length) {
       setTimeout(() => document.querySelector('.modal [aria-invalid="true"]')?.focus(), 30);
@@ -213,9 +235,9 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
         <div className="form-section">
           <h3><Info size={18} aria-hidden="true" /> Información general</h3>
           <div className="form-grid">
-            <Field label="Nombre" required error={errors.name} className="span-2">{(p) => <input {...p} className="input" value={f.name} onChange={set('name')} maxLength={255} placeholder="Ej. Tour al Parque Nacional Cotopaxi" />}</Field>
-            <Field label="Resumen corto" hint={`Se muestra en las tarjetas · ${f.short_description.length}/280`} className="span-2">{(p) => <input {...p} className="input" value={f.short_description} onChange={set('short_description')} maxLength={280} />}</Field>
-            <Field label="Descripción completa" required error={errors.long_description} className="span-2" hint="Usa un salto de línea para separar párrafos">{(p) => <textarea {...p} className="textarea" style={{ minHeight: 130 }} value={f.long_description} onChange={set('long_description')} />}</Field>
+            <Field label="Nombre" required error={errors.name} className="span-2">{(p) => <input {...p} className="input" value={f.name} onChange={set('name')} maxLength={LIMITES.nombreAtraccion} placeholder="Ej. Tour al Parque Nacional Cotopaxi" />}</Field>
+            <Field label="Resumen corto" error={errors.short_description} hint={`Se muestra en las tarjetas · ${f.short_description.length}/${LIMITES.resumen}`} className="span-2">{(p) => <input {...p} className="input" value={f.short_description} onChange={set('short_description')} maxLength={LIMITES.resumen} />}</Field>
+            <Field label="Descripción completa" required error={errors.long_description} className="span-2" hint={`Mínimo 20 caracteres · ${f.long_description.length}/${LIMITES.descripcion}. Usa un salto de línea para separar párrafos`}>{(p) => <textarea {...p} className="textarea" style={{ minHeight: 130 }} value={f.long_description} onChange={set('long_description')} maxLength={LIMITES.descripcion} />}</Field>
             <Field label="Tipo de producto" required>
               {(p) => <select {...p} className="select" value={f.product_type} onChange={set('product_type')}>{Object.entries(PRODUCT_TYPE).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
             </Field>
@@ -251,10 +273,10 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
         <div className="form-section">
           <h3><Tag size={18} aria-hidden="true" /> Precios, horarios y cupos</h3>
           <div className="form-grid">
-            <Field label="Precio adulto (USD)" required error={errors.price}>{(p) => <input {...p} className="input" type="number" min="0" step="0.5" inputMode="decimal" value={f.price} onChange={set('price')} />}</Field>
-            <Field label="Precio niño 3–11 (USD)" error={errors.child_price} hint="Vacío = mismo precio que adulto">{(p) => <input {...p} className="input" type="number" min="0" step="0.5" inputMode="decimal" value={f.child_price} onChange={set('child_price')} />}</Field>
-            <Field label="Duración (horas)" required error={errors.duration_hours} hint="Ej. 2.5 = 2 h 30 min · 96 = 4 días">{(p) => <input {...p} className="input" type="number" min="0.5" step="0.5" value={f.duration_hours} onChange={set('duration_hours')} />}</Field>
-            <Field label="Cupo por horario" required error={errors.capacity_per_slot}>{(p) => <input {...p} className="input" type="number" min="1" value={f.capacity_per_slot} onChange={set('capacity_per_slot')} />}</Field>
+            <Field label="Precio adulto (USD)" required error={errors.price}>{(p) => <input {...p} className="input" type="number" min="0.5" max={PRECIO_MAX} step="0.01" inputMode="decimal" value={f.price} onChange={set('price')} />}</Field>
+            <Field label="Precio niño 3–11 (USD)" error={errors.child_price} hint="Vacío = mismo precio que adulto; no puede superarlo">{(p) => <input {...p} className="input" type="number" min="0" max={PRECIO_MAX} step="0.01" inputMode="decimal" value={f.child_price} onChange={set('child_price')} />}</Field>
+            <Field label="Duración (horas)" required error={errors.duration_hours} hint="Ej. 2.5 = 2 h 30 min · 96 = 4 días">{(p) => <input {...p} className="input" type="number" min="0.5" max={MAX_HORAS} step="0.5" inputMode="decimal" value={f.duration_hours} onChange={set('duration_hours')} />}</Field>
+            <Field label="Cupo por horario" required error={errors.capacity_per_slot} hint="Entre 1 y 500 personas por salida">{(p) => <input {...p} className="input" type="number" min="1" max="500" step="1" inputMode="numeric" value={f.capacity_per_slot} onChange={set('capacity_per_slot')} />}</Field>
             <div className="field span-2">
               <span className="label">Horarios de salida <span className="req">*</span></span>
               <TimesInput value={f.times} onChange={set('times')} error={errors.times} errorId="times-err" />
@@ -264,7 +286,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
               <Switch checked={f.free_cancellation} onChange={set('free_cancellation')} label="Permite cancelación gratuita" />
             </div>
             {f.free_cancellation && (
-              <Field label="Hasta cuántas horas antes">{(p) => <input {...p} className="input" type="number" min="0" value={f.cancellation_hours} onChange={set('cancellation_hours')} />}</Field>
+              <Field label="Hasta cuántas horas antes" required error={errors.cancellation_hours} hint="Entre 0 y 720 horas (30 días)">{(p) => <input {...p} className="input" type="number" min="0" max="720" step="1" inputMode="numeric" value={f.cancellation_hours} onChange={set('cancellation_hours')} />}</Field>
             )}
           </div>
         </div>
@@ -282,10 +304,10 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
                 </select>
               )}
             </Field>
-            <Field label="Dirección de la actividad" required error={errors.address}>{(p) => <input {...p} className="input" value={f.address} onChange={set('address')} />}</Field>
-            <Field label="Punto de encuentro" className="span-2" hint="Dónde se reúne el grupo (si es distinto de la actividad)">{(p) => <input {...p} className="input" value={f.meeting_point} onChange={set('meeting_point')} />}</Field>
-            <Field label="Latitud" required error={errors.latitude} hint="Se sugiere al elegir destino">{(p) => <input {...p} className="input" type="number" step="0.000001" value={f.latitude} onChange={set('latitude')} />}</Field>
-            <Field label="Longitud" required error={errors.longitude}>{(p) => <input {...p} className="input" type="number" step="0.000001" value={f.longitude} onChange={set('longitude')} />}</Field>
+            <Field label="Dirección de la actividad" required error={errors.address} hint="Ej. Parque Nacional Cotopaxi, control Caspi">{(p) => <input {...p} className="input" value={f.address} onChange={set('address')} maxLength={LIMITES.direccion} />}</Field>
+            <Field label="Punto de encuentro" className="span-2" error={errors.meeting_point} hint="Dónde se reúne el grupo (si es distinto de la actividad)">{(p) => <input {...p} className="input" value={f.meeting_point} onChange={set('meeting_point')} maxLength={LIMITES.direccion} />}</Field>
+            <Field label="Latitud" required error={errors.latitude} hint={`Dentro del Ecuador: entre ${ECUADOR.latMin} y ${ECUADOR.latMax}`}>{(p) => <input {...p} className="input" type="number" min={ECUADOR.latMin} max={ECUADOR.latMax} step="0.000001" value={f.latitude} onChange={set('latitude')} />}</Field>
+            <Field label="Longitud" required error={errors.longitude} hint={`Dentro del Ecuador: entre ${ECUADOR.lngMin} y ${ECUADOR.lngMax}`}>{(p) => <input {...p} className="input" type="number" min={ECUADOR.lngMin} max={ECUADOR.lngMax} step="0.000001" value={f.longitude} onChange={set('longitude')} />}</Field>
           </div>
         </div>
 
@@ -300,10 +322,12 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             <div className="field">
               <span className="label">No incluye</span>
               <ListEditor name="No incluye" items={f.not_includes} onChange={set('not_includes')} placeholder="Ej. Propinas" addLabel="Agregar" />
+              {errors.not_includes && <span className="error-text" role="alert">{errors.not_includes}</span>}
             </div>
             <div className="field span-2">
               <span className="label">Recomendaciones "Antes de ir"</span>
               <ListEditor name="Recomendaciones" items={f.recommendations} onChange={set('recommendations')} placeholder="Ej. Lleva ropa abrigada" addLabel="Agregar recomendación" />
+              {errors.recommendations && <span className="error-text" role="alert">{errors.recommendations}</span>}
             </div>
           </div>
         </div>
@@ -329,6 +353,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             </button>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => upload([...e.target.files])} />
           </div>
+          {errors.photos && <span className="error-text" role="alert">{errors.photos}</span>}
           <div className="row" style={{ marginTop: 18, gap: 24 }}>
             <Switch checked={f.is_active} onChange={set('is_active')} label="Visible en el sitio" />
             <Switch checked={f.featured} onChange={set('featured')} label="Destacada en el inicio" />

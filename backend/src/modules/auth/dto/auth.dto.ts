@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { Rol } from '../../../common/auth/scopes';
 import { trim, lower } from '../../../common/utils/transform';
+import { EsDocumentoEc, RE_NOMBRE_PERSONA } from '../../../common/utils/validators';
 
 /** Mismas reglas que los dominios de la base (dom_correo, dom_telefono, dom_documento). */
 export const RE_CORREO = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
@@ -15,6 +16,7 @@ export class RegisterDto {
   @IsString()
   @MinLength(2, { message: 'nombre debe tener al menos 2 caracteres' })
   @MaxLength(120)
+  @Matches(RE_NOMBRE_PERSONA, { message: 'nombre debe contener solo letras' })
   nombre: string;
 
   @ApiProperty({ example: 'Guamán' })
@@ -22,6 +24,7 @@ export class RegisterDto {
   @IsString()
   @MinLength(2, { message: 'apellido debe tener al menos 2 caracteres' })
   @MaxLength(120)
+  @Matches(RE_NOMBRE_PERSONA, { message: 'apellido debe contener solo letras' })
   apellido: string;
 
   @ApiProperty({ example: 'maria@correo.com' })
@@ -65,6 +68,7 @@ export class UpdatePerfilDto {
   @IsString()
   @MinLength(2, { message: 'nombre debe tener al menos 2 caracteres' })
   @MaxLength(120)
+  @Matches(RE_NOMBRE_PERSONA, { message: 'nombre debe contener solo letras' })
   nombre?: string;
 
   @ApiPropertyOptional()
@@ -73,6 +77,7 @@ export class UpdatePerfilDto {
   @IsString()
   @MinLength(2, { message: 'apellido debe tener al menos 2 caracteres' })
   @MaxLength(120)
+  @Matches(RE_NOMBRE_PERSONA, { message: 'apellido debe contener solo letras' })
   apellido?: string;
 
   @ApiPropertyOptional({ description: 'Vacío para quitarlo' })
@@ -84,7 +89,7 @@ export class UpdatePerfilDto {
   @ApiPropertyOptional({ description: 'Cédula (10 dígitos) o pasaporte (1-2 letras y 6-9 dígitos). Vacío para quitarlo' })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
-  @Matches(/^(|\d{10}|[A-Z]{1,2}\d{6,9})$/, { message: 'documento debe ser una cédula de 10 dígitos o un pasaporte válido' })
+  @EsDocumentoEc({ message: 'documento debe ser una cédula ecuatoriana válida o un pasaporte (1-2 letras y 6-9 dígitos)' })
   documento?: string;
 }
 
@@ -110,6 +115,7 @@ export class CreateUsuarioDto extends RegisterDto {
   @ApiPropertyOptional({ description: 'Código de la empresa operadora (obligatorio para rol OPERADOR)', example: 101 })
   @IsOptional()
   @IsInt({ message: 'operadorCodigo debe ser un número entero' })
+  @Min(1)
   operadorCodigo?: number | null;
 }
 

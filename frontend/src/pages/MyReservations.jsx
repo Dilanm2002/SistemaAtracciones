@@ -22,7 +22,9 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
 
   const submit = async () => {
     if (!motivo) { setError('Selecciona un motivo'); return; }
-    if (motivo === 'Otro' && detalle.trim().length < 3) { setError('Cuéntanos brevemente el motivo'); return; }
+    const t = detalle.trim();
+    if (motivo === 'Otro' && (t.length < 5 || !/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(t))) { setError('Cuéntanos brevemente el motivo (mínimo 5 caracteres, con texto)'); return; }
+    if (t && !/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(t)) { setError('El comentario debe contener texto'); return; }
     setSending(true);
     try {
       const reason = motivo === 'Otro' ? detalle.trim() : `${motivo}${detalle.trim() ? `: ${detalle.trim()}` : ''}`;

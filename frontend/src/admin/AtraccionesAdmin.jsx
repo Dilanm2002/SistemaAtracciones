@@ -133,7 +133,7 @@ export default function AtraccionesAdmin() {
       <div className="adm-toolbar">
         <div className="input-icon">
           <Search size={18} aria-hidden="true" />
-          <input className="input" type="search" placeholder="Buscar por nombre o destino" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar atracciones" data-shortcut-search />
+          <input className="input" type="search" maxLength={120} placeholder="Buscar por nombre o destino" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar atracciones" data-shortcut-search />
         </div>
         <div className="segmented" role="group" aria-label="Estado">
           {[['all', 'Todas'], ['active', 'Activas'], ['inactive', 'Inactivas']].map(([k, l]) => <button key={k} aria-pressed={status === k} onClick={() => setStatus(k)}>{l}</button>)}

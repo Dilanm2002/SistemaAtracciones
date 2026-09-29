@@ -1,9 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLength, Max, IsEnum, MinLength, IsIn, IsUUID, ValidateNested } from 'class-validator';
+import { IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLength, Max, IsEnum, MinLength, IsIn, IsUUID, ValidateIf, ValidateNested } from 'class-validator';
 import { Link } from '../../../common/utils/hateoas';
 import { PriceDto } from './nested-types.dto';
 import { trim } from '../../../common/utils/transform';
+import { ContieneLetras, EsDocumentoEc, FechaFutura, RE_NOMBRE_PERSONA } from '../../../common/utils/validators';
 
 export enum ReservationStatus {
   CONFIRMED = 'CONFIRMED',
@@ -43,6 +44,7 @@ export class CardInfoDto {
   @IsString()
   @MinLength(3)
   @MaxLength(120)
+  @Matches(RE_NOMBRE_PERSONA, { message: 'card.holder debe contener solo letras (como aparece en la tarjeta)' })
   holder: string;
 
   @ApiProperty({ example: 12 })
@@ -61,6 +63,7 @@ export class CardInfoDto {
 export class ReservationRequestDto {
   @ApiProperty({ description: 'Fecha para la reserva', example: '2026-10-10', format: 'date' })
   @IsDateString({}, { message: 'date debe ser una fecha válida (AAAA-MM-DD)' })
+  @FechaFutura(365, { message: 'date debe ser desde hoy y hasta un año adelante' })
   date: string;
 
   @ApiProperty({ description: 'Hora seleccionada', example: '10:00', required: false })
@@ -80,6 +83,7 @@ export class ReservationRequestDto {
   @IsString()
   @MinLength(3, { message: 'customer_name debe tener al menos 3 caracteres' })
   @MaxLength(120)
+  @Matches(RE_NOMBRE_PERSONA, { message: 'customer_name debe contener solo letras, espacios, apóstrofes o guiones' })
   customer_name: string;
 
   @ApiProperty({ description: 'Email del cliente', example: 'juan@example.com', required: false })
@@ -105,7 +109,7 @@ export class ReservationRequestDto {
   @ApiPropertyOptional({ description: 'Cédula (10 dígitos) o pasaporte (1-2 letras y 6-9 dígitos)', example: '1712345678' })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
-  @Matches(/^(\d{10}|[A-Z]{1,2}\d{6,9})$/, { message: 'customer_document debe ser una cédula de 10 dígitos o un pasaporte válido' })
+  @EsDocumentoEc({ message: 'customer_document debe ser una cédula ecuatoriana válida o un pasaporte (1-2 letras y 6-9 dígitos)' })
   customer_document?: string;
 
   @ApiPropertyOptional({ type: CardInfoDto, description: 'Solo con payment_method TARJETA' })
@@ -121,8 +125,11 @@ export class ReservationRequestDto {
 
   @ApiPropertyOptional({ example: 'Viajamos con una persona vegetariana' })
   @IsOptional()
+  @Transform(trim)
   @IsString()
   @MaxLength(500)
+  @ValidateIf((o: { notes?: string }) => !!o.notes)
+  @ContieneLetras()
   notes?: string;
 }
 
@@ -170,8 +177,9 @@ export class CancelReservationRequestDto {
   @ApiProperty({ description: 'Razón de la cancelación', example: 'Cambio de planes' })
   @Transform(trim)
   @IsString()
-  @MinLength(3, { message: 'reason debe tener al menos 3 caracteres' })
+  @MinLength(5, { message: 'reason debe tener al menos 5 caracteres' })
   @MaxLength(255)
+  @ContieneLetras({ message: 'reason debe explicar el motivo con texto' })
   reason: string;
 }
 

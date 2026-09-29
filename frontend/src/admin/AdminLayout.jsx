@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Auth, Mensajes, Reservas } from '../api/client';
 import { Field, Modal, RequiredLegend, Spinner } from '../components/ui';
+import { LIMITES, password } from '../utils/validation';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { initials } from '../utils/format';
@@ -63,7 +64,9 @@ function ChangePasswordModal({ onClose }) {
     e.preventDefault();
     const errs = {};
     if (!f.actual) errs.actual = 'Ingresa tu contraseña actual';
-    if (f.nueva.length < 8 || !/[A-Za-z]/.test(f.nueva) || !/\d/.test(f.nueva)) errs.nueva = 'Mínimo 8 caracteres con letras y números';
+    const e2 = password(f.nueva);
+    if (e2) errs.nueva = e2;
+    else if (f.nueva === f.actual) errs.nueva = 'La nueva contraseña debe ser distinta de la actual';
     setErr(errs);
     if (Object.keys(errs).length) return;
     setSaving(true);
@@ -81,8 +84,8 @@ function ChangePasswordModal({ onClose }) {
     <Modal open onClose={onClose} title="Cambiar contraseña" footer={<><button className="btn" onClick={onClose}>Cancelar</button><button className="btn btn-primary" form="pw-form" disabled={saving}>{saving && <Spinner />} Guardar</button></>}>
       <form id="pw-form" onSubmit={submit} className="stack" noValidate>
         <RequiredLegend />
-        <Field label="Contraseña actual" required error={err.actual}>{(p) => <input {...p} type="password" className="input" autoComplete="current-password" value={f.actual} onChange={(e) => setF({ ...f, actual: e.target.value })} />}</Field>
-        <Field label="Nueva contraseña" required error={err.nueva} hint="Mínimo 8 caracteres con letras y números">{(p) => <input {...p} type="password" className="input" autoComplete="new-password" value={f.nueva} onChange={(e) => setF({ ...f, nueva: e.target.value })} />}</Field>
+        <Field label="Contraseña actual" required error={err.actual}>{(p) => <input {...p} type="password" className="input" autoComplete="current-password" maxLength={200} value={f.actual} onChange={(e) => setF({ ...f, actual: e.target.value })} />}</Field>
+        <Field label="Nueva contraseña" required error={err.nueva} hint="Mínimo 8 caracteres con letras y números">{(p) => <input {...p} type="password" className="input" autoComplete="new-password" maxLength={LIMITES.password} value={f.nueva} onChange={(e) => setF({ ...f, nueva: e.target.value })} />}</Field>
       </form>
     </Modal>
   );

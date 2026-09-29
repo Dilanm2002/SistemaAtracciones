@@ -5,6 +5,7 @@ import { FALLBACK_IMG, onImgError } from '../components/AttractionCard';
 import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, Switch, useAsync, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
+import { correo, LIMITES, limpiar, numero, ruc, telefono, texto } from '../utils/validation';
 import { CATEGORY_ICONS, CategoryIcon } from '../utils/icons';
 
 /** Provincias del Ecuador (tabla provincia), agrupadas por región para los selects. */
@@ -106,7 +107,14 @@ function CategoriaModal({ item, categorias, onClose, onSaved }) {
   const [saving, setSaving] = useState(false);
   const save = async (e) => {
     e.preventDefault();
-    if (f.nombre.trim().length < 2) { setErr({ nombre: 'Mínimo 2 caracteres' }); return; }
+    const errs = limpiar({
+      nombre: texto(f.nombre, { min: 2, max: LIMITES.categoria, que: 'El nombre' }),
+      slug: /^[a-z0-9-]{1,80}$/.test(f.slug) ? null : 'Solo minúsculas, números y guiones (máx. 80)',
+      descripcion: texto(f.descripcion, { min: 5, max: LIMITES.descCategoria, requerido: false, que: 'La descripción' }),
+      orden: numero(f.orden, { min: 0, max: 999, decimales: 0, que: 'El orden' }),
+    });
+    setErr(errs);
+    if (Object.keys(errs).length) return;
     setSaving(true);
     try {
       const u = await Categorias.update(item.id, { ...f, orden: Number(f.orden) });
@@ -119,14 +127,14 @@ function CategoriaModal({ item, categorias, onClose, onSaved }) {
       <form id="cat-form" onSubmit={save} className="stack" noValidate>
         <RequiredLegend />
         {err.api && <Alert tone="danger">{err.api}</Alert>}
-        <Field label="Nombre" required error={err.nombre}>{(p) => <input {...p} className="input" value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} />}</Field>
-        <Field label="Slug (identificador en la API)" hint="Cambiarlo afecta los enlaces y filtros existentes" error={err.slug}>{(p) => <input {...p} className="input" value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value.toLowerCase() })} />}</Field>
+        <Field label="Nombre" required error={err.nombre}>{(p) => <input {...p} className="input" maxLength={LIMITES.categoria} value={f.nombre} onChange={(e) => setF({ ...f, nombre: e.target.value })} />}</Field>
+        <Field label="Slug (identificador en la API)" required hint="Minúsculas, números y guiones. Cambiarlo afecta los enlaces y filtros existentes" error={err.slug}>{(p) => <input {...p} className="input" maxLength={80} value={f.slug} onChange={(e) => setF({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })} />}</Field>
         <div className="field"><span className="label">Ícono</span><IconPicker value={f.icono} onChange={(icono) => setF({ ...f, icono })} /></div>
-        <Field label="Descripción">{(p) => <input {...p} className="input" value={f.descripcion} onChange={(e) => setF({ ...f, descripcion: e.target.value })} />}</Field>
+        <Field label="Descripción" error={err.descripcion}>{(p) => <input {...p} className="input" maxLength={LIMITES.descCategoria} value={f.descripcion} onChange={(e) => setF({ ...f, descripcion: e.target.value })} />}</Field>
         <Field label="Categoría padre" hint="Las subcategorías se agrupan bajo su categoría principal" error={err.padre_id}>
           {(p) => <PadreSelect {...p} categorias={categorias} excluir={item.id} value={f.padre_id} onChange={(padre_id) => setF({ ...f, padre_id })} />}
         </Field>
-        <Field label="Orden de aparición" hint="Menor número = aparece primero">{(p) => <input {...p} className="input" type="number" value={f.orden} onChange={(e) => setF({ ...f, orden: e.target.value })} />}</Field>
+        <Field label="Orden de aparición" required error={err.orden} hint="Entre 0 y 999; menor número = aparece primero">{(p) => <input {...p} className="input" type="number" min="0" max="999" step="1" inputMode="numeric" value={f.orden} onChange={(e) => setF({ ...f, orden: e.target.value })} />}</Field>
       </form>
     </Modal>
   );
@@ -142,7 +150,9 @@ export function CategoriasAdmin() {
 
   const create = async (e) => {
     e.preventDefault();
-    if (form.nombre.trim().length < 2) { setFormErr('Escribe el nombre de la categoría'); return; }
+    const e1 = texto(form.nombre, { min: 2, max: LIMITES.categoria, que: 'El nombre de la categoría' }) ??
+      texto(form.descripcion, { min: 5, max: LIMITES.descCategoria, requerido: false, que: 'La descripción' });
+    if (e1) { setFormErr(e1); return; }
     try {
       const c = await Categorias.create({ ...form, nombre: form.nombre.trim(), orden: (data?.length ?? 0) + 1 });
       setData((d) => [...d, { ...c, total_atracciones: 0 }]);
@@ -156,8 +166,8 @@ export function CategoriasAdmin() {
     <>
       <div className="adm-module-head"><div><h2>Categorías</h2><p>Agrupan las experiencias en el buscador y en el inicio.</p></div></div>
       <form className="inline-form" onSubmit={create} noValidate>
-        <Field label="Nueva categoría" error={formErr}>{(p) => <input {...p} className="input" placeholder="Ej. Bienestar y termas" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />}</Field>
-        <Field label="Descripción (opcional)">{(p) => <input {...p} className="input" value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />}</Field>
+        <Field label="Nueva categoría" error={formErr}>{(p) => <input {...p} className="input" maxLength={LIMITES.categoria} placeholder="Ej. Bienestar y termas" value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />}</Field>
+        <Field label="Descripción (opcional)">{(p) => <input {...p} className="input" maxLength={LIMITES.descCategoria} value={form.descripcion} onChange={(e) => setForm({ ...form, descripcion: e.target.value })} />}</Field>
         <Field label="Dentro de (opcional)">{(p) => <PadreSelect {...p} categorias={data ?? []} value={form.padre_id} onChange={(padre_id) => setForm({ ...form, padre_id })} />}</Field>
         <div className="field" style={{ flexBasis: '100%' }}><span className="label">Ícono</span><IconPicker value={form.icono} onChange={(icono) => setForm({ ...form, icono })} /></div>
         <button className="btn btn-primary"><Plus size={18} /> Crear categoría</button>
@@ -214,9 +224,12 @@ function DestinoModal({ item, onClose, onSaved }) {
   const save = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (f.nombre.trim().length < 2) errs.nombre = 'Escribe el nombre de la ciudad';
-    if (!f.provincia_id) errs.provincia_id = 'Elige la provincia';
-    if (!/^\d{6}$/.test(f.codigo_inec)) errs.codigo_inec = 'El código INEC tiene 6 dígitos';
+    Object.assign(errs, limpiar({
+      nombre: texto(f.nombre, { min: 2, max: LIMITES.ciudad, que: 'El nombre de la ciudad' }),
+      provincia_id: f.provincia_id ? null : 'Elige la provincia',
+      codigo_inec: /^\d{6}$/.test(f.codigo_inec) ? null : 'El código INEC tiene exactamente 6 dígitos',
+      descripcion: texto(f.descripcion, { min: 10, max: LIMITES.descCiudad, requerido: false, que: 'La descripción' }),
+    }));
     setErr(errs);
     if (Object.keys(errs).length) return;
     setSaving(true);
@@ -238,12 +251,12 @@ function DestinoModal({ item, onClose, onSaved }) {
       <form id="dst-form" onSubmit={save} className="form-grid" noValidate>
         <div className="span-2"><RequiredLegend /></div>
         {err.api && <div className="span-2"><Alert tone="danger">{err.api}</Alert></div>}
-        <Field label="Ciudad" required error={err.nombre}>{(p) => <input {...p} className="input" value={f.nombre} onChange={set('nombre')} />}</Field>
+        <Field label="Ciudad" required error={err.nombre}>{(p) => <input {...p} className="input" maxLength={LIMITES.ciudad} value={f.nombre} onChange={set('nombre')} />}</Field>
         <Field label="Provincia" required error={err.provincia_id} hint={item && f.provincia_id !== item.provincia_id ? 'Sus atracciones pasarán a la nueva provincia' : undefined}>
           {(p) => <ProvinciaSelect {...p} value={f.provincia_id} onChange={(provincia_id) => setF({ ...f, provincia_id })} />}
         </Field>
-        <Field label="Código INEC" required error={err.codigo_inec} hint="6 dígitos, ej. 170150 (Quito)">{(p) => <input {...p} className="input" inputMode="numeric" maxLength={6} value={f.codigo_inec} onChange={set('codigo_inec')} />}</Field>
-        <Field label="Descripción" className="span-2" hint="Aparece en la página de destinos (máx. 500 caracteres)">{(p) => <textarea {...p} className="textarea" maxLength={500} style={{ minHeight: 80 }} value={f.descripcion} onChange={set('descripcion')} />}</Field>
+        <Field label="Código INEC" required error={err.codigo_inec} hint="6 dígitos, ej. 170150 (Quito)">{(p) => <input {...p} className="input" inputMode="numeric" maxLength={6} value={f.codigo_inec} onChange={(e) => setF({ ...f, codigo_inec: e.target.value.replace(/\D/g, '') })} />}</Field>
+        <Field label="Descripción" className="span-2" error={err.descripcion} hint="Aparece en la página de destinos (10 a 500 caracteres)">{(p) => <textarea {...p} className="textarea" maxLength={500} style={{ minHeight: 80 }} value={f.descripcion} onChange={set('descripcion')} />}</Field>
         <div className="field span-2">
           <span className="label">Imagen de portada</span>
           <div className="photo-list">
@@ -325,11 +338,14 @@ function OperadorModal({ item, onClose, onSaved }) {
   const save = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (f.nombre.trim().length < 2) errs.nombre = 'Escribe el nombre comercial';
     if (!f.provincia_id) errs.provincia_id = 'Elige la provincia de la sede';
-    if (f.ruc && !/^\d{13}$/.test(f.ruc)) errs.ruc = 'El RUC tiene 13 dígitos';
-    if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email)) errs.email = 'Correo no válido';
-    if (f.telefono && !/^\+?\d{7,15}$/.test(f.telefono)) errs.telefono = '7 a 15 dígitos';
+    Object.assign(errs, limpiar({
+      nombre: texto(f.nombre, { min: 2, max: LIMITES.operador, que: 'El nombre comercial' }),
+      direccion: texto(f.direccion, { min: 5, max: LIMITES.direccion, requerido: false, que: 'La dirección' }),
+      ruc: ruc(f.ruc),
+      email: correo(f.email, { requerido: false }),
+      telefono: telefono(f.telefono),
+    }));
     setErr(errs);
     if (Object.keys(errs).length) return;
     setSaving(true);
@@ -346,12 +362,12 @@ function OperadorModal({ item, onClose, onSaved }) {
       <form id="op-form" onSubmit={save} className="stack" noValidate>
         <RequiredLegend />
         {err.api && <Alert tone="danger">{err.api}</Alert>}
-        <Field label="Nombre comercial" required error={err.nombre}>{(p) => <input {...p} className="input" value={f.nombre} onChange={set('nombre')} />}</Field>
+        <Field label="Nombre comercial" required error={err.nombre}>{(p) => <input {...p} className="input" maxLength={LIMITES.operador} value={f.nombre} onChange={set('nombre')} />}</Field>
         <Field label="Provincia de la sede" required error={err.provincia_id}>{(p) => <ProvinciaSelect {...p} value={f.provincia_id} onChange={(provincia_id) => setF({ ...f, provincia_id })} />}</Field>
         <Field label="Dirección" error={err.direccion}>{(p) => <input {...p} className="input" maxLength={255} value={f.direccion} onChange={set('direccion')} />}</Field>
-        <Field label="RUC" error={err.ruc} hint="13 dígitos">{(p) => <input {...p} className="input" inputMode="numeric" maxLength={13} value={f.ruc} onChange={set('ruc')} />}</Field>
-        <Field label="Correo de reservas" error={err.email}>{(p) => <input {...p} className="input" type="email" value={f.email} onChange={set('email')} />}</Field>
-        <Field label="Teléfono" error={err.telefono}>{(p) => <input {...p} className="input" type="tel" value={f.telefono} onChange={set('telefono')} />}</Field>
+        <Field label="RUC" error={err.ruc} hint="13 dígitos, termina en 001">{(p) => <input {...p} className="input" inputMode="numeric" maxLength={13} value={f.ruc} onChange={(e) => setF({ ...f, ruc: e.target.value.replace(/\D/g, '') })} />}</Field>
+        <Field label="Correo de reservas" error={err.email}>{(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.email} onChange={set('email')} />}</Field>
+        <Field label="Teléfono" error={err.telefono} hint="7 a 15 dígitos, ej. 022456789">{(p) => <input {...p} className="input" type="tel" inputMode="tel" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value.replace(/[^\d+]/g, '') })} />}</Field>
         <Switch checked={f.activo} onChange={(v) => setF({ ...f, activo: v })} label="Operador activo" />
       </form>
     </Modal>

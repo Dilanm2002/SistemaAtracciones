@@ -110,7 +110,7 @@ export default function ReservasAdmin() {
       <div className="adm-toolbar">
         <div className="input-icon">
           <Search size={18} aria-hidden="true" />
-          <input className="input" type="search" placeholder="Código, cliente o correo" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar reservas" data-shortcut-search />
+          <input className="input" type="search" maxLength={120} placeholder="Código, cliente o correo" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar reservas" data-shortcut-search />
         </div>
         <select className="select" value={attr} onChange={(e) => setAttr(e.target.value)} aria-label="Filtrar por atracción" style={{ maxWidth: 280 }}>
           <option value="">Todas las atracciones</option>

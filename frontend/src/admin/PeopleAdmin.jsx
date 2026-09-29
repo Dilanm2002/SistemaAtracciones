@@ -6,6 +6,7 @@ import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, S
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateTime, fmtMoney, fmtRelative, initials } from '../utils/format';
+import { correo, LIMITES, limpiar, nombrePersona, password, telefono } from '../utils/validation';
 import { useAdmin } from './AdminLayout';
 import { exportXlsx } from './excel';
 
@@ -25,7 +26,7 @@ export function ClientesAdmin() {
         </button>
       </div>
       <div className="adm-toolbar">
-        <div className="input-icon"><Search size={18} aria-hidden="true" /><input className="input" type="search" placeholder="Nombre o correo" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar clientes" data-shortcut-search /></div>
+        <div className="input-icon"><Search size={18} aria-hidden="true" /><input className="input" type="search" maxLength={LIMITES.busqueda} placeholder="Nombre o correo" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar clientes" data-shortcut-search /></div>
       </div>
       {error ? <ErrorState error={error} onRetry={reload} /> : loading ? <div className="skeleton" style={{ height: 300 }} /> : rows.length === 0 ? <EmptyState icon={Users} title="Sin clientes que coincidan" /> : (
         <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
@@ -67,13 +68,14 @@ function UsuarioModal({ item, onClose, onSaved }) {
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const save = async (e) => {
     e.preventDefault();
-    const errs = {};
-    if (f.nombre.trim().length < 2) errs.nombre = 'Mínimo 2 caracteres';
-    if (f.apellido.trim().length < 2) errs.apellido = 'Mínimo 2 caracteres';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email)) errs.email = 'Correo no válido';
-    if ((!item || f.password) && (f.password.length < 8 || !/[A-Za-z]/.test(f.password) || !/\d/.test(f.password))) errs.password = 'Mínimo 8 caracteres con letras y números';
-    if (f.telefono && !/^\+?\d{7,15}$/.test(f.telefono)) errs.telefono = '7 a 15 dígitos';
-    if (f.rol === 'OPERADOR' && !f.operadorCodigo) errs.operadorCodigo = 'Elige la empresa operadora';
+    const errs = limpiar({
+      nombre: nombrePersona(f.nombre, { que: 'Los nombres' }),
+      apellido: nombrePersona(f.apellido, { que: 'Los apellidos' }),
+      email: correo(f.email),
+      password: !item || f.password ? password(f.password) : null,
+      telefono: telefono(f.telefono),
+      operadorCodigo: f.rol === 'OPERADOR' && !f.operadorCodigo ? 'Elige la empresa operadora' : null,
+    });
     setErr(errs);
     if (Object.keys(errs).length) return;
     setSaving(true);
@@ -98,11 +100,11 @@ function UsuarioModal({ item, onClose, onSaved }) {
         <RequiredLegend />
         {err.api && <Alert tone="danger">{err.api}</Alert>}
         <div className="form-grid">
-          <Field label="Nombres" required error={err.nombre}>{(p) => <input {...p} className="input" value={f.nombre} onChange={set('nombre')} />}</Field>
-          <Field label="Apellidos" required error={err.apellido}>{(p) => <input {...p} className="input" value={f.apellido} onChange={set('apellido')} />}</Field>
+          <Field label="Nombres" required error={err.nombre}>{(p) => <input {...p} className="input" maxLength={LIMITES.nombrePersona} value={f.nombre} onChange={set('nombre')} />}</Field>
+          <Field label="Apellidos" required error={err.apellido}>{(p) => <input {...p} className="input" maxLength={LIMITES.nombrePersona} value={f.apellido} onChange={set('apellido')} />}</Field>
         </div>
-        <Field label="Correo" required error={err.email}>{(p) => <input {...p} className="input" type="email" value={f.email} onChange={set('email')} />}</Field>
-        <Field label="Teléfono" error={err.telefono}>{(p) => <input {...p} className="input" type="tel" value={f.telefono} onChange={set('telefono')} />}</Field>
+        <Field label="Correo" required error={err.email}>{(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.email} onChange={set('email')} />}</Field>
+        <Field label="Teléfono" error={err.telefono} hint="7 a 15 dígitos">{(p) => <input {...p} className="input" type="tel" inputMode="tel" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value.replace(/[^\d+]/g, '') })} />}</Field>
         <Field label="Rol" required hint={f.rol === 'ADMIN' ? 'Acceso total al panel' : f.rol === 'OPERADOR' ? 'Solo Dashboard, Reservas y Disponibilidad' : 'Solo puede reservar en el sitio'}>
           {(p) => <select {...p} className="select" value={f.rol} onChange={set('rol')}>{Object.entries(ROL_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
         </Field>
@@ -117,7 +119,7 @@ function UsuarioModal({ item, onClose, onSaved }) {
           </Field>
         )}
         <Field label={item ? 'Nueva contraseña (opcional)' : 'Contraseña inicial'} required={!item} error={err.password} hint="Compártela de forma segura; el usuario podrá cambiarla">
-          {(p) => <input {...p} className="input" type="text" autoComplete="new-password" value={f.password} onChange={set('password')} />}
+          {(p) => <input {...p} className="input" type="text" autoComplete="new-password" maxLength={LIMITES.password} value={f.password} onChange={set('password')} />}
         </Field>
       </form>
     </Modal>

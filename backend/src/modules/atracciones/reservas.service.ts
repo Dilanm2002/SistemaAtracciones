@@ -118,6 +118,13 @@ export class ReservasService {
 
         const metodo = dto.payment_method ?? PaymentMethod.TARJETA;
         if (dto.card && metodo !== PaymentMethod.TARJETA) throw new BadRequestException('card solo aplica al pago con TARJETA.');
+        if (dto.card) {
+          const [anio, mes] = hoy.split('-').map(Number);
+          if (dto.card.exp_year < anio || (dto.card.exp_year === anio && dto.card.exp_month < mes)) {
+            throw new BadRequestException('La tarjeta está vencida.');
+          }
+          if (dto.card.exp_year > anio + 20) throw new BadRequestException('La fecha de vencimiento de la tarjeta no es válida.');
+        }
         const compra = await registrarCompra(tx, this.catalogos, {
           usuId: user.sub,
           atrId: a.atr_id,

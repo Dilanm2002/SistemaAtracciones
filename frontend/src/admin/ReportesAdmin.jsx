@@ -26,7 +26,9 @@ export default function ReportesAdmin() {
   const [error, setError] = useState(null);
 
   const [from, to] = periodo === 'custom' ? [custom.from, custom.to] : PERIODOS[periodo].range(today);
-  const invalid = periodo === 'custom' && (!from || !to || to < from);
+  // Rango válido: ambas fechas, "hasta" no futura, "desde" ≤ "hasta" y máximo un año (igual que la API)
+  const invalid =
+    periodo === 'custom' && (!from || !to || to < from || to > today || Date.parse(to) - Date.parse(from) > 366 * 86400000);
 
   const load = () => {
     if (invalid) return;
@@ -90,7 +92,7 @@ export default function ReportesAdmin() {
           <span className="muted small"><CalendarRange size={15} style={{ verticalAlign: '-3px' }} aria-hidden="true" /> {fmtDate(from)} – {fmtDate(to)}</span>
         )}
       </div>
-      {invalid && <div id="rango-err"><Alert tone="warning">La fecha final («Hasta») debe ser igual o posterior a la inicial («Desde»).</Alert></div>}
+      {invalid && <div id="rango-err"><Alert tone="warning">Revisa el rango: ambas fechas son obligatorias, «Hasta» no puede ser futura ni anterior a «Desde», y el rango máximo es de un año.</Alert></div>}
 
       {error ? <ErrorState error={error} onRetry={load} /> : !data ? <div className="skeleton" style={{ height: 420 }} /> : (
         <>

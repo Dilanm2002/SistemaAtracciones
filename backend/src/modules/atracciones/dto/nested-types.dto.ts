@@ -1,6 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsPositive, Min, IsLatitude, IsLongitude, ValidateNested, IsOptional, IsInt, Max, Length, Matches, MaxLength } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNumber, IsPositive, Min, IsLatitude, IsLongitude, ValidateNested, IsOptional, IsInt, Max, Length, Matches, MaxLength, MinLength, IsIn } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ContieneLetras, ECUADOR } from '../../../common/utils/validators';
+import { trim } from '../../../common/utils/transform';
+
+/** Precio máximo por persona aceptado en el catálogo (USD). */
+export const PRECIO_MAX = 10000;
 
 export class PriceDto {
   @ApiProperty({ description: 'Código de moneda ISO 4217', example: 'USD' })
@@ -9,9 +14,10 @@ export class PriceDto {
   @Matches(/^[A-Z]{3}$/, { message: 'currency debe ser un código ISO 4217 en mayúsculas (ej. USD)' })
   currency: string;
 
-  @ApiProperty({ description: 'Monto total', example: 45.0 })
-  @IsNumber()
+  @ApiProperty({ description: 'Monto total (máx. 10 000, 2 decimales)', example: 45.0 })
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'price.total debe ser un número con máximo 2 decimales' })
   @IsPositive({ message: 'price.total debe ser mayor a 0' })
+  @Max(PRECIO_MAX, { message: `price.total no puede superar ${PRECIO_MAX}` })
   total: number;
 }
 
@@ -24,34 +30,46 @@ export class PhotoDto {
 
   @ApiProperty({ description: 'Texto alternativo (WCAG 1.1.1)', required: false, example: 'Volcán Cotopaxi al amanecer' })
   @IsOptional()
+  @Transform(trim)
   @IsString()
   @MaxLength(200)
+  @ContieneLetras()
   alt?: string;
 }
 
 export class CoordinatesDto {
-  @ApiProperty({ description: 'Latitud', example: -0.680556 })
+  @ApiProperty({ description: 'Latitud (dentro del Ecuador, incluidas las Galápagos)', example: -0.680556 })
   @IsLatitude()
   @IsNumber()
+  @Min(ECUADOR.latMin, { message: 'latitude está fuera del Ecuador' })
+  @Max(ECUADOR.latMax, { message: 'latitude está fuera del Ecuador' })
   latitude: number;
 
-  @ApiProperty({ description: 'Longitud', example: -78.437778 })
+  @ApiProperty({ description: 'Longitud (dentro del Ecuador, incluidas las Galápagos)', example: -78.437778 })
   @IsLongitude()
   @IsNumber()
+  @Min(ECUADOR.lngMin, { message: 'longitude está fuera del Ecuador' })
+  @Max(ECUADOR.lngMax, { message: 'longitude está fuera del Ecuador' })
   longitude: number;
 }
 
 export class LocationDto {
   @ApiProperty({ description: 'Dirección física', example: 'Parque Nacional Cotopaxi, control Caspi' })
+  @Transform(trim)
   @IsString()
+  @MinLength(5, { message: 'address debe tener al menos 5 caracteres' })
+  @MaxLength(255)
+  @ContieneLetras()
   address: string;
 
   @ApiProperty({ description: 'ID numérico de la ciudad/destino', example: 8 })
   @IsInt()
+  @Min(1)
   city: number;
 
-  @ApiProperty({ description: 'Código ISO de país', example: 'ec' })
+  @ApiProperty({ description: 'Código ISO de país (solo Ecuador)', example: 'ec' })
   @IsString()
+  @IsIn(['ec', 'EC'], { message: 'country debe ser ec: el catálogo es del Ecuador' })
   country: string;
 
   @ApiProperty({ description: 'Coordenadas', type: CoordinatesDto })

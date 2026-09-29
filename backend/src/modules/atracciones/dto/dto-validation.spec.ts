@@ -39,7 +39,7 @@ describe('Validaciones de DTO (auditoría)', () => {
   });
 
   it('children tiene tope (API-011)', () => {
-    const base = { date: '2030-01-01', ticket_count: 2, customer_name: 'Ana Pérez' };
+    const base = { date: new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10), ticket_count: 2, customer_name: 'Ana Pérez' };
     expect(errores(ReservationRequestDto, base)).toEqual([]);
     expect(errores(ReservationRequestDto, { ...base, children: 31 })).toContain('children');
   });

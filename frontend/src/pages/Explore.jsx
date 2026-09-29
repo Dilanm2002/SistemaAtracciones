@@ -5,6 +5,7 @@ import { Atracciones, Categorias, Destinos } from '../api/client';
 import AttractionCard from '../components/AttractionCard';
 import { Breadcrumbs, CardSkeleton, EmptyState, ErrorState, useDebounce, useFocusTrap, usePageTitle } from '../components/ui';
 import { fmtDate, fmtMoney, PRODUCT_TYPE, REGION } from '../utils/format';
+import { LIMITES, numero, PRECIO_MAX } from '../utils/validation';
 
 const DURACIONES = {
   short: { label: 'Hasta 4 h', min: 0, max: 4 },
@@ -66,6 +67,16 @@ export default function Explore() {
       else next.set(k, val);
     });
     setParams(next, { replace: false });
+  };
+  // Rango de precio: enteros entre 0 y 10 000 y mínimo ≤ máximo (mismas reglas que la API)
+  const [errPrecio, setErrPrecio] = useState(null);
+  const setPrecio = (key, valor) => {
+    const v = String(valor).trim();
+    const err = numero(v, { min: 0, max: PRECIO_MAX, decimales: 0, requerido: false, que: key === 'min' ? 'El precio mínimo' : 'El precio máximo' });
+    const otro = key === 'min' ? f.max : f.min;
+    const cruzado = !err && v && otro && (key === 'min' ? Number(v) > Number(otro) : Number(v) < Number(otro));
+    setErrPrecio(err ?? (cruzado ? 'El precio mínimo no puede ser mayor que el máximo' : null));
+    if (!err && !cruzado) update({ [key]: v });
   };
   const toggleIn = (key, arr, value) => update({ [key]: arr.includes(value) ? arr.filter((x) => x !== value) : [...arr, value] });
 
@@ -170,7 +181,7 @@ export default function Explore() {
           <label className="label" htmlFor="f-text" style={{ display: 'block', marginBottom: 8 }}>Buscar</label>
           <div className="input-icon">
             <Search size={18} aria-hidden="true" />
-            <input id="f-text" className="input" type="search" placeholder="Volcán, snorkel, museo…" value={text} onChange={(e) => setText(e.target.value)} data-shortcut-search />
+            <input id="f-text" className="input" type="search" maxLength={LIMITES.busqueda} placeholder="Volcán, snorkel, museo…" value={text} onChange={(e) => setText(e.target.value)} data-shortcut-search />
           </div>
         </div>
         <div className="filter-group">
@@ -214,10 +225,11 @@ export default function Explore() {
           <fieldset>
             <legend>Precio por persona (USD)</legend>
             <div className="price-inputs">
-              <input className="input" type="number" min="0" inputMode="numeric" placeholder="Mín." aria-label="Precio mínimo" defaultValue={f.min} key={`min${f.min}`} onBlur={(e) => update({ min: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && update({ min: e.currentTarget.value })} />
+              <input className="input" type="number" min="0" max={PRECIO_MAX} step="1" inputMode="numeric" placeholder="Mín." aria-label="Precio mínimo" aria-invalid={errPrecio ? true : undefined} aria-describedby={errPrecio ? 'precio-err' : undefined} defaultValue={f.min} key={`min${f.min}`} onBlur={(e) => setPrecio('min', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setPrecio('min', e.currentTarget.value)} />
               <span className="muted">–</span>
-              <input className="input" type="number" min="0" inputMode="numeric" placeholder="Máx." aria-label="Precio máximo" defaultValue={f.max} key={`max${f.max}`} onBlur={(e) => update({ max: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && update({ max: e.currentTarget.value })} />
+              <input className="input" type="number" min="0" max={PRECIO_MAX} step="1" inputMode="numeric" placeholder="Máx." aria-label="Precio máximo" aria-invalid={errPrecio ? true : undefined} aria-describedby={errPrecio ? 'precio-err' : undefined} defaultValue={f.max} key={`max${f.max}`} onBlur={(e) => setPrecio('max', e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setPrecio('max', e.currentTarget.value)} />
             </div>
+            {errPrecio && <span id="precio-err" className="error-text small" role="alert">{errPrecio}</span>}
             <div className="chip-row" style={{ marginTop: 10 }}>
               {[['', '30', 'Hasta $30'], ['30', '80', '$30–80'], ['80', '', '+$80']].map(([mn, mx, l]) => (
                 <button key={l} type="button" className="chip" aria-pressed={f.min === mn && f.max === mx} onClick={() => update({ min: mn, max: mx })}>{l}</button>

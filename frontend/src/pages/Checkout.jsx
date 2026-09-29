@@ -8,6 +8,7 @@ import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePage
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtMoney } from '../utils/format';
+import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, nombrePersona, RE_NOMBRE_PERSONA, telefono, texto } from '../utils/validation';
 
 const luhn = (num) => {
   const d = num.replace(/\D/g, '');
@@ -29,7 +30,6 @@ const marcaTarjeta = (n) => {
   if (/^3(0[0-5]|[68])/.test(d)) return 'DINERS';
   return 'OTRA';
 };
-const RE_DOCUMENTO = /^(\d{10}|[A-Z]{1,2}\d{6,9})$/;
 
 const fmtCard = (v) => v.replace(/\D/g, '').slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ');
 const fmtExp = (v) => v.replace(/\D/g, '').slice(0, 4).replace(/^(\d{2})(\d)/, '$1/$2');
@@ -44,8 +44,10 @@ export default function Checkout() {
 
   const fecha = params.get('fecha');
   const hora = params.get('hora');
-  const adultos = Math.max(1, Number(params.get('adultos')) || 1);
-  const ninos = Math.max(0, Number(params.get('ninos')) || 0);
+  // Los parámetros de la URL se pueden editar a mano: se acotan a los límites de la API (máx. 30 por reserva)
+  const entero = (v, min, max) => Math.min(max, Math.max(min, Math.trunc(Number(v)) || min));
+  const adultos = entero(params.get('adultos'), 1, 30);
+  const ninos = entero(params.get('ninos'), 0, 30 - adultos);
 
   const [a, setA] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -69,10 +71,12 @@ export default function Checkout() {
     if (user) setForm((f) => ({ ...f, nombre: f.nombre || user.nombre, email: f.email || user.email, telefono: f.telefono || user.telefono || '', documento: f.documento || user.documento || '' }));
   }, [user]);
 
-  if (!fecha || !hora) {
+  // Fecha y hora también vienen de la URL: deben tener formato válido y la fecha no puede ser pasada
+  const fechaHoraInvalida = !fecha || !hora || validarFecha(fecha, { min: hoyEc(), max: enDias(365) }) || validarHora(hora);
+  if (fechaHoraInvalida) {
     return (
       <div className="container" style={{ paddingTop: 40 }}>
-        <Alert tone="warning" title="Falta elegir fecha y horario">
+        <Alert tone="warning" title="Falta elegir una fecha y un horario válidos">
           <p>Vuelve a la experiencia y selecciona fecha, horario y participantes. <Link to={`/atraccion/${id}`}>Elegir fecha</Link></p>
         </Alert>
       </div>
@@ -92,12 +96,13 @@ export default function Checkout() {
 
   const validateStep1 = () => {
     const errs = {};
-    if (form.nombre.trim().length < 3) errs.nombre = 'Escribe el nombre completo del titular de la reserva';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) errs.email = 'Ingresa un correo válido para recibir la confirmación';
-    if (!/^\+?\d{7,15}$/.test(form.telefono.replace(/\s/g, ''))) errs.telefono = 'Necesitamos un teléfono (7 a 15 dígitos) por si hay cambios de último minuto';
-    if (form.documento.trim() && !RE_DOCUMENTO.test(form.documento.trim().toUpperCase())) {
-      errs.documento = 'Cédula de 10 dígitos o pasaporte (1-2 letras y 6-9 dígitos, ej. AB1234567)';
-    }
+    Object.assign(errs, limpiar({
+      nombre: nombrePersona(form.nombre, { que: 'El nombre del titular' }) ?? (form.nombre.trim().split(/\s+/).length < 2 ? 'Escribe nombre y apellido del titular' : null),
+      email: correo(form.email),
+      telefono: telefono(form.telefono, { requerido: true }),
+      documento: validarDocumento(form.documento),
+      notas: texto(form.notas, { max: LIMITES.notas, requerido: false, que: 'Las notas' }),
+    }));
     setErrors(errs);
     return !Object.keys(errs).length;
   };
@@ -105,12 +110,14 @@ export default function Checkout() {
   const validateStep2 = () => {
     const errs = {};
     if (pay.metodo === 'TARJETA') {
-      if (!luhn(pay.numero)) errs.numero = 'El número de tarjeta no es válido. Revisa los 16 dígitos.';
+      const digitos = pay.numero.replace(/\D/g, '');
+      if (digitos.length < 13 || digitos.length > 19 || !luhn(pay.numero)) errs.numero = 'El número de tarjeta no es válido. Revisa los dígitos.';
       const [mm, yy] = pay.exp.split('/').map(Number);
       const now = new Date();
       if (!mm || mm > 12 || !yy || new Date(2000 + yy, mm) <= now) errs.exp = 'Fecha inválida o tarjeta vencida (MM/AA)';
+      else if (2000 + yy > now.getFullYear() + 20) errs.exp = 'El año de vencimiento no es válido';
       if (!/^\d{3,4}$/.test(pay.cvv)) errs.cvv = '3 o 4 dígitos al reverso';
-      if (pay.titular.trim().length < 3) errs.titular = 'Nombre como aparece en la tarjeta';
+      if (pay.titular.trim().length < 3 || !RE_NOMBRE_PERSONA.test(pay.titular.trim())) errs.titular = 'Nombre como aparece en la tarjeta (solo letras)';
     }
     if (!pay.terms) errs.terms = 'Acepta la política de cancelación para continuar';
     setErrors(errs);
@@ -230,19 +237,19 @@ export default function Checkout() {
               <p className="muted small">Presenta un documento con este nombre en el punto de encuentro.</p>
               <div className="form-grid">
                 <Field label="Nombre completo" required error={errors.nombre} className="span-2">
-                  {(p) => <input {...p} className="input" autoComplete="name" value={form.nombre} onChange={set('nombre')} />}
+                  {(p) => <input {...p} className="input" autoComplete="name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={set('nombre')} />}
                 </Field>
                 <Field label="Correo electrónico" required error={errors.email} hint="Te enviaremos aquí el código de reserva">
-                  {(p) => <input {...p} className="input" type="email" autoComplete="email" value={form.email} onChange={set('email')} />}
+                  {(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} />}
                 </Field>
                 <Field label="Teléfono / WhatsApp" required error={errors.telefono}>
-                  {(p) => <input {...p} className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="0991234567" value={form.telefono} onChange={set('telefono')} />}
+                  {(p) => <input {...p} className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="0991234567" maxLength={LIMITES.telefono} value={form.telefono} onChange={set('telefono')} />}
                 </Field>
                 <Field label="Cédula o pasaporte" hint="Opcional, agiliza el ingreso a parques nacionales. Ej. 1712345678 o AB1234567" error={errors.documento}>
                   {(p) => <input {...p} className="input" value={form.documento} onChange={set('documento')} maxLength={11} autoCapitalize="characters" />}
                 </Field>
                 <Field label="Notas para el operador" hint="Alergias, movilidad reducida, hotel de recogida…" className="span-2">
-                  {(p) => <textarea {...p} className="textarea" value={form.notas} onChange={set('notas')} maxLength={500} style={{ minHeight: 80 }} />}
+                  {(p) => <textarea {...p} className="textarea" value={form.notas} onChange={set('notas')} maxLength={LIMITES.notas} style={{ minHeight: 80 }} />}
                 </Field>
               </div>
               <div className="row-between" style={{ marginTop: 20 }}>
@@ -279,16 +286,16 @@ export default function Checkout() {
                 <>
                   <div className="card-fields">
                     <Field label="Número de tarjeta" required error={errors.numero} className="span-2">
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="4111 1111 1111 1111" value={pay.numero} onChange={setP('numero', fmtCard)} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="4111 1111 1111 1111" maxLength={23} value={pay.numero} onChange={setP('numero', fmtCard)} />}
                     </Field>
                     <Field label="Vencimiento" required error={errors.exp}>
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="MM/AA" value={pay.exp} onChange={setP('exp', fmtExp)} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="MM/AA" maxLength={5} value={pay.exp} onChange={setP('exp', fmtExp)} />}
                     </Field>
                     <Field label="CVV" required error={errors.cvv}>
                       {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="123" maxLength={4} value={pay.cvv} onChange={setP('cvv', (v) => v.replace(/\D/g, ''))} />}
                     </Field>
                     <Field label="Titular de la tarjeta" required error={errors.titular} className="span-2">
-                      {(p) => <input {...p} className="input" autoComplete="off" value={pay.titular} onChange={setP('titular')} />}
+                      {(p) => <input {...p} className="input" autoComplete="off" maxLength={LIMITES.nombrePersona} value={pay.titular} onChange={setP('titular')} />}
                     </Field>
                   </div>
                   <p className="tiny muted" style={{ marginTop: 10 }}><Lock size={12} aria-hidden="true" /> Pago simulado para el prototipo: no se realizan cargos reales. Prueba con 4111 1111 1111 1111.</p>

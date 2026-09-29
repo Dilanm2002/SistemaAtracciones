@@ -14,13 +14,17 @@ export class DatesFilterDto {
 }
 
 export class RatingFilterDto {
-  @ApiProperty({ description: 'Puntuación mínima', example: 4.2, required: false })
+  @ApiProperty({ description: 'Puntuación mínima (0 a 5)', example: 4.2, required: false })
   @IsNumber()
+  @Min(0)
+  @Max(5)
   @IsOptional()
   minimum_review_score?: number;
 
   @ApiProperty({ description: 'Cantidad mínima de reseñas', example: 10, required: false })
   @IsInt()
+  @Min(0)
+  @Max(100000)
   @IsOptional()
   minimum_review_count?: number;
 }
@@ -30,12 +34,14 @@ export class PriceRangeDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(10000)
   min?: number;
 
   @ApiPropertyOptional({ example: 100 })
   @IsOptional()
   @IsNumber()
   @Min(0)
+  @Max(10000)
   max?: number;
 }
 
@@ -43,11 +49,15 @@ export class DurationRangeDto {
   @ApiPropertyOptional({ description: 'Horas mínimas', example: 0 })
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  @Max(720)
   min_hours?: number;
 
   @ApiPropertyOptional({ description: 'Horas máximas', example: 4 })
   @IsOptional()
   @IsNumber()
+  @Min(0)
+  @Max(720)
   max_hours?: number;
 }
 
@@ -123,6 +133,7 @@ export class SearchAtraccionesDto {
   @IsArray()
   @ArrayMaxSize(20)
   @IsInt({ each: true })
+  @Min(1, { each: true })
   cities?: number[];
 
   @ApiProperty({ description: 'Códigos de países ISO', example: ['ec'], required: false })

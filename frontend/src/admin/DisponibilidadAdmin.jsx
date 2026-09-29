@@ -6,6 +6,7 @@ import { Alert, EmptyState, Field, useConfirm } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDate, fmtMonth, todayEc } from '../utils/format';
+import { enDias, fecha as validarFecha, limpiar, texto } from '../utils/validation';
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const shift = (m, n) => {
@@ -40,10 +41,10 @@ export default function DisponibilidadAdmin() {
 
   const block = async (e) => {
     e.preventDefault();
-    const errs = {};
-    if (!form.date) errs.date = 'Elige la fecha';
-    else if (form.date < todayEc()) errs.date = 'No puedes bloquear fechas pasadas';
-    if (form.reason.trim().length < 3) errs.reason = 'Indica el motivo (lo verán los viajeros)';
+    const errs = limpiar({
+      date: validarFecha(form.date, { min: todayEc(), max: enDias(365), que: 'La fecha a bloquear' }),
+      reason: texto(form.reason, { min: 5, max: 200, que: 'El motivo (lo verán los viajeros)' }),
+    });
     setErr(errs);
     if (Object.keys(errs).length) return;
     try {
@@ -127,7 +128,7 @@ export default function DisponibilidadAdmin() {
           <form className="card card-pad" onSubmit={block} noValidate>
             <h3 className="panel-title"><Ban size={18} aria-hidden="true" /> Bloquear una fecha</h3>
             <div className="stack">
-              <Field label="Fecha" required error={err.date}>{(p) => <input {...p} type="date" className="input" min={todayEc()} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />}</Field>
+              <Field label="Fecha" required error={err.date}>{(p) => <input {...p} type="date" className="input" min={todayEc()} max={enDias(365)} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />}</Field>
               <Field label="Motivo" required error={err.reason} hint="Ej. Feriado, mantenimiento, clima">{(p) => <input {...p} className="input" value={form.reason} maxLength={200} onChange={(e) => setForm({ ...form, reason: e.target.value })} />}</Field>
               <button className="btn btn-primary btn-block">Bloquear fecha</button>
             </div>

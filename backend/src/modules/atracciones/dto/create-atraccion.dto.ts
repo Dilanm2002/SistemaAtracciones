@@ -16,12 +16,18 @@ import {
   Min,
   MinLength,
   Validate,
+  ValidateIf,
   ValidateNested,
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PriceDto, LocationDto, PhotoDto, OperatorDto } from './nested-types.dto';
+import { PriceDto, LocationDto, PhotoDto, OperatorDto, PRECIO_MAX } from './nested-types.dto';
+import { Transform } from 'class-transformer';
+import { ContieneLetras } from '../../../common/utils/validators';
+import { trim } from '../../../common/utils/transform';
+
+const trimLista = ({ value }: { value: unknown }) => (Array.isArray(value) ? value.map((x) => (typeof x === 'string' ? x.trim() : x)) : value);
 
 /** Duración ISO 8601 mayor a 0 y de máximo 30 días (720 h). */
 @ValidatorConstraint({ name: 'duracionRazonable' })
@@ -46,14 +52,19 @@ export enum ProductType {
 export class CreateAtraccionDto {
   // ── Campos del contrato (CreateAtraccionRequest) ──────────────────────
   @ApiProperty({ description: 'Nombre de la atracción turística', example: 'Tour al Parque Nacional Cotopaxi' })
+  @Transform(trim)
   @IsString()
   @MinLength(3, { message: 'name debe tener al menos 3 caracteres' })
   @MaxLength(200)
+  @ContieneLetras()
   name: string;
 
   @ApiProperty({ description: 'Descripción detallada de la atracción', example: 'Excursión guiada al volcán Cotopaxi, incluye caminata hasta el refugio.' })
+  @Transform(trim)
   @IsString()
-  @MinLength(10, { message: 'long_description debe tener al menos 10 caracteres' })
+  @MinLength(20, { message: 'long_description debe tener al menos 20 caracteres' })
+  @MaxLength(5000, { message: 'long_description puede tener hasta 5000 caracteres' })
+  @ContieneLetras()
   long_description: string;
 
   @ApiProperty({ description: 'Duración en formato ISO 8601', example: 'PT8H' })
@@ -77,10 +88,14 @@ export class CreateAtraccionDto {
   product_type: ProductType;
 
   @ApiProperty({ description: 'Qué incluye el tour/paquete', example: ['Transporte', 'Guía bilingüe', 'Almuerzo'] })
+  @Transform(trimLista)
   @IsArray()
+  @ArrayMinSize(1, { message: 'includes debe tener al menos un elemento' })
   @ArrayMaxSize(30)
   @IsString({ each: true })
+  @MinLength(2, { each: true, message: 'cada elemento de includes debe tener al menos 2 caracteres' })
   @MaxLength(150, { each: true, message: 'cada elemento de includes puede tener hasta 150 caracteres' })
+  @ContieneLetras({ message: 'cada elemento de includes debe contener texto' })
   includes: string[];
 
   @ApiProperty({ description: 'Slugs de categorías', example: ['naturaleza', 'aventura'] })
@@ -88,6 +103,7 @@ export class CreateAtraccionDto {
   @ArrayMaxSize(10)
   @ArrayMinSize(1, { message: 'categories debe tener al menos una categoría' })
   @IsString({ each: true })
+  @Matches(/^[a-z0-9-]{1,80}$/, { each: true, message: 'categories debe contener slugs de categoría' })
   categories: string[];
 
   @ApiProperty({ description: 'Se acepta por compatibilidad con el contrato pero se ignora: las insignias se calculan (ventas, ocupación, antigüedad)', example: ['best_seller'], required: false })
@@ -126,57 +142,73 @@ export class CreateAtraccionDto {
   // ── Extensiones opcionales (no rompen el contrato) ────────────────────
   @ApiPropertyOptional({ description: 'Resumen corto para tarjetas', example: 'Camina entre páramos hasta el refugio del volcán activo más alto.' })
   @IsOptional()
+  @Transform(trim)
   @IsString()
   @MaxLength(280)
+  @ValidateIf((o: { short_description?: string }) => !!o.short_description)
+  @MinLength(10, { message: 'short_description debe tener al menos 10 caracteres' })
+  @ContieneLetras()
   short_description?: string;
 
   @ApiPropertyOptional({ description: 'Precio por niño (3-11 años)', example: 35 })
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'child_price debe ser un número con máximo 2 decimales' })
   @Min(0)
+  @Max(PRECIO_MAX, { message: `child_price no puede superar ${PRECIO_MAX}` })
   child_price?: number;
 
   @ApiPropertyOptional({ example: ['Propinas', 'Alquiler de equipo'] })
   @IsOptional()
   @IsArray()
+  @Transform(trimLista)
   @ArrayMaxSize(30)
   @IsString({ each: true })
+  @MinLength(2, { each: true, message: 'cada elemento de not_includes debe tener al menos 2 caracteres' })
   @MaxLength(150, { each: true, message: 'cada elemento de not_includes puede tener hasta 150 caracteres' })
+  @ContieneLetras({ message: 'cada elemento de not_includes debe contener texto' })
   not_includes?: string[];
 
   @ApiPropertyOptional({ example: ['Lleva ropa abrigada', 'Protector solar'] })
   @IsOptional()
   @IsArray()
+  @Transform(trimLista)
   @ArrayMaxSize(20)
   @IsString({ each: true })
+  @MinLength(3, { each: true, message: 'cada recomendación debe tener al menos 3 caracteres' })
   @MaxLength(150, { each: true, message: 'cada recomendación puede tener hasta 150 caracteres' })
+  @ContieneLetras({ message: 'cada recomendación debe contener texto' })
   recommendations?: string[];
 
   @ApiPropertyOptional({ description: 'Horarios de salida', example: ['07:00', '13:00'] })
   @IsOptional()
   @IsArray()
+  @ArrayMinSize(1, { message: 'times debe tener al menos un horario' })
   @ArrayMaxSize(24)
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { each: true, message: 'times debe contener horas en formato HH:mm' })
   times?: string[];
 
   @ApiPropertyOptional({ description: 'Cupo máximo por horario', example: 16 })
   @IsOptional()
-  @IsInt()
+  @IsInt({ message: 'capacity_per_slot debe ser un número entero' })
   @IsPositive()
-  @Max(1000)
+  @Max(500, { message: 'capacity_per_slot no puede superar 500 personas por salida' })
   capacity_per_slot?: number;
 
   @ApiPropertyOptional({ description: 'Horas mínimas para cancelar sin costo', example: 24 })
   @IsOptional()
-  @IsInt()
+  @IsInt({ message: 'cancellation_hours debe ser un número entero' })
   @Min(0)
-  @Max(720)
+  @Max(720, { message: 'cancellation_hours no puede superar 720 (30 días)' })
   cancellation_hours?: number;
 
   @ApiPropertyOptional({ example: 'Parque La Carolina, frente al Quicentro' })
   @IsOptional()
+  @Transform(trim)
   @IsString()
   @MaxLength(255)
+  @ValidateIf((o: { meeting_point?: string }) => !!o.meeting_point)
+  @MinLength(5, { message: 'meeting_point debe tener al menos 5 caracteres' })
+  @ContieneLetras()
   meeting_point?: string;
 
   @ApiPropertyOptional({ example: false })

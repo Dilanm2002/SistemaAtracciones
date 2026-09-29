@@ -62,6 +62,12 @@ export class AtraccionesService {
       return { data: [], metadata: { total_results: 0 }, request_id: randomUUID() };
     }
     const f = dto.filters ?? {};
+    if (f.price?.min != null && f.price?.max != null && f.price.min > f.price.max) {
+      throw new BadRequestException('filters.price.min no puede ser mayor que filters.price.max');
+    }
+    if (f.duration?.min_hours != null && f.duration?.max_hours != null && f.duration.min_hours > f.duration.max_hours) {
+      throw new BadRequestException('filters.duration.min_hours no puede ser mayor que filters.duration.max_hours');
+    }
     const p = new Params();
     const w = [VISIBLE, `a.atr_estado = 'PUBLICADA'`];
     const wPrecio: string[] = [];
@@ -374,6 +380,12 @@ export class AtraccionesService {
     }
 
     const moneda = dto.price?.currency.toUpperCase() ?? (await tx.one<{ m: string }>('SELECT atr_moneda AS m FROM atraccion WHERE atr_id = $1', [id]))!.m;
+    // El precio de niño no puede superar al de adulto (se compara con el vigente si no llega en el DTO)
+    if (dto.child_price != null || dto.price !== undefined) {
+      const adulto = dto.price?.total ?? (await tx.one<{ p: number | null }>(`SELECT ${sqlTarifa('ADULTO')} AS p FROM atraccion a WHERE a.atr_id = $1`, [id]))?.p;
+      const nino = dto.child_price ?? (await tx.one<{ p: number | null }>(`SELECT ${sqlTarifa('NINO')} AS p FROM atraccion a WHERE a.atr_id = $1`, [id]))?.p;
+      if (adulto != null && nino != null && nino > adulto) throw new BadRequestException('child_price no puede ser mayor que el precio de adulto.');
+    }
     if (dto.price !== undefined) await this.fijarTarifa(tx, id, 'ADULTO', dto.price.total, moneda);
     if (dto.child_price !== undefined) await this.fijarTarifa(tx, id, 'NINO', dto.child_price, moneda);
     await this.fijarHorarios(tx, id, dto.times, dto.capacity_per_slot);

@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { CalendarCheck, ChevronLeft, ChevronRight, Info, ShieldCheck } from 'lucide-react';
 import { Atracciones } from '../api/client';
 import { fmtDateLong, fmtMoney, fmtMonth, todayEc } from '../utils/format';
+
+/** Máximo de tickets por reserva (igual que la API: ticket_count ≤ 30). */
+const MAX_TICKETS = 30;
 import { Alert, Qty, Spinner } from './ui';
 
 const DOW = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
@@ -165,11 +168,11 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
         <h3>{date ? '3.' : '2.'} Participantes</h3>
         <div className="pax-row">
           <div><strong>Adultos</strong><span>12 años o más · {fmtMoney(a.price.total)}</span></div>
-          <Qty value={adults} onChange={setAdults} min={1} max={slot ? Math.max(1, slot.available - children) : 20} label="adultos" />
+          <Qty value={adults} onChange={setAdults} min={1} max={Math.max(1, Math.min(MAX_TICKETS - children, slot ? slot.available - children : MAX_TICKETS))} label="adultos" />
         </div>
         <div className="pax-row">
           <div><strong>Niños</strong><span>3 a 11 años · {fmtMoney(childPrice)}</span></div>
-          <Qty value={children} onChange={setChildren} min={0} max={slot ? Math.max(0, slot.available - adults) : 10} label="niños" />
+          <Qty value={children} onChange={setChildren} min={0} max={Math.max(0, Math.min(MAX_TICKETS - adults, slot ? slot.available - adults : MAX_TICKETS))} label="niños" />
         </div>
         {overCapacity && <Alert tone="warning">Solo quedan {slot.available} cupos a las {time}. Reduce participantes o elige otro horario.</Alert>}
 

@@ -9,6 +9,7 @@ import { Scopes } from '../../common/auth/auth.decorators';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SCOPES } from '../../common/auth/scopes';
 import { trim } from '../../common/utils/transform';
+import { ContieneLetras, RE_NOMBRE_PERSONA } from '../../common/utils/validators';
 
 export const ASUNTOS = ['RESERVA', 'CANCELACION', 'PROVEEDOR', 'SUGERENCIA', 'OTRO'] as const;
 
@@ -18,6 +19,7 @@ export class CreateMensajeDto {
   @IsString()
   @MinLength(3, { message: 'nombre debe tener al menos 3 caracteres' })
   @MaxLength(120)
+  @Matches(RE_NOMBRE_PERSONA, { message: 'nombre debe contener solo letras' })
   nombre: string;
 
   @ApiProperty({ example: 'ana@correo.com' })
@@ -36,6 +38,7 @@ export class CreateMensajeDto {
   @IsString()
   @MinLength(10, { message: 'mensaje debe tener al menos 10 caracteres' })
   @MaxLength(2000)
+  @ContieneLetras({ message: 'mensaje debe contener texto' })
   mensaje: string;
 
   @ApiPropertyOptional({ description: 'Campo trampa anti-spam: debe venir vacío' })

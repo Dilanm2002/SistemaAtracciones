@@ -386,8 +386,8 @@ export const ATRACCIONES: SeedAtraccion[] = [
 export const USUARIOS: { nombre: string; apellido: string; email: string; password: string; rol: string; telefono: string; documento?: string; operadorCodigo?: number }[] = [
   { nombre: 'Andrea', apellido: 'Salazar', email: 'admin@descubre-ec.com', password: 'Admin123', rol: 'ADMIN', telefono: '0990000001' },
   { nombre: 'Carlos', apellido: 'Operaciones', email: 'operador@descubre-ec.com', password: 'Operador123', rol: 'OPERADOR', telefono: '0990000002', operadorCodigo: 101 },
-  { nombre: 'María', apellido: 'Guamán', email: 'cliente@descubre-ec.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0991234567', documento: '1718293745' },
-  { nombre: 'Ana', apellido: 'Torres', email: 'ana.torres@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0987654321', documento: '0923456781' },
+  { nombre: 'María', apellido: 'Guamán', email: 'cliente@descubre-ec.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0991234567', documento: '1710034065' },
+  { nombre: 'Ana', apellido: 'Torres', email: 'ana.torres@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0987654321', documento: '0926687856' },
   { nombre: 'Luis', apellido: 'Andrade', email: 'luis.andrade@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0981122334' },
   { nombre: 'Sofía', apellido: 'Mendoza', email: 'sofia.mendoza@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0975566778' },
   { nombre: 'John', apellido: 'Smith', email: 'john.smith@mail.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '+14155550123', documento: 'A1234567' },

@@ -19,7 +19,9 @@ export function ReviewModal({ open, onClose, attraction, onDone }) {
     e.preventDefault();
     const errs = {};
     if (!rating) errs.rating = 'Selecciona de 1 a 5 estrellas.';
-    if (comment.trim().length < 10) errs.comment = 'Cuéntanos un poco más (mínimo 10 caracteres).';
+    const t = comment.trim();
+    if (t.length < 10) errs.comment = 'Cuéntanos un poco más (mínimo 10 caracteres).';
+    else if (!/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(t)) errs.comment = 'Escribe tu opinión con texto.';
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setSending(true);

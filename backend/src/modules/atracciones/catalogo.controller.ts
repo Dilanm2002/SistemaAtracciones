@@ -208,7 +208,11 @@ export class AdminAtraccionesController {
     const re = /^\d{4}-\d{2}-\d{2}$/;
     const hasta = to ?? hoyEc();
     const desde = from ?? sumarDias(hasta, -29);
-    if (!re.test(desde) || !re.test(hasta)) throw new BadRequestException('from y to deben tener formato AAAA-MM-DD.');
+    if (!re.test(desde) || !re.test(hasta) || Number.isNaN(Date.parse(desde)) || Number.isNaN(Date.parse(hasta))) {
+      throw new BadRequestException('from y to deben ser fechas válidas con formato AAAA-MM-DD.');
+    }
+    if (hasta > hoyEc()) throw new BadRequestException('"to" no puede ser una fecha futura.');
+    if (Date.parse(hasta) - Date.parse(desde) > 366 * 86400000) throw new BadRequestException('El rango máximo del reporte es de un año.');
     return this.reportes.ventas(desde, hasta);
   }
 
