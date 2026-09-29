@@ -8,6 +8,19 @@ Proyecto Ecommerce/
 └── frontend/   React 18 + Vite + CSS propio (sitio público + panel de administración)
 ```
 
+## En la nube
+
+| Pieza | Servicio | URL |
+|---|---|---|
+| Sitio web | Vercel (proyecto `descubre-ec`, Root Directory `frontend`) | https://descubre-ec.vercel.app |
+| API + Swagger | Vercel serverless (proyecto `sistemaatracciones-backend`, Root Directory `backend`) | https://sistemaatracciones-backend.vercel.app/api/docs |
+| Base de datos | Supabase PostgreSQL (São Paulo), *transaction pooler* puerto 6543, RLS activo | — |
+| Fotos subidas | Supabase Storage, bucket público `uploads` | — |
+
+Cada `git push` a `main` vuelve a desplegar ambos proyectos. Variables de la API en Vercel: `DATABASE_URL`, `DB_SSL=true`, `DB_SYNC=false`, `DB_POOL_MAX=3`, `SEED_ON_START=false`, `NODE_ENV=production`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET=uploads`, `PUBLIC_URL`, `FRONTEND_URL`. Variable del frontend: `VITE_API_URL`.
+
+Para recrear las tablas y los datos de demostración en una base nueva, ejecutar la API una vez en local apuntando a esa base con `DB_SYNC=true` y `SEED_ON_START=true`.
+
 ## Cómo ejecutarlo
 
 Requisitos: Node 20+, Docker Desktop.
