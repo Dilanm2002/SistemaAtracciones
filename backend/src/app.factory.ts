@@ -24,17 +24,18 @@ export async function createApp(): Promise<NestExpressApplication> {
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
 
-  // Cuerpos pequeños: ningún payload legítimo de la API supera 100 kB (SEG-022)
-  app.useBodyParser('json', { limit: '100kb' });
-  app.useBodyParser('urlencoded', { limit: '100kb', extended: true });
-
-  // X-Request-Id por petición: se devuelve en la cabecera y en los errores (OPS-005)
+  // X-Request-Id por petición: se devuelve en la cabecera y en los errores (OPS-005).
+  // Va antes del body-parser para que también los errores de cuerpo (413, JSON inválido) lleven request_id
   app.use((req: Request & { id?: string }, res: Response, next: NextFunction) => {
     const entrante = req.header('x-request-id');
     req.id = entrante && /^[\w-]{8,64}$/.test(entrante) ? entrante : randomUUID();
     res.setHeader('X-Request-Id', req.id);
     next();
   });
+
+  // Cuerpos pequeños: ningún payload legítimo de la API supera 100 kB (SEG-022)
+  app.useBodyParser('json', { limit: '100kb' });
+  app.useBodyParser('urlencoded', { limit: '100kb', extended: true });
 
   // Cabeceras de seguridad (SEG-006). CSP estricta: la API solo sirve JSON, imágenes y Swagger.
   app.use(

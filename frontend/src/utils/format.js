@@ -44,8 +44,10 @@ export const fmtDuration = (h) => {
     const d = Math.round(hours / 24);
     return `${d} ${d === 1 ? 'día' : 'días'}`;
   }
-  const whole = Math.floor(hours);
-  const min = Math.round((hours - whole) * 60);
+  // Redondeo a minutos totales antes de separar: 1.999 h → "2 h" (no "1 h 60 min")
+  const total = Math.round(hours * 60);
+  const whole = Math.floor(total / 60);
+  const min = total % 60;
   return `${whole ? `${whole} h` : ''}${whole && min ? ' ' : ''}${min ? `${min} min` : ''}` || '—';
 };
 

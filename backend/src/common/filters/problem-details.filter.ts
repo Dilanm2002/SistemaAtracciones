@@ -2,6 +2,12 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import { Request, Response } from 'express';
 import { QueryFailedError } from 'typeorm';
 
+/** Error de `http-errors` (lo lanzan body-parser y otros middlewares) con estado 4xx pensado para el cliente. */
+const esErrorHttpCliente = (e: unknown): e is Error & { status: number } => {
+  const { expose, status } = e as { expose?: unknown; status?: unknown };
+  return e instanceof Error && expose === true && typeof status === 'number' && status >= 400 && status < 500;
+};
+
 const pgCode = (e: QueryFailedError) => (e as QueryFailedError & { driverError?: { code?: string } }).driverError?.code ?? '';
 
 /**
@@ -96,6 +102,14 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         title: 'Registro duplicado',
         detail: 'Ya existe un registro con esos datos únicos.',
         code: 'DUPLICATE',
+      };
+    } else if (esErrorHttpCliente(exception)) {
+      // Errores 4xx de los middlewares de Express (body-parser: cuerpo > 100 kB, charset no soportado…)
+      status = exception.status;
+      body = {
+        type: `https://api.descubre-ec.com/errors/${status}`,
+        title: ProblemDetailsFilter.TITLES[status] ?? 'Solicitud inválida',
+        detail: status === HttpStatus.PAYLOAD_TOO_LARGE ? 'El cuerpo de la solicitud supera el tamaño máximo permitido (100 kB).' : exception.message,
       };
     } else {
       this.logger.error(`[${(req as Request & { id?: string }).id ?? '-'}] ${exception instanceof Error ? exception.stack : String(exception)}`);

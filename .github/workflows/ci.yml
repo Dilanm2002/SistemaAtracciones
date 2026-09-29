@@ -35,7 +35,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=critical
 
   database:
-    name: Modelo relacional (migraciones · seed · 02_verificacion.sql)
+    name: Modelo relacional (migraciones · seed · 02_verificacion.sql · E2E)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -68,11 +68,13 @@ jobs:
         run: node dist/seed/run-seed.js
       - name: Verificar el modelo con database/02_verificacion.sql
         run: npm run db:verify
+      - name: Pruebas E2E (API completa contra PostgreSQL)
+        run: npm run test:e2e -- --ci
       - name: Validar el contrato OpenAPI
         run: npx --yes @redocly/cli@latest lint contracts/atracciones-openapi.yaml
 
   frontend:
-    name: Frontend (lint · build)
+    name: Frontend (lint · test · build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -86,6 +88,7 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run build
         env:
           VITE_API_URL: https://sistemaatracciones-backend.vercel.app/api/v1

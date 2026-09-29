@@ -1,6 +1,6 @@
 # Descubre EC · Reserva de atracciones turísticas en Ecuador
 
-> 📘 Documentación técnica (arquitectura, modelo de datos, APIs, eventos): [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Guía de demostración: [docs/GUIA-DEFENSA.md](docs/GUIA-DEFENSA.md)
+> 📘 Documentación técnica (arquitectura, modelo de datos, APIs, eventos): [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md) · Guía de demostración: [docs/GUIA-DEFENSA.md](docs/GUIA-DEFENSA.md) · Pruebas y QA: [docs/PRUEBAS-QA.md](docs/PRUEBAS-QA.md)
 
 Plataforma web para buscar, reservar y administrar tours, entradas y paquetes turísticos en Ecuador (Andes, Costa, Amazonía y Galápagos). Es el **dominio de Atracciones** del sistema *Booking Prototipo* y está construida sobre la plantilla oficial [`Plantilla-Integracion-Sistemas`](https://github.com/semestre5grupal-ops/Plantilla-Integracion-Sistemas), respetando su contrato `contracts/atracciones-openapi.yaml` para la futura migración a microservicios y Apollo Federation.
 

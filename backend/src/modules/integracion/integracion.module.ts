@@ -110,7 +110,8 @@ export class ContratosController {
   @Header('Cache-Control', 'public, max-age=300')
   @ApiOperation({ summary: 'Descargar un contrato' })
   get(@Param('nombre') nombre: string, @Res() res: Response) {
-    const c = CONTRATOS[nombre];
+    // Solo claves propias: "constructor", "toString"… vienen del prototipo de Object
+    const c = Object.prototype.hasOwnProperty.call(CONTRATOS, nombre) ? CONTRATOS[nombre] : undefined;
     if (!c) throw new BadRequestException(`Contrato desconocido. Disponibles: ${Object.keys(CONTRATOS).join(', ')}`);
     const contenido = leerContrato(c.archivo);
     if (contenido === null) throw new NotFoundException('El contrato no está disponible en este despliegue.');
