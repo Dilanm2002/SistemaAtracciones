@@ -3,7 +3,8 @@ import { Transform, Type } from 'class-transformer';
 import { IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLength, Max, IsEnum, MinLength, IsIn, IsUUID, ValidateIf, ValidateNested } from 'class-validator';
 import { Link } from '../../../common/utils/hateoas';
 import { PriceDto } from './nested-types.dto';
-import { trim } from '../../../common/utils/transform';
+import { lower, trim } from '../../../common/utils/transform';
+import { RE_CORREO } from '../../auth/dto/auth.dto';
 import { ContieneLetras, EsDocumentoEc, FechaFutura, MSG_TELEFONO_EC, RE_NOMBRE_PERSONA, RE_TELEFONO_EC } from '../../../common/utils/validators';
 
 export enum ReservationStatus {
@@ -87,9 +88,11 @@ export class ReservationRequestDto {
   customer_name: string;
 
   @ApiProperty({ description: 'Email del cliente', example: 'juan@example.com', required: false })
-  @IsEmail({}, { message: 'customer_email no tiene un formato válido' })
-  @MaxLength(160)
   @IsOptional()
+  @Transform(lower)
+  @IsEmail({}, { message: 'customer_email no tiene un formato válido' })
+  @Matches(RE_CORREO, { message: 'customer_email no tiene un formato válido' })
+  @MaxLength(160)
   customer_email?: string;
 
   // ── Extensiones ───────────────────────────────────────────────────────

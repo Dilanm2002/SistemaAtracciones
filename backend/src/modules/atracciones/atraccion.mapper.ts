@@ -128,8 +128,9 @@ export class AtraccionMapper {
       },
       customer: {
         name: r.pax_nombre ?? '',
-        email: r.correo,
-        phone: r.telefono ?? undefined,
+        // Contacto indicado al reservar; si no se indicó, el de la cuenta
+        email: r.pax_correo ?? r.correo,
+        phone: r.pax_telefono ?? r.telefono ?? undefined,
         document: r.pax_documento ?? undefined,
       },
       payment_method: r.metodo ?? undefined,

@@ -7,7 +7,7 @@ Plataforma web para buscar, reservar y administrar tours, entradas y paquetes tu
 ```
 Proyecto Ecommerce/
 ├── docs/       Documentación técnica (ARQUITECTURA.md) y guía de la defensa (GUIA-DEFENSA.md)
-├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN), 02_verificacion.sql y 03_eventos.sql
+├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN), 02_verificacion.sql, 03_eventos.sql y los cambios 04 (cédula/teléfono EC) y 05 (contacto del pasajero)
 ├── backend/    NestJS 10 + PostgreSQL + Swagger · solo el dominio de Atracciones
 │   └── contracts/   OpenAPI (REST), AsyncAPI (eventos), GraphQL (Federation) y gRPC
 └── frontend/   React 18 + Vite + CSS propio (sitio público + panel de administración)
@@ -26,7 +26,7 @@ Los módulos y contratos de vuelos, autos y alojamientos que traía la plantilla
 
 Cada `git push` a `main` pasa por CI (`.github/workflows/ci.yml`: lint, tipos, tests, build, `npm audit` y gitleaks) y vuelve a desplegar ambos proyectos.
 
-Variables de la API en Vercel: `DATABASE_URL`, `DB_SSL=true`, `DB_POOL_MAX=1`, `SEED_ON_START=false`, `NODE_ENV=production`, `JWT_SECRET` (≥ 32 caracteres aleatorios), `JWT_EXPIRES_IN=2h`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET=uploads`, `PUBLIC_URL`, `FRONTEND_URL`. Variable del frontend: `VITE_API_URL`. La API **no arranca** si falta `JWT_SECRET`, si es un valor de ejemplo, si `DATABASE_URL` apunta a `localhost` en producción o si se intenta `DB_SYNC=true` en producción (`src/config/env.validation.ts`). En producción se ignora cualquier archivo `.env`.
+Variables de la API en Vercel: `DATABASE_URL`, `DB_SSL=true`, `DB_POOL_MAX=1`, `SEED_ON_START=false`, `NODE_ENV=production`, `JWT_SECRET` (≥ 32 caracteres aleatorios), `JWT_EXPIRES_IN=2h`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET=uploads`, `PUBLIC_URL`, `FRONTEND_URL`. Variable del frontend: `VITE_API_URL`. `TRUST_PROXY` solo hace falta si la API está detrás de otro proxy (en Vercel se confía en `X-Forwarded-For` automáticamente; sin proxy, el límite de peticiones usa la IP de la conexión). La API **no arranca** si falta `JWT_SECRET`, si es un valor de ejemplo, si `DATABASE_URL` apunta a `localhost` en producción o si se intenta `DB_SYNC=true` en producción (`src/config/env.validation.ts`). En producción se ignora cualquier archivo `.env`.
 
 `DB_POOL_MAX=1`: cada instancia serverless abre como mucho una conexión contra el *transaction pooler* de Supabase, cuyo límite es por proyecto; con N instancias concurrentes se usan N conexiones.
 

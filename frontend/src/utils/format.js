@@ -20,12 +20,15 @@ export const fmtDateLong = (s) =>
 export const fmtDateTime = (iso) =>
   iso ? new Date(iso).toLocaleString('es-EC', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 
+/** "hace 5 minutos", "dentro de 3 días", "ahora"; a más de 30 días, el mes y el año. */
 export const fmtRelative = (iso) => {
-  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  const seg = (new Date(iso).getTime() - Date.now()) / 1000; // negativo = pasado, positivo = futuro
+  const abs = Math.abs(seg);
   const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });
-  if (diff < 3600) return rtf.format(-Math.max(1, Math.round(diff / 60)), 'minute');
-  if (diff < 86400) return rtf.format(-Math.round(diff / 3600), 'hour');
-  if (diff < 86400 * 30) return rtf.format(-Math.round(diff / 86400), 'day');
+  if (abs < 60) return rtf.format(0, 'second');
+  if (abs < 3600) return rtf.format(Math.round(seg / 60), 'minute');
+  if (abs < 86400) return rtf.format(Math.round(seg / 3600), 'hour');
+  if (abs < 86400 * 30) return rtf.format(Math.round(seg / 86400), 'day');
   return new Date(iso).toLocaleDateString('es-EC', { month: 'long', year: 'numeric' });
 };
 

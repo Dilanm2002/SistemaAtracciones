@@ -8,6 +8,7 @@ import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
+import { confianzaProxy } from './config/proxy';
 
 const SWAGGER_CDN = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14';
 export const API_VERSION = '2.0.0';
@@ -20,8 +21,11 @@ export async function createApp(): Promise<NestExpressApplication> {
   // abortOnError=false: si falla el arranque se lanza la excepción en vez de hacer process.exit(1)
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { abortOnError: false, bodyParser: true });
 
-  // Detrás del proxy de Vercel: req.ip real para el límite de peticiones y los logs (SEG-021)
-  app.set('trust proxy', 1);
+  // IP real para el límite de peticiones y los logs (SEG-021). Solo se confía en X-Forwarded-For
+  // detrás de un proxy que la reescribe (Vercel, o el que indique TRUST_PROXY); expuesta
+  // directamente, la API usa la IP de la conexión y esa cabecera no sirve para evadir el límite.
+  const proxy = confianzaProxy(process.env.TRUST_PROXY, !!process.env.VERCEL);
+  if (proxy !== false) app.set('trust proxy', proxy);
   app.disable('x-powered-by');
 
   // X-Request-Id por petición: se devuelve en la cabecera y en los errores (OPS-005).

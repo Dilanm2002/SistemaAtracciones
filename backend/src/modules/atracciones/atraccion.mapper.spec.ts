@@ -32,7 +32,7 @@ describe('AtraccionMapper: reservas', () => {
     fecha: '2030-01-01', hora: '09:00', observaciones: null, motivo_cancelacion: null, cancelado_en: null, creado_en: new Date('2026-01-01T00:00:00Z'),
     atr_uuid: 'a-uuid', atr_nombre: 'Tour', ciudad: 'Quito', punto_encuentro: null, direccion: 'Plaza Grande', cancelacion_gratuita: true,
     horas_cancelacion: 24, foto: '/img/x.jpg', ope_codigo: 101, usu_id: '9', correo: 'a@b.ec', telefono: null, pax_nombre: 'Ana',
-    pax_documento: null, metodo: null, ...extra,
+    pax_documento: null, pax_correo: null, pax_telefono: null, metodo: null, ...extra,
   });
 
   it('toReservation: enlaces HATEOAS según el estado y URLs absolutas', () => {

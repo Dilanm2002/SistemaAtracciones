@@ -228,6 +228,24 @@ describeDb('Catálogo, reseñas, favoritos, contacto e integración (E2E)', () =
       expect((await http(app).get(`/atracciones/${a.id}/reviews/eligibility`).set(bearer(ana))).body.can_review).toBe(false);
     });
 
+    it('una reserva de hoy solo habilita a reseñar cuando ya pasó su hora (hora de Ecuador)', async () => {
+      const a = await crearAtraccion();
+      const r = await http(app).post(`/atracciones/${a.id}/reservations`).set(bearer(ana)).set(idem()).send(reserva(fechaEc(10), { customer_name: 'Ana Torres' }));
+      const mover = (intervalo: string) =>
+        db(app).query(
+          `UPDATE reserva SET res_fecha = ((now() AT TIME ZONE 'America/Guayaquil') + $2::interval)::date,
+                              res_hora  = ((now() AT TIME ZONE 'America/Guayaquil') + $2::interval)::time
+            WHERE res_uuid = $1`,
+          [r.body.reservation_id, intervalo],
+        );
+      const puede = async () => (await http(app).get(`/atracciones/${a.id}/reviews/eligibility`).set(bearer(ana))).body.can_review;
+      await mover('1 hour'); // sale dentro de una hora
+      expect(await puede()).toBe(false);
+      expect((await http(app).post(`/atracciones/${a.id}/reviews`).set(bearer(ana)).send({ rating: 5, comment: 'Todavía no la he vivido' })).status).toBe(403);
+      await mover('-1 hour'); // salió hace una hora
+      expect(await puede()).toBe(true);
+    });
+
     it('validación: rating fuera de 1-5 y comentario ilegible → 400', async () => {
       const a = await crearAtraccion();
       expect((await http(app).post(`/atracciones/${a.id}/reviews`).set(bearer(ana)).send({ rating: 6, comment: 'Excelente experiencia' })).status).toBe(400);
@@ -247,6 +265,22 @@ describeDb('Catálogo, reseñas, favoritos, contacto e integración (E2E)', () =
       expect((await http(app).get('/favoritos').set(bearer(cliente))).body).not.toContain(a.id);
       expect((await http(app).put(`/favoritos/${randomUUID()}`).set(bearer(cliente))).status).toBe(404);
       expect((await http(app).get('/favoritos')).status).toBe(401);
+    });
+  });
+
+  describe('favoritos de atracciones inactivas', () => {
+    it('no se puede agregar una inactiva (404) y las que se desactivan dejan de listarse', async () => {
+      const inactiva = await crearAtraccion({ is_active: false });
+      expect((await http(app).put(`/favoritos/${inactiva.id}`).set(bearer(cliente))).status).toBe(404);
+
+      const a = await crearAtraccion();
+      expect((await http(app).put(`/favoritos/${a.id}`).set(bearer(cliente))).status).toBe(204);
+      await http(app).patch(`/atracciones/${a.id}`).set(bearer(admin)).send({ is_active: false });
+      expect((await http(app).get('/favoritos').set(bearer(cliente))).body).not.toContain(a.id);
+      // Al reactivarla vuelve a aparecer (el favorito se conserva)
+      await http(app).patch(`/atracciones/${a.id}`).set(bearer(admin)).send({ is_active: true });
+      expect((await http(app).get('/favoritos').set(bearer(cliente))).body).toContain(a.id);
+      expect((await http(app).delete(`/favoritos/${inactiva.id}`).set(bearer(cliente))).status).toBe(204); // quitar siempre es idempotente
     });
   });
 
@@ -289,6 +323,27 @@ describeDb('Catálogo, reseñas, favoritos, contacto e integración (E2E)', () =
         `SELECT COUNT(*)::int AS n FROM atraccion a JOIN operador o ON o.ope_id = a.ope_id WHERE o.ope_codigo = 101 AND a.atr_eliminado_en IS NULL AND a.atr_estado = 'PUBLICADA'`,
       );
       expect(r.body.kpis.active_attractions).toBe(n);
+    });
+
+    it('ingresos = dinero cobrado: una reserva pendiente de pago no suma hasta que se confirma', async () => {
+      const hoy = fechaEc(0);
+      const kpis = async () => (await http(app).get(`/reportes/ventas?from=${hoy}&to=${hoy}`).set(bearer(admin))).body.kpis;
+      const antes = await kpis();
+      const a = await crearAtraccion(); // 40 USD por adulto
+      const r = await http(app).post(`/atracciones/${a.id}/reservations`).set(bearer(ana)).set(idem())
+        .send(reserva(fechaEc(15), { customer_name: 'Ana Torres', payment_method: 'TRANSFERENCIA' }));
+      expect(r.status).toBe(201);
+
+      const pendiente = await kpis();
+      expect(pendiente.reservations).toBe(antes.reservations + 1);
+      expect(pendiente.revenue).toBeCloseTo(antes.revenue, 2);
+      expect(pendiente.pending_revenue).toBeCloseTo(antes.pending_revenue + 40, 2);
+
+      expect((await http(app).post(`/atracciones/reservations/${r.body.reservation_id}/confirm`).set(bearer(operador)).set(idem()).send()).status).toBe(200);
+      const cobrada = await kpis();
+      expect(cobrada.revenue).toBeCloseTo(antes.revenue + 40, 2);
+      expect(cobrada.pending_revenue).toBeCloseTo(antes.pending_revenue, 2);
+      expect(cobrada.average_ticket).toBeGreaterThan(0);
     });
 
     it('ventas: rango válido, "to" futuro → 400, rango invertido → 400, fecha inválida → 400', async () => {

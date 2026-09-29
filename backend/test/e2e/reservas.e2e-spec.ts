@@ -90,6 +90,28 @@ describeDb('Reservas (E2E)', () => {
       expect(n).toBe(0);
     });
 
+    it('guarda el correo y el teléfono de contacto de la reserva (y usa los de la cuenta si no se envían)', async () => {
+      const atr = await crearAtraccion();
+      const con = await reservar(atr, cliente, reserva(fechaEc(22), { customer_email: '  Familiar@Correo.EC ', customer_phone: '0987654321' }));
+      expect(con.status).toBe(201);
+      expect(con.body.customer).toMatchObject({ email: 'familiar@correo.ec', phone: '0987654321' });
+      const [pax] = await db(app).query(
+        'SELECT x.pax_correo, x.pax_telefono FROM reserva_pasajero x JOIN reserva r ON r.res_id = x.res_id WHERE r.res_uuid = $1',
+        [con.body.reservation_id],
+      );
+      expect(pax).toEqual({ pax_correo: 'familiar@correo.ec', pax_telefono: '0987654321' });
+      // Se puede buscar por ese correo
+      const q = await http(app).get('/atracciones/reservations?q=familiar%40correo').set(bearer(cliente));
+      expect(q.body.map((r: { reservation_id: string }) => r.reservation_id)).toContain(con.body.reservation_id);
+
+      const sin = await reservar(atr, cliente, reserva(fechaEc(22)));
+      expect(sin.body.customer.email).toBe(USERS.cliente.email);
+      expect(sin.body.customer.phone).toBe('0991234567'); // teléfono de la cuenta (seed)
+
+      expect((await reservar(atr, cliente, reserva(fechaEc(22), { customer_email: 'no-es-correo' }))).status).toBe(400);
+      expect((await reservar(atr, cliente, reserva(fechaEc(22), { customer_phone: '+15551234567' }))).status).toBe(400);
+    });
+
     it('sin horario (time) y con un solo horario activo, lo toma automáticamente', async () => {
       const atr = await crearAtraccion();
       const res = await reservar(atr, cliente, { date: fechaEc(22), ticket_count: 1, customer_name: 'María Guamán' });
@@ -336,7 +358,13 @@ describeDb('Reservas (E2E)', () => {
       expect(lista.status).toBe(200);
       expect(lista.body.map((r: { reservation_id: string }) => r.reservation_id)).not.toContain(mia.body.reservation_id);
       expect(Number(lista.headers['x-total-count'])).toBeGreaterThan(0);
-      expect(lista.body.every((r: { customer: { email: string } }) => r.customer.email === USERS.cliente.email)).toBe(true);
+      // El dueño se comprueba en la orden (customer.email es el contacto de la reserva y puede ser otro)
+      const duenos = await db(app).query(
+        `SELECT DISTINCT u.usu_correo AS correo FROM reserva r JOIN orden_detalle dt ON dt.det_id = r.det_id JOIN orden o ON o.ord_id = dt.ord_id
+           JOIN usuario u ON u.usu_id = o.usu_id WHERE r.res_uuid = ANY($1::uuid[])`,
+        [lista.body.map((r: { reservation_id: string }) => r.reservation_id)],
+      );
+      expect(duenos).toEqual([{ correo: USERS.cliente.email }]);
     });
 
     it('el operador con all=true ve solo las de su empresa; el admin, todas', async () => {

@@ -31,6 +31,8 @@ export async function createTestApp(): Promise<NestExpressApplication> {
   process.env.ENABLE_DOCS = 'false';
   process.env.SEED_ON_START = 'true';
   process.env.DB_POOL_MAX = '8';
+  // Las pruebas simulan un proxy (X-Forwarded-For distinto por petición) salvo que la suite lo desactive
+  process.env.TRUST_PROXY ??= '1';
   // Importado aquí para que ConfigModule lea las variables anteriores
   Logger.overrideLogger(process.env.E2E_LOGS === 'true' ? ['error', 'warn'] : false);
   const { createApp } = await import('../../src/app.factory');

@@ -1,7 +1,7 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthUser } from '../../common/auth/scopes';
 import { BitacoraService } from '../../common/db/bitacora.service';
-import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
+import { DbService, Params, Sql } from '../../common/db/db.service';
 import { paginate } from '../../common/utils/hateoas';
 import { AtraccionMapper } from './atraccion.mapper';
 import { AtraccionesService } from './atracciones.service';
@@ -79,7 +79,7 @@ export class ResenasService {
     return { ...paginate(rows.map((r) => this.toDto(r)), total, page, limit, `/atracciones/${atrUuid}/reviews`), distribution };
   }
 
-  /** ¿Puede reseñar? Debe haber vivido la experiencia (reserva confirmada ya pasada) y no haberla reseñado. */
+  /** ¿Puede reseñar? Debe haber vivido la experiencia (reserva confirmada cuya fecha y hora ya pasaron) y no haberla reseñado. */
   async elegibilidad(atrUuid: string, user: AuthUser) {
     const a = await this.atracciones.getRow(atrUuid);
     if (await this.db.one('SELECT 1 FROM resena WHERE atr_id = $1 AND usu_id = $2', [a.id, user.sub])) {
@@ -87,7 +87,8 @@ export class ResenasService {
     }
     const vivida = await this.db.one(
       `SELECT 1 FROM reserva r JOIN estado e ON e.est_id = r.est_id JOIN orden_detalle dt ON dt.det_id = r.det_id JOIN orden o ON o.ord_id = dt.ord_id
-        WHERE dt.atr_id = $1 AND o.usu_id = $2 AND e.est_codigo IN ('CONFIRMADA', 'COMPLETADA') AND r.res_fecha <= ${HOY_EC} LIMIT 1`,
+        WHERE dt.atr_id = $1 AND o.usu_id = $2 AND e.est_codigo IN ('CONFIRMADA', 'COMPLETADA')
+          AND r.res_fecha + r.res_hora <= (now() AT TIME ZONE 'America/Guayaquil') LIMIT 1`,
       [a.id, user.sub],
     );
     if (!vivida) return { can_review: false, reason: 'Podrás opinar después de vivir esta experiencia con una reserva confirmada.' };

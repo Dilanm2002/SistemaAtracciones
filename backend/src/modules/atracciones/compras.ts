@@ -28,6 +28,9 @@ export interface DatosCompra {
   metodo: PaymentMethod;
   paxNombre: string;
   paxDocumento?: string | null;
+  /** Contacto de la reserva (NULL = el de la cuenta) */
+  paxCorreo?: string | null;
+  paxTelefono?: string | null;
   notas?: string | null;
   tarjeta?: CardInfoDto;
   /** Para los datos de demostración: fecha de creación en el pasado */
@@ -84,8 +87,9 @@ export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCo
         ],
       );
       await tx.query(
-        'INSERT INTO reserva_pasajero (res_id, pax_nombre, pax_documento, pax_es_titular) VALUES ($1, $2, $3, TRUE)',
-        [res!.res_id, d.paxNombre.slice(0, 120), d.paxDocumento || null],
+        `INSERT INTO reserva_pasajero (res_id, pax_nombre, pax_documento, pax_correo, pax_telefono, pax_es_titular)
+         VALUES ($1, $2, $3, $4, $5, TRUE)`,
+        [res!.res_id, d.paxNombre.slice(0, 120), d.paxDocumento || null, d.paxCorreo || null, d.paxTelefono || null],
       );
       const pago = await tx.one<{ pag_id: string }>(
         `INSERT INTO pago (pag_numero, ord_id, mpa_id, est_id, pag_monto, pag_moneda, pag_fecha, pag_aprobado_en, pag_referencia, pag_creado_en)
