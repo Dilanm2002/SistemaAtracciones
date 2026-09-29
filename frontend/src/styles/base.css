@@ -1,0 +1,168 @@
+/* ==========================================================================
+   Descubre EC · Sistema de diseño "Andes y Selva"
+   Tipografía: Poppins (títulos) + Open Sans (texto)
+   ========================================================================== */
+:root {
+  /* Marca */
+  --primary: #0f766e;
+  --primary-hover: #115e59;
+  --primary-strong: #0b4f4a;
+  --primary-50: #effaf8;
+  --primary-100: #d3f0eb;
+  --secondary: #14b8a6;
+  --cta: #f59e0b;
+  --cta-hover: #d97706;
+  --cta-ink: #1c1917; /* texto sobre el dorado: contraste 9:1 */
+
+  /* Superficies y texto */
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-2: #f3eee6;
+  --surface-3: #ebe4d8;
+  --text: #1c2b2a;
+  --text-2: #3d4d4b;
+  --muted: #52615f; /* 5.9:1 sobre blanco */
+  --border: #e2dace;
+  --border-strong: #c9bfb0;
+
+  /* Estados (siempre con ícono + texto, nunca solo color) */
+  --success: #15803d;
+  --success-bg: #ecfdf3;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  --info: #0369a1;
+  --info-bg: #eff8ff;
+
+  /* Admin */
+  --sidebar: #0b3b36;
+  --sidebar-2: #0f4a44;
+  --sidebar-ink: #d7ece8;
+  --sidebar-muted: #8fb5ae;
+
+  /* Tipografía */
+  --font-head: 'Poppins', system-ui, sans-serif;
+  --font-body: 'Open Sans', system-ui, sans-serif;
+
+  /* Forma */
+  --r-sm: 8px;
+  --r: 12px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+  --shadow-sm: 0 1px 2px rgba(28, 43, 42, 0.06), 0 1px 3px rgba(28, 43, 42, 0.08);
+  --shadow: 0 4px 12px rgba(28, 43, 42, 0.08), 0 2px 4px rgba(28, 43, 42, 0.05);
+  --shadow-lg: 0 18px 40px rgba(28, 43, 42, 0.16);
+  --ring: 0 0 0 3px rgba(20, 184, 166, 0.45);
+
+  /* Escala z-index */
+  --z-header: 30;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+
+  --container: 1200px;
+  --header-h: 68px;
+  --t-fast: 150ms ease;
+  --t: 220ms ease;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-padding-top: calc(var(--header-h) + 16px);
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-head);
+  line-height: 1.2;
+  margin: 0 0 0.5em;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); font-weight: 700; }
+h2 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); font-weight: 600; }
+h3 { font-size: 1.15rem; font-weight: 600; }
+p { margin: 0 0 1em; }
+
+a {
+  color: var(--primary);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+a:hover { color: var(--primary-hover); }
+
+img { max-width: 100%; display: block; }
+
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 6px;
+}
+
+::selection { background: var(--primary-100); }
+
+.sr-only {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px; top: -60px;
+  background: var(--primary);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: var(--r-sm);
+  z-index: 100;
+  transition: top var(--t-fast);
+}
+.skip-link:focus { top: 12px; color: #fff; }
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.muted { color: var(--muted); }
+.small { font-size: 0.875rem; }
+.tiny { font-size: 0.78rem; }
+.center { text-align: center; }
+.nowrap { white-space: nowrap; }
+.stack > * + * { margin-top: 12px; }
+.row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.grow { flex: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
