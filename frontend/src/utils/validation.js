@@ -7,15 +7,16 @@
 const LETRA = /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/;
 export const RE_NOMBRE_PERSONA = /^(?=(?:.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]){2})[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .-]+$/;
 export const RE_CORREO = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-export const RE_TELEFONO = /^\+?\d{7,15}$/;
+/** Teléfono ecuatoriano (dom_telefono): celular 09XXXXXXXX o fijo 0[2-7]XXXXXXX. */
+export const RE_TELEFONO = /^(09\d{8}|0[2-7]\d{7})$/;
 export const PRECIO_MAX = 10000;
 export const ECUADOR = { latMin: -5.1, latMax: 1.7, lngMin: -92.1, lngMax: -75.1 };
 
 export const LIMITES = {
   nombrePersona: 120,
   correo: 160,
-  telefono: 16,
-  documento: 11,
+  telefono: 10,
+  documento: 10,
   password: 72,
   nombreAtraccion: 200,
   resumen: 280,
@@ -57,14 +58,43 @@ export function esRucEc(r) {
 
 const vacio = (v) => v === undefined || v === null || String(v).trim() === '';
 
-/** Texto libre con contenido real (no solo números o símbolos). */
-export function texto(v, { min = 1, max, requerido = true, que = 'Este campo', letras = true } = {}) {
+/** Longitud de la secuencia de dígitos seguidos más larga ("Ruta 66" → 2). */
+export const maxDigitosSeguidos = (t) => Math.max(0, ...(String(t).match(/\d+/g) ?? []).map((x) => x.length));
+
+/**
+ * Texto libre legible (misma regla que ContieneLetras/SinNumerosLargos de la API):
+ * tiene letras, las letras son al menos la mitad de lo alfanumérico, sin un carácter repetido 6+ veces
+ * y sin más de `maxDigitos` dígitos seguidos (10 por defecto; 4-5 en nombres, ítems y direcciones).
+ */
+export function texto(v, { min = 1, max, requerido = true, que = 'Este campo', letras = true, maxDigitos = 10 } = {}) {
   const t = String(v ?? '').trim();
   if (!t) return requerido ? `${que} es obligatorio` : null;
   if (t.length < min) return `${que} debe tener al menos ${min} caracteres`;
   if (max && t.length > max) return `${que} puede tener hasta ${max} caracteres`;
-  if (letras && !LETRA.test(t)) return `${que} debe contener texto, no solo números o símbolos`;
+  if (!letras) return null;
+  const nLetras = (t.match(new RegExp(LETRA.source, 'g')) ?? []).length;
+  const nDigitos = (t.match(/\d/g) ?? []).length;
+  if (!nLetras) return `${que} debe contener texto, no solo números o símbolos`;
+  if (nDigitos > nLetras) return `${que} debe ser principalmente texto, no números`;
+  if (maxDigitosSeguidos(t) > maxDigitos) return `${que} no puede tener más de ${maxDigitos} números seguidos`;
+  if (/(.)\1{5,}/u.test(t)) return `${que} tiene un carácter repetido demasiadas veces`;
   return null;
+}
+
+/**
+ * Máscara para campos numéricos escritos como texto: deja solo dígitos y un separador decimal
+ * (la coma se convierte en punto), limita dígitos enteros y decimales y opcionalmente el signo "-".
+ * Impide escribir valores absurdos como 1231231313131313.
+ */
+export function mascaraNumero(v, { enteros = 5, decimales = 2, negativo = false } = {}) {
+  let t = String(v ?? '').replace(',', '.');
+  const signo = negativo && t.trim().startsWith('-') ? '-' : '';
+  t = t.replace(/[^\d.]/g, '');
+  const [ent = '', ...resto] = t.split('.');
+  const dec = resto.join('');
+  let out = ent.slice(0, enteros);
+  if (decimales > 0 && t.includes('.')) out += `.${dec.slice(0, decimales)}`;
+  return signo + out;
 }
 
 export function nombrePersona(v, { que = 'El nombre', requerido = true } = {}) {
@@ -86,17 +116,26 @@ export function correo(v, { requerido = true } = {}) {
 export function telefono(v, { requerido = false } = {}) {
   const t = String(v ?? '').replace(/[\s-]/g, '');
   if (!t) return requerido ? 'El teléfono es obligatorio' : null;
-  if (!RE_TELEFONO.test(t)) return 'Usa solo números (7 a 15 dígitos), ej. 0991234567';
-  return null;
+  if (!/^\d+$/.test(t)) return 'El teléfono solo puede tener números';
+  if (!t.startsWith('0')) return 'El teléfono ecuatoriano empieza con 0, ej. 0991234567';
+  if (t.startsWith('09')) return t.length === 10 ? null : 'El celular tiene 10 dígitos: 09 y 8 números más';
+  if (/^0[2-7]/.test(t)) return t.length === 9 ? null : 'El teléfono fijo tiene 9 dígitos: 0, código de provincia (2-7) y 7 números';
+  return 'Teléfono ecuatoriano no válido: celular 09XXXXXXXX o fijo 0[2-7]XXXXXXX';
 }
 
+/** Cédula ecuatoriana (dom_documento): 10 dígitos, provincia 01-24 o 30, tercer dígito 0-5 y verificador. */
 export function documento(v, { requerido = false } = {}) {
-  const t = String(v ?? '').trim().toUpperCase();
-  if (!t) return requerido ? 'El documento es obligatorio' : null;
-  if (/^\d+$/.test(t)) return esCedulaEc(t) ? null : 'La cédula no es válida: revisa los 10 dígitos';
-  if (/^[A-Z]{1,2}\d{6,9}$/.test(t)) return null;
-  return 'Usa una cédula de 10 dígitos o un pasaporte (1-2 letras y 6-9 dígitos, ej. AB1234567)';
+  const t = String(v ?? '').trim();
+  if (!t) return requerido ? 'La cédula es obligatoria' : null;
+  if (!/^\d+$/.test(t)) return 'La cédula solo puede tener números';
+  if (t.length !== 10) return 'La cédula tiene exactamente 10 dígitos';
+  const provincia = Number(t.slice(0, 2));
+  if (!((provincia >= 1 && provincia <= 24) || provincia === 30)) return 'Los 2 primeros dígitos deben ser un código de provincia (01-24 o 30)';
+  return esCedulaEc(t) ? null : 'La cédula no es válida: el dígito verificador no coincide';
 }
+
+/** Deja solo dígitos (para campos de cédula, teléfono, RUC). */
+export const soloDigitos = (v) => String(v ?? '').replace(/\D/g, '');
 
 export function ruc(v, { requerido = false } = {}) {
   const t = String(v ?? '').trim();

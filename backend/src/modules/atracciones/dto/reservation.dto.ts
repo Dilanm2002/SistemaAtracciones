@@ -4,7 +4,7 @@ import { IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLe
 import { Link } from '../../../common/utils/hateoas';
 import { PriceDto } from './nested-types.dto';
 import { trim } from '../../../common/utils/transform';
-import { ContieneLetras, EsDocumentoEc, FechaFutura, RE_NOMBRE_PERSONA } from '../../../common/utils/validators';
+import { ContieneLetras, EsDocumentoEc, FechaFutura, MSG_TELEFONO_EC, RE_NOMBRE_PERSONA, RE_TELEFONO_EC } from '../../../common/utils/validators';
 
 export enum ReservationStatus {
   CONFIRMED = 'CONFIRMED',
@@ -103,13 +103,13 @@ export class ReservationRequestDto {
   @ApiPropertyOptional({ example: '0991234567' })
   @IsOptional()
   @Transform(trim)
-  @Matches(/^\+?\d{7,15}$/, { message: 'customer_phone debe tener entre 7 y 15 dígitos' })
+  @Matches(RE_TELEFONO_EC, { message: `customer_phone ${MSG_TELEFONO_EC}` })
   customer_phone?: string;
 
-  @ApiPropertyOptional({ description: 'Cédula (10 dígitos) o pasaporte (1-2 letras y 6-9 dígitos)', example: '1712345678' })
+  @ApiPropertyOptional({ description: 'Cédula ecuatoriana (10 dígitos con dígito verificador)', example: '1710034065' })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
-  @EsDocumentoEc({ message: 'customer_document debe ser una cédula ecuatoriana válida o un pasaporte (1-2 letras y 6-9 dígitos)' })
+  @EsDocumentoEc()
   customer_document?: string;
 
   @ApiPropertyOptional({ type: CardInfoDto, description: 'Solo con payment_method TARJETA' })

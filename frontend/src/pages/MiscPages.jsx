@@ -9,7 +9,7 @@ import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
-import { correo, documento, LIMITES, limpiar, nombrePersona, password, telefono, texto } from '../utils/validation';
+import { correo, documento, LIMITES, limpiar, nombrePersona, password, soloDigitos, telefono, texto } from '../utils/validation';
 
 // ── Favoritos ────────────────────────────────────────────────────────────
 export function Favorites() {
@@ -347,8 +347,8 @@ export function Profile() {
         <div className="form-grid">
           <Field label="Nombres" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="given-name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />}</Field>
           <Field label="Apellidos" required error={errors.apellido}>{(p) => <input {...p} className="input" autoComplete="family-name" maxLength={LIMITES.nombrePersona} value={form.apellido} onChange={(e) => setForm({ ...form, apellido: e.target.value })} />}</Field>
-          <Field label="Teléfono" error={errors.telefono} hint="7 a 15 dígitos">{(p) => <input {...p} className="input" type="tel" inputMode="tel" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: e.target.value.replace(/[^\d+]/g, '') })} />}</Field>
-          <Field label="Cédula o pasaporte" hint="Cédula de 10 dígitos o pasaporte (ej. AB1234567). Se usa para autocompletar tus reservas" error={errors.documento}>{(p) => <input {...p} className="input" maxLength={LIMITES.documento} autoCapitalize="characters" value={form.documento} onChange={(e) => setForm({ ...form, documento: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') })} />}</Field>
+          <Field label="Teléfono" error={errors.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">{(p) => <input {...p} className="input" type="tel" inputMode="numeric" placeholder="0991234567" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })} />}</Field>
+          <Field label="Cédula" hint="Cédula ecuatoriana de 10 dígitos. Se usa para autocompletar tus reservas" error={errors.documento}>{(p) => <input {...p} className="input" inputMode="numeric" placeholder="1710034065" maxLength={LIMITES.documento} value={form.documento} onChange={(e) => setForm({ ...form, documento: soloDigitos(e.target.value) })} />}</Field>
         </div>
         <button className="btn btn-primary" style={{ marginTop: 18 }} disabled={saving}>{saving && <Spinner />} Guardar cambios</button>
       </form>

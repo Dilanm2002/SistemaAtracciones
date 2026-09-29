@@ -1,13 +1,38 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Tag, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Star, Tag, Trash2, UploadCloud, X } from 'lucide-react';
 import { Atracciones, Uploads } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
-import { ECUADOR, LIMITES, limpiar, numero, PRECIO_MAX, texto } from '../utils/validation';
+import { ECUADOR, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
 
 const MAX_HORAS = 720; // 30 días: mismo límite que la base (atraccion_duracion_valida)
+const MAX_FOTOS = 12;
+const MAX_MB = 4;
+const MIN_ANCHO = 800;
+const MIN_ALTO = 500;
+
+/** Máscaras de los campos numéricos: no se pueden escribir más dígitos de los que admite el campo. */
+const MASCARA = {
+  price: { enteros: 5, decimales: 2 },
+  child_price: { enteros: 5, decimales: 2 },
+  duration_hours: { enteros: 3, decimales: 2 },
+  capacity_per_slot: { enteros: 3, decimales: 0 },
+  cancellation_hours: { enteros: 3, decimales: 0 },
+  latitude: { enteros: 1, decimales: 6, negativo: true },
+  longitude: { enteros: 2, decimales: 6, negativo: true },
+};
+
+/** Lee el ancho y alto reales de una imagen antes de subirla (null si está dañada). */
+const medirImagen = (file) =>
+  new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
+    img.onerror = () => { resolve(null); URL.revokeObjectURL(url); };
+    img.src = url;
+  });
 
 const EMPTY = {
   name: '', short_description: '', long_description: '', product_type: 'GUIDED_TOUR',
@@ -110,14 +135,27 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
   const confirm = useConfirm();
   const initial = useMemo(() => (atraccion ? fromApi(atraccion) : EMPTY), [atraccion]);
   const [f, setF] = useState(initial);
-  const [errors, setErrors] = useState({});
+  const [tocados, setTocados] = useState(() => new Set());
+  const [enviado, setEnviado] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [pendientes, setPendientes] = useState([]); // fotos subiéndose: { id, url, nombre, file }
+  const [fotoErrores, setFotoErrores] = useState([]);
+  const [arrastrando, setArrastrando] = useState(false);
   const [apiError, setApiError] = useState(null);
   const fileRef = useRef(null);
+  const uploading = pendientes.length > 0;
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
-  const set = (k) => (v) => setF((prev) => ({ ...prev, [k]: v?.target ? (v.target.type === 'checkbox' ? v.target.checked : v.target.value) : v }));
-  const toggle = (k, v) => setF((prev) => ({ ...prev, [k]: prev[k].includes(v) ? prev[k].filter((x) => x !== v) : [...prev[k], v] }));
+  const tocar = (k) => setTocados((prev) => (prev.has(k) ? prev : new Set(prev).add(k)));
+  const set = (k) => (v) => {
+    tocar(k);
+    setF((prev) => ({ ...prev, [k]: v?.target ? (v.target.type === 'checkbox' ? v.target.checked : v.target.value) : v }));
+  };
+  /** Campo numérico con máscara: el valor se recorta mientras se escribe. */
+  const setNum = (k) => (e) => set(k)(mascaraNumero(e.target.value, MASCARA[k]));
+  const toggle = (k, v) => {
+    tocar(k);
+    setF((prev) => ({ ...prev, [k]: prev[k].includes(v) ? prev[k].filter((x) => x !== v) : [...prev[k], v] }));
+  };
 
   // Idiomas registrados en la base (tabla idioma); si aún no cargan, los conocidos
   const listaIdiomas = idiomas?.length ? idiomas.map((i) => [i.codigo, LANG[i.codigo] ?? i.nombre]) : Object.entries(LANG);
@@ -127,20 +165,36 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     onClose();
   };
 
+  /** Valida cada archivo (tipo, peso, medidas, cupo) y sube los válidos mostrando su vista previa. */
   const upload = async (files) => {
-    setUploading(true);
-    try {
-      for (const file of files) {
-        if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { toast(`"${file.name}" no es una imagen JPG, PNG o WebP`, 'error'); continue; }
-        if (file.size > 4 * 1024 * 1024) { toast(`"${file.name}" supera los 4 MB`, 'error'); continue; }
-        const r = await Uploads.image(file);
-        setF((p) => ({ ...p, photos: [...p.photos, r.url] }));
+    const errores = [];
+    const libres = MAX_FOTOS - f.photos.length - pendientes.length;
+    if (files.length > libres) errores.push(libres > 0 ? `Solo puedes agregar ${libres} foto(s) más (máximo ${MAX_FOTOS}).` : `Ya tienes ${MAX_FOTOS} fotos, el máximo permitido.`);
+    const validos = [];
+    for (const file of files.slice(0, Math.max(0, libres))) {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { errores.push(`«${file.name}»: solo se aceptan JPG, PNG o WebP.`); continue; }
+      if (file.size > MAX_MB * 1024 * 1024) { errores.push(`«${file.name}»: pesa ${(file.size / 1048576).toFixed(1)} MB (máximo ${MAX_MB} MB).`); continue; }
+      const m = await medirImagen(file);
+      if (!m) { errores.push(`«${file.name}»: el archivo está dañado o no es una imagen.`); continue; }
+      if (m.w < MIN_ANCHO || m.h < MIN_ALTO) { errores.push(`«${file.name}»: mide ${m.w}×${m.h} px; el mínimo es ${MIN_ANCHO}×${MIN_ALTO} px.`); continue; }
+      validos.push(file);
+    }
+    setFotoErrores(errores);
+    if (fileRef.current) fileRef.current.value = '';
+    if (!validos.length) return;
+    tocar('photos');
+    const lote = validos.map((file, i) => ({ id: `${Date.now()}-${i}-${file.name}`, url: URL.createObjectURL(file), nombre: file.name, file }));
+    setPendientes((p) => [...p, ...lote]);
+    for (const item of lote) {
+      try {
+        const r = await Uploads.image(item.file);
+        setF((p) => ({ ...p, photos: p.photos.includes(r.url) ? p.photos : [...p.photos, r.url] }));
+      } catch (e) {
+        setFotoErrores((prev) => [...prev, `«${item.nombre}»: ${e.message}`]);
+      } finally {
+        URL.revokeObjectURL(item.url);
+        setPendientes((p) => p.filter((x) => x.id !== item.id));
       }
-    } catch (e) {
-      toast(e.message, 'error');
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
   };
   const movePhoto = (i, dir) => setF((p) => {
@@ -148,25 +202,32 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     [ph[i], ph[i + dir]] = [ph[i + dir], ph[i]];
     return { ...p, photos: ph };
   });
+  const hacerPortada = (i) => setF((p) => ({ ...p, photos: [p.photos[i], ...p.photos.filter((_, j) => j !== i)] }));
+  const onDrop = (e) => {
+    e.preventDefault();
+    setArrastrando(false);
+    if (!uploading) upload([...e.dataTransfer.files]);
+  };
 
   /** Valida los ítems de una lista (Incluye, No incluye, Recomendaciones). */
   const validarLista = (items, que, obligatoria) => {
     const llenos = items.map((x) => x.trim()).filter(Boolean);
     if (obligatoria && !llenos.length) return `Indica al menos un elemento en "${que}"`;
-    const malo = llenos.map((x) => texto(x, { min: 2, max: LIMITES.item, que: `Cada elemento de "${que}"` })).find(Boolean);
+    const malo = llenos.map((x) => texto(x, { min: 2, max: LIMITES.item, que: `«${x.slice(0, 30)}» en "${que}"`, maxDigitos: 4 })).find(Boolean);
     if (malo) return malo;
     if (new Set(llenos.map((x) => x.toLowerCase())).size !== llenos.length) return `Hay elementos repetidos en "${que}"`;
     return null;
   };
 
-  const validate = () => {
+  /** Todas las reglas del formulario; se recalculan en cada cambio (validación en vivo). */
+  const calcularErrores = () => {
     const precioErr = numero(f.price, { min: 0.5, max: PRECIO_MAX, que: 'El precio' });
     const ninoErr =
       numero(f.child_price, { min: 0, max: PRECIO_MAX, requerido: false, que: 'El precio de niño' }) ??
       (f.child_price !== '' && !precioErr && Number(f.child_price) > Number(f.price) ? 'No puede ser mayor que el precio de adulto' : null);
     const e = limpiar({
-      name: texto(f.name, { min: 3, max: LIMITES.nombreAtraccion, que: 'El nombre' }),
-      short_description: texto(f.short_description, { min: 10, max: LIMITES.resumen, requerido: false, que: 'El resumen' }),
+      name: texto(f.name, { min: 3, max: LIMITES.nombreAtraccion, que: 'El nombre', maxDigitos: 4 }),
+      short_description: texto(f.short_description, { min: 10, max: LIMITES.resumen, requerido: false, que: 'El resumen', maxDigitos: 4 }),
       long_description: texto(f.long_description, { min: 20, max: LIMITES.descripcion, que: 'La descripción' }),
       price: precioErr,
       child_price: ninoErr,
@@ -178,16 +239,24 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
       supported_languages: f.supported_languages.length ? null : 'Selecciona al menos un idioma',
       city: f.city ? null : 'Selecciona el destino',
       operator: f.operator ? null : 'Selecciona el operador',
-      address: texto(f.address, { min: 5, max: LIMITES.direccion, que: 'La dirección' }),
-      meeting_point: texto(f.meeting_point, { min: 5, max: LIMITES.direccion, requerido: false, que: 'El punto de encuentro' }),
+      address: texto(f.address, { min: 5, max: LIMITES.direccion, que: 'La dirección', maxDigitos: 5 }),
+      meeting_point: texto(f.meeting_point, { min: 5, max: LIMITES.direccion, requerido: false, que: 'El punto de encuentro', maxDigitos: 5 }),
       latitude: numero(f.latitude, { min: ECUADOR.latMin, max: ECUADOR.latMax, decimales: 6, que: 'La latitud (dentro del Ecuador)' }),
       longitude: numero(f.longitude, { min: ECUADOR.lngMin, max: ECUADOR.lngMax, decimales: 6, que: 'La longitud (dentro del Ecuador)' }),
       includes: validarLista(f.includes, 'Incluye', true),
       not_includes: validarLista(f.not_includes, 'No incluye', false),
       recommendations: validarLista(f.recommendations, 'Recomendaciones', false),
-      photos: f.photos.length > 12 ? 'Máximo 12 fotos' : null,
+      photos: !f.photos.length ? 'Agrega al menos una foto: la primera será la portada' : f.photos.length > MAX_FOTOS ? `Máximo ${MAX_FOTOS} fotos` : null,
     });
-    setErrors(e);
+    return e;
+  };
+  const todos = calcularErrores();
+  // Se muestran los errores de los campos ya tocados; al intentar guardar, los de todos
+  const errors = enviado ? todos : Object.fromEntries(Object.entries(todos).filter(([k]) => tocados.has(k)));
+
+  const validate = () => {
+    setEnviado(true);
+    const e = todos;
     if (Object.keys(e).length) {
       setTimeout(() => document.querySelector('.modal [aria-invalid="true"]')?.focus(), 30);
       toast(`Revisa ${Object.keys(e).length} campo(s) marcados en rojo`, 'warning');
@@ -273,10 +342,10 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
         <div className="form-section">
           <h3><Tag size={18} aria-hidden="true" /> Precios, horarios y cupos</h3>
           <div className="form-grid">
-            <Field label="Precio adulto (USD)" required error={errors.price}>{(p) => <input {...p} className="input" type="number" min="0.5" max={PRECIO_MAX} step="0.01" inputMode="decimal" value={f.price} onChange={set('price')} />}</Field>
-            <Field label="Precio niño 3–11 (USD)" error={errors.child_price} hint="Vacío = mismo precio que adulto; no puede superarlo">{(p) => <input {...p} className="input" type="number" min="0" max={PRECIO_MAX} step="0.01" inputMode="decimal" value={f.child_price} onChange={set('child_price')} />}</Field>
-            <Field label="Duración (horas)" required error={errors.duration_hours} hint="Ej. 2.5 = 2 h 30 min · 96 = 4 días">{(p) => <input {...p} className="input" type="number" min="0.5" max={MAX_HORAS} step="0.5" inputMode="decimal" value={f.duration_hours} onChange={set('duration_hours')} />}</Field>
-            <Field label="Cupo por horario" required error={errors.capacity_per_slot} hint="Entre 1 y 500 personas por salida">{(p) => <input {...p} className="input" type="number" min="1" max="500" step="1" inputMode="numeric" value={f.capacity_per_slot} onChange={set('capacity_per_slot')} />}</Field>
+            <Field label="Precio adulto (USD)" required error={errors.price} hint={`Entre 0.50 y ${PRECIO_MAX.toLocaleString('es-EC')}, hasta 2 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. 45.00" value={f.price} onChange={setNum('price')} />}</Field>
+            <Field label="Precio niño 3–11 (USD)" error={errors.child_price} hint="Vacío = mismo precio que adulto; no puede superarlo">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={f.child_price} onChange={setNum('child_price')} />}</Field>
+            <Field label="Duración (horas)" required error={errors.duration_hours} hint={`Entre 0.5 y ${MAX_HORAS} h. Ej. 2.5 = 2 h 30 min · 96 = 4 días`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. 8" value={f.duration_hours} onChange={setNum('duration_hours')} />}</Field>
+            <Field label="Cupo por horario" required error={errors.capacity_per_slot} hint="Entre 1 y 500 personas por salida">{(p) => <input {...p} className="input" type="text" inputMode="numeric" autoComplete="off" value={f.capacity_per_slot} onChange={setNum('capacity_per_slot')} />}</Field>
             <div className="field span-2">
               <span className="label">Horarios de salida <span className="req">*</span></span>
               <TimesInput value={f.times} onChange={set('times')} error={errors.times} errorId="times-err" />
@@ -286,7 +355,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
               <Switch checked={f.free_cancellation} onChange={set('free_cancellation')} label="Permite cancelación gratuita" />
             </div>
             {f.free_cancellation && (
-              <Field label="Hasta cuántas horas antes" required error={errors.cancellation_hours} hint="Entre 0 y 720 horas (30 días)">{(p) => <input {...p} className="input" type="number" min="0" max="720" step="1" inputMode="numeric" value={f.cancellation_hours} onChange={set('cancellation_hours')} />}</Field>
+              <Field label="Hasta cuántas horas antes" required error={errors.cancellation_hours} hint="Entre 0 y 720 horas (30 días)">{(p) => <input {...p} className="input" type="text" inputMode="numeric" autoComplete="off" value={f.cancellation_hours} onChange={setNum('cancellation_hours')} />}</Field>
             )}
           </div>
         </div>
@@ -306,8 +375,8 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             </Field>
             <Field label="Dirección de la actividad" required error={errors.address} hint="Ej. Parque Nacional Cotopaxi, control Caspi">{(p) => <input {...p} className="input" value={f.address} onChange={set('address')} maxLength={LIMITES.direccion} />}</Field>
             <Field label="Punto de encuentro" className="span-2" error={errors.meeting_point} hint="Dónde se reúne el grupo (si es distinto de la actividad)">{(p) => <input {...p} className="input" value={f.meeting_point} onChange={set('meeting_point')} maxLength={LIMITES.direccion} />}</Field>
-            <Field label="Latitud" required error={errors.latitude} hint={`Dentro del Ecuador: entre ${ECUADOR.latMin} y ${ECUADOR.latMax}`}>{(p) => <input {...p} className="input" type="number" min={ECUADOR.latMin} max={ECUADOR.latMax} step="0.000001" value={f.latitude} onChange={set('latitude')} />}</Field>
-            <Field label="Longitud" required error={errors.longitude} hint={`Dentro del Ecuador: entre ${ECUADOR.lngMin} y ${ECUADOR.lngMax}`}>{(p) => <input {...p} className="input" type="number" min={ECUADOR.lngMin} max={ECUADOR.lngMax} step="0.000001" value={f.longitude} onChange={set('longitude')} />}</Field>
+            <Field label="Latitud" required error={errors.latitude} hint={`Dentro del Ecuador: entre ${ECUADOR.latMin} y ${ECUADOR.latMax}, hasta 6 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. -0.683" value={f.latitude} onChange={setNum('latitude')} />}</Field>
+            <Field label="Longitud" required error={errors.longitude} hint={`Dentro del Ecuador: entre ${ECUADOR.lngMin} y ${ECUADOR.lngMax}, hasta 6 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. -78.437" value={f.longitude} onChange={setNum('longitude')} />}</Field>
           </div>
         </div>
 
@@ -334,26 +403,56 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
 
         <div className="form-section">
           <h3><ImagePlus size={18} aria-hidden="true" /> Fotos y visibilidad</h3>
-          <p className="hint" style={{ marginTop: -6 }}>La primera foto es la portada. JPG, PNG o WebP de máximo 4 MB.</p>
-          <div className="photo-list">
-            {f.photos.map((url, i) => (
-              <div key={url} className="photo-thumb">
-                <img src={url} alt={`Foto ${i + 1}`} loading="lazy" decoding="async" onError={onImgError} />
-                {i === 0 && <span className="badge badge-cta ph-main">Portada</span>}
-                <div className="ph-actions">
-                  {i > 0 && <button type="button" onClick={() => movePhoto(i, -1)} aria-label="Mover a la izquierda"><ArrowLeft size={14} /></button>}
-                  {i < f.photos.length - 1 && <button type="button" onClick={() => movePhoto(i, 1)} aria-label="Mover a la derecha"><ArrowRight size={14} /></button>}
-                  <button type="button" onClick={() => set('photos')(f.photos.filter((_, j) => j !== i))} aria-label={`Eliminar foto ${i + 1}`}><Trash2 size={14} /></button>
-                </div>
-              </div>
-            ))}
-            <button type="button" className="photo-add" onClick={() => fileRef.current?.click()} disabled={uploading}>
-              {uploading ? <Spinner /> : <ImagePlus size={22} />}
-              {uploading ? 'Subiendo…' : 'Agregar fotos'}
+          <div
+            className={`photo-drop${arrastrando ? ' is-over' : ''}${errors.photos ? ' is-invalid' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+            onDragLeave={() => setArrastrando(false)}
+            onDrop={onDrop}
+          >
+            <UploadCloud size={30} aria-hidden="true" />
+            <p className="photo-drop-title">Arrastra tus fotos aquí o</p>
+            <button type="button" className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={uploading || f.photos.length >= MAX_FOTOS} aria-describedby="fotos-reglas">
+              <ImagePlus size={16} aria-hidden="true" /> Elegir fotos
             </button>
+            <p id="fotos-reglas" className="hint" style={{ margin: 0 }}>
+              JPG, PNG o WebP · máximo {MAX_MB} MB · mínimo {MIN_ANCHO}×{MIN_ALTO} px · se recomienda horizontal
+            </p>
+            <span className="photo-count" aria-live="polite">{f.photos.length}/{MAX_FOTOS} fotos</span>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => upload([...e.target.files])} />
           </div>
+          {fotoErrores.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <Alert tone="warning" title="Algunas fotos no se agregaron">
+                <ul style={{ margin: 0, paddingLeft: 18 }}>{fotoErrores.map((m) => <li key={m}>{m}</li>)}</ul>
+              </Alert>
+            </div>
+          )}
           {errors.photos && <span className="error-text" role="alert">{errors.photos}</span>}
+          {(f.photos.length > 0 || pendientes.length > 0) && (
+            <>
+              <p className="hint" style={{ margin: '12px 0 8px' }}>La primera foto es la <strong>portada</strong> de las tarjetas y del inicio. Ordénalas con las flechas o con la estrella.</p>
+              <ul className="photo-grid">
+                {f.photos.map((url, i) => (
+                  <li key={url} className={`photo-card${i === 0 ? ' is-cover' : ''}`}>
+                    <img src={url} alt={`Foto ${i + 1} de ${f.photos.length}`} loading="lazy" decoding="async" onError={onImgError} />
+                    {i === 0 ? <span className="badge badge-cta ph-main"><Star size={12} aria-hidden="true" /> Portada</span> : <span className="ph-num">{i + 1}</span>}
+                    <div className="ph-actions">
+                      {i > 0 && <button type="button" onClick={() => hacerPortada(i)} title="Usar como portada" aria-label={`Usar la foto ${i + 1} como portada`}><Star size={15} /></button>}
+                      {i > 0 && <button type="button" onClick={() => movePhoto(i, -1)} title="Mover antes" aria-label={`Mover la foto ${i + 1} antes`}><ArrowLeft size={15} /></button>}
+                      {i < f.photos.length - 1 && <button type="button" onClick={() => movePhoto(i, 1)} title="Mover después" aria-label={`Mover la foto ${i + 1} después`}><ArrowRight size={15} /></button>}
+                      <button type="button" className="danger" onClick={() => set('photos')(f.photos.filter((_, j) => j !== i))} title="Eliminar" aria-label={`Eliminar la foto ${i + 1}`}><Trash2 size={15} /></button>
+                    </div>
+                  </li>
+                ))}
+                {pendientes.map((p) => (
+                  <li key={p.id} className="photo-card is-uploading" aria-label={`Subiendo ${p.nombre}`}>
+                    <img src={p.url} alt="" />
+                    <div className="ph-overlay"><Spinner /> Subiendo…</div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <div className="row" style={{ marginTop: 18, gap: 24 }}>
             <Switch checked={f.is_active} onChange={set('is_active')} label="Visible en el sitio" />
             <Switch checked={f.featured} onChange={set('featured')} label="Destacada en el inicio" />

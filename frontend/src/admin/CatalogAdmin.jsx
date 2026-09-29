@@ -5,7 +5,7 @@ import { FALLBACK_IMG, onImgError } from '../components/AttractionCard';
 import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, Switch, useAsync, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
-import { correo, LIMITES, limpiar, numero, ruc, telefono, texto } from '../utils/validation';
+import { correo, LIMITES, limpiar, numero, ruc, soloDigitos, telefono, texto } from '../utils/validation';
 import { CATEGORY_ICONS, CategoryIcon } from '../utils/icons';
 
 /** Provincias del Ecuador (tabla provincia), agrupadas por región para los selects. */
@@ -108,7 +108,7 @@ function CategoriaModal({ item, categorias, onClose, onSaved }) {
   const save = async (e) => {
     e.preventDefault();
     const errs = limpiar({
-      nombre: texto(f.nombre, { min: 2, max: LIMITES.categoria, que: 'El nombre' }),
+      nombre: texto(f.nombre, { min: 2, max: LIMITES.categoria, que: 'El nombre', maxDigitos: 4 }),
       slug: /^[a-z0-9-]{1,80}$/.test(f.slug) ? null : 'Solo minúsculas, números y guiones (máx. 80)',
       descripcion: texto(f.descripcion, { min: 5, max: LIMITES.descCategoria, requerido: false, que: 'La descripción' }),
       orden: numero(f.orden, { min: 0, max: 999, decimales: 0, que: 'El orden' }),
@@ -150,7 +150,7 @@ export function CategoriasAdmin() {
 
   const create = async (e) => {
     e.preventDefault();
-    const e1 = texto(form.nombre, { min: 2, max: LIMITES.categoria, que: 'El nombre de la categoría' }) ??
+    const e1 = texto(form.nombre, { min: 2, max: LIMITES.categoria, que: 'El nombre de la categoría', maxDigitos: 4 }) ??
       texto(form.descripcion, { min: 5, max: LIMITES.descCategoria, requerido: false, que: 'La descripción' });
     if (e1) { setFormErr(e1); return; }
     try {
@@ -225,7 +225,7 @@ function DestinoModal({ item, onClose, onSaved }) {
     e.preventDefault();
     const errs = {};
     Object.assign(errs, limpiar({
-      nombre: texto(f.nombre, { min: 2, max: LIMITES.ciudad, que: 'El nombre de la ciudad' }),
+      nombre: texto(f.nombre, { min: 2, max: LIMITES.ciudad, que: 'El nombre de la ciudad', maxDigitos: 4 }),
       provincia_id: f.provincia_id ? null : 'Elige la provincia',
       codigo_inec: /^\d{6}$/.test(f.codigo_inec) ? null : 'El código INEC tiene exactamente 6 dígitos',
       descripcion: texto(f.descripcion, { min: 10, max: LIMITES.descCiudad, requerido: false, que: 'La descripción' }),
@@ -340,7 +340,7 @@ function OperadorModal({ item, onClose, onSaved }) {
     const errs = {};
     if (!f.provincia_id) errs.provincia_id = 'Elige la provincia de la sede';
     Object.assign(errs, limpiar({
-      nombre: texto(f.nombre, { min: 2, max: LIMITES.operador, que: 'El nombre comercial' }),
+      nombre: texto(f.nombre, { min: 2, max: LIMITES.operador, que: 'El nombre comercial', maxDigitos: 4 }),
       direccion: texto(f.direccion, { min: 5, max: LIMITES.direccion, requerido: false, que: 'La dirección' }),
       ruc: ruc(f.ruc),
       email: correo(f.email, { requerido: false }),
@@ -367,7 +367,7 @@ function OperadorModal({ item, onClose, onSaved }) {
         <Field label="Dirección" error={err.direccion}>{(p) => <input {...p} className="input" maxLength={255} value={f.direccion} onChange={set('direccion')} />}</Field>
         <Field label="RUC" error={err.ruc} hint="13 dígitos, termina en 001">{(p) => <input {...p} className="input" inputMode="numeric" maxLength={13} value={f.ruc} onChange={(e) => setF({ ...f, ruc: e.target.value.replace(/\D/g, '') })} />}</Field>
         <Field label="Correo de reservas" error={err.email}>{(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.email} onChange={set('email')} />}</Field>
-        <Field label="Teléfono" error={err.telefono} hint="7 a 15 dígitos, ej. 022456789">{(p) => <input {...p} className="input" type="tel" inputMode="tel" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value.replace(/[^\d+]/g, '') })} />}</Field>
+        <Field label="Teléfono" error={err.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">{(p) => <input {...p} className="input" type="tel" inputMode="numeric" placeholder="022456789" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: soloDigitos(e.target.value) })} />}</Field>
         <Switch checked={f.activo} onChange={(v) => setF({ ...f, activo: v })} label="Operador activo" />
       </form>
     </Modal>

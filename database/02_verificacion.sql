@@ -329,7 +329,7 @@ BEGIN
     SELECT est_id  INTO v_est_orden_creada FROM estado WHERE est_codigo = 'CREADA';
 
     INSERT INTO usuario (usu_correo, usu_password, usu_documento, usu_nombre, usu_apellido)
-    VALUES ('prueba@descubre.ec', 'hash-de-prueba', '1712345678', 'Prueba', 'Validacion')
+    VALUES ('prueba@descubre.ec', 'hash-de-prueba', '0102030400', 'Prueba', 'Validacion')
     RETURNING usu_id INTO v_usu;
 
     SELECT rol_id INTO v_rol FROM rol LIMIT 1;
@@ -376,7 +376,7 @@ BEGIN
     BEGIN
         INSERT INTO usuario (usu_correo, usu_password, usu_documento,
                              usu_nombre, usu_apellido)
-        VALUES ('prueba@descubre.ec', 'otra', '0900000000', 'Otro', 'Usuario');
+        VALUES ('prueba@descubre.ec', 'otra', '0911223345', 'Otro', 'Usuario');
         RAISE EXCEPTION 'FALLO: permitio correo duplicado';
     EXCEPTION WHEN unique_violation THEN
         RAISE NOTICE 'CASO 2  OK: correo duplicado rechazado';
@@ -471,6 +471,27 @@ BEGIN
     EXCEPTION WHEN unique_violation THEN
         RAISE NOTICE 'CASO 11 OK: favorito duplicado rechazado';
     END;
+
+    -- CASO 12 (debe FALLAR): cedula con digito verificador incorrecto (migracion 004).
+    BEGIN
+        UPDATE usuario SET usu_documento = '1712345678' WHERE usu_id = v_usu;
+        RAISE EXCEPTION 'FALLO: permitio cedula invalida';
+    EXCEPTION WHEN check_violation THEN
+        RAISE NOTICE 'CASO 12 OK: dom_documento rechazo cedula invalida';
+    END;
+
+    -- CASO 13 (debe FALLAR): telefono no ecuatoriano (16 digitos / internacional).
+    BEGIN
+        UPDATE usuario SET usu_telefono = '1231230012938129' WHERE usu_id = v_usu;
+        RAISE EXCEPTION 'FALLO: permitio telefono no ecuatoriano';
+    EXCEPTION WHEN check_violation THEN
+        RAISE NOTICE 'CASO 13 OK: dom_telefono rechazo telefono no ecuatoriano';
+    END;
+
+    -- CASO 14 (debe PASAR): celular 09XXXXXXXX y fijo 0[2-7]XXXXXXX.
+    UPDATE usuario SET usu_telefono = '0991234567' WHERE usu_id = v_usu;
+    UPDATE operador SET ope_telefono = '072845123' WHERE ope_id = v_ope;
+    RAISE NOTICE 'CASO 14 OK: telefonos ecuatorianos (celular y fijo) aceptados';
 
     RAISE NOTICE '--- CASOS FUNCIONALES COMPLETADOS ---';
 END $$;

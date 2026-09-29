@@ -3,7 +3,7 @@ import { Check, Eye, EyeOff, Lock, Mail, Phone, User, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Alert, Field, RequiredLegend, Spinner } from './ui';
-import { correo, LIMITES, limpiar, nombrePersona, password, telefono } from '../utils/validation';
+import { correo, LIMITES, limpiar, nombrePersona, password, soloDigitos, telefono } from '../utils/validation';
 
 
 function PasswordInput({ value, onChange, autoComplete, ...p }) {
@@ -157,10 +157,10 @@ export function RegisterForm({ onSuccess }) {
           </div>
         )}
       </Field>
-      <Field label="Teléfono (opcional)" error={errors.telefono}>
+      <Field label="Teléfono (opcional)" error={errors.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">
         {(p) => (
           <div className="input-icon"><Phone size={18} aria-hidden="true" />
-            <input {...p} className="input" type="tel" autoComplete="tel" inputMode="tel" maxLength={LIMITES.telefono} value={form.telefono} onChange={set('telefono')} placeholder="0991234567" />
+            <input {...p} className="input" type="tel" autoComplete="tel-national" inputMode="numeric" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })} placeholder="0991234567" />
           </div>
         )}
       </Field>

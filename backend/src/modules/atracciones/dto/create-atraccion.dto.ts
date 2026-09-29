@@ -24,7 +24,7 @@ import {
 import { Type } from 'class-transformer';
 import { PriceDto, LocationDto, PhotoDto, OperatorDto, PRECIO_MAX } from './nested-types.dto';
 import { Transform } from 'class-transformer';
-import { ContieneLetras } from '../../../common/utils/validators';
+import { ContieneLetras, SinNumerosLargos } from '../../../common/utils/validators';
 import { trim } from '../../../common/utils/transform';
 
 const trimLista = ({ value }: { value: unknown }) => (Array.isArray(value) ? value.map((x) => (typeof x === 'string' ? x.trim() : x)) : value);
@@ -57,6 +57,7 @@ export class CreateAtraccionDto {
   @MinLength(3, { message: 'name debe tener al menos 3 caracteres' })
   @MaxLength(200)
   @ContieneLetras()
+  @SinNumerosLargos(4)
   name: string;
 
   @ApiProperty({ description: 'Descripción detallada de la atracción', example: 'Excursión guiada al volcán Cotopaxi, incluye caminata hasta el refugio.' })
@@ -95,7 +96,8 @@ export class CreateAtraccionDto {
   @IsString({ each: true })
   @MinLength(2, { each: true, message: 'cada elemento de includes debe tener al menos 2 caracteres' })
   @MaxLength(150, { each: true, message: 'cada elemento de includes puede tener hasta 150 caracteres' })
-  @ContieneLetras({ message: 'cada elemento de includes debe contener texto' })
+  @ContieneLetras({ message: 'cada elemento de includes debe ser texto legible (principalmente letras)' })
+  @SinNumerosLargos(4, { message: 'cada elemento de includes puede tener como máximo 4 dígitos seguidos' })
   includes: string[];
 
   @ApiProperty({ description: 'Slugs de categorías', example: ['naturaleza', 'aventura'] })
@@ -123,7 +125,8 @@ export class CreateAtraccionDto {
 
   @ApiProperty({ description: 'Fotos de la atracción', type: [PhotoDto] })
   @IsArray()
-  @ArrayMaxSize(12)
+  @ArrayMinSize(1, { message: 'photos debe tener al menos una foto (la portada)' })
+  @ArrayMaxSize(12, { message: 'photos admite como máximo 12 fotos' })
   @ValidateNested({ each: true })
   @Type(() => PhotoDto)
   photos: PhotoDto[];
@@ -148,6 +151,7 @@ export class CreateAtraccionDto {
   @ValidateIf((o: { short_description?: string }) => !!o.short_description)
   @MinLength(10, { message: 'short_description debe tener al menos 10 caracteres' })
   @ContieneLetras()
+  @SinNumerosLargos(4)
   short_description?: string;
 
   @ApiPropertyOptional({ description: 'Precio por niño (3-11 años)', example: 35 })
@@ -165,7 +169,8 @@ export class CreateAtraccionDto {
   @IsString({ each: true })
   @MinLength(2, { each: true, message: 'cada elemento de not_includes debe tener al menos 2 caracteres' })
   @MaxLength(150, { each: true, message: 'cada elemento de not_includes puede tener hasta 150 caracteres' })
-  @ContieneLetras({ message: 'cada elemento de not_includes debe contener texto' })
+  @ContieneLetras({ message: 'cada elemento de not_includes debe ser texto legible (principalmente letras)' })
+  @SinNumerosLargos(4, { message: 'cada elemento de not_includes puede tener como máximo 4 dígitos seguidos' })
   not_includes?: string[];
 
   @ApiPropertyOptional({ example: ['Lleva ropa abrigada', 'Protector solar'] })
@@ -176,7 +181,8 @@ export class CreateAtraccionDto {
   @IsString({ each: true })
   @MinLength(3, { each: true, message: 'cada recomendación debe tener al menos 3 caracteres' })
   @MaxLength(150, { each: true, message: 'cada recomendación puede tener hasta 150 caracteres' })
-  @ContieneLetras({ message: 'cada recomendación debe contener texto' })
+  @ContieneLetras({ message: 'cada recomendación debe ser texto legible (principalmente letras)' })
+  @SinNumerosLargos(4, { message: 'cada recomendación puede tener como máximo 4 dígitos seguidos' })
   recommendations?: string[];
 
   @ApiPropertyOptional({ description: 'Horarios de salida', example: ['07:00', '13:00'] })
@@ -209,6 +215,7 @@ export class CreateAtraccionDto {
   @ValidateIf((o: { meeting_point?: string }) => !!o.meeting_point)
   @MinLength(5, { message: 'meeting_point debe tener al menos 5 caracteres' })
   @ContieneLetras()
+  @SinNumerosLargos(5)
   meeting_point?: string;
 
   @ApiPropertyOptional({ example: false })

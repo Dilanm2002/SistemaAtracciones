@@ -924,11 +924,14 @@ components:
           description: Cuántos de los tickets son de niño (tarifa NINO).
         customer_phone:
           type: string
-          pattern: '^\+?\d{7,15}$'
+          pattern: '^(09\d{8}|0[2-7]\d{7})$'
+          example: '0991234567'
+          description: Teléfono ecuatoriano (dom_telefono) — celular 09XXXXXXXX o fijo 0[2-7]XXXXXXX.
         customer_document:
           type: string
-          pattern: '^(\d{10}|[A-Z]{1,2}\d{6,9})$'
-          description: Cédula (10 dígitos) o pasaporte. Se guarda en reserva_pasajero.
+          pattern: '^\d{10}$'
+          example: '1710034065'
+          description: Cédula ecuatoriana (dom_documento) — 10 dígitos, provincia 01-24/30 y dígito verificador módulo 10. Se guarda en reserva_pasajero.
         payment_method:
           type: string
           enum: [TARJETA, TRANSFERENCIA, EN_SITIO]

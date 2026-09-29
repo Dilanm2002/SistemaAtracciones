@@ -156,7 +156,7 @@ Eventos: `reserva.creada`, `reserva.confirmada`, `reserva.cancelada`, `pago.apro
 
 ## 5. Seguridad
 
-JWT (2 h) con sesión revocable (`sesion`), permisos recalculados desde `usuario_rol` en cada petición, bcrypt, throttling (login 5/min), helmet (CSP, HSTS), CORS restringido, validación estricta de entrada y dominios de la base (`dom_correo`, `dom_ruc`, `dom_documento`), subida de imágenes por *magic bytes*, bitácora de acciones administrativas, datos de tarjeta nunca completos (solo marca y últimos 4 dígitos).
+JWT (2 h) con sesión revocable (`sesion`), permisos recalculados desde `usuario_rol` en cada petición, bcrypt, throttling (login 5/min), helmet (CSP, HSTS), CORS restringido, validación estricta de entrada y dominios de la base (`dom_correo`, `dom_ruc`, `dom_documento` = cédula ecuatoriana con dígito verificador y `dom_telefono` = celular 09XXXXXXXX o fijo 0[2-7]XXXXXXX, migración 004), subida de imágenes por *magic bytes*, bitácora de acciones administrativas, datos de tarjeta nunca completos (solo marca y últimos 4 dígitos).
 
 ## 6. Despliegue y calidad
 

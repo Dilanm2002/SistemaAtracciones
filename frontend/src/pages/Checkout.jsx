@@ -8,7 +8,7 @@ import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePage
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtMoney } from '../utils/format';
-import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, nombrePersona, RE_NOMBRE_PERSONA, telefono, texto } from '../utils/validation';
+import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, nombrePersona, RE_NOMBRE_PERSONA, soloDigitos, telefono, texto } from '../utils/validation';
 
 const luhn = (num) => {
   const d = num.replace(/\D/g, '');
@@ -242,11 +242,11 @@ export default function Checkout() {
                 <Field label="Correo electrónico" required error={errors.email} hint="Te enviaremos aquí el código de reserva">
                   {(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} />}
                 </Field>
-                <Field label="Teléfono / WhatsApp" required error={errors.telefono}>
-                  {(p) => <input {...p} className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="0991234567" maxLength={LIMITES.telefono} value={form.telefono} onChange={set('telefono')} />}
+                <Field label="Teléfono / WhatsApp" required error={errors.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">
+                  {(p) => <input {...p} className="input" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="0991234567" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })} />}
                 </Field>
-                <Field label="Cédula o pasaporte" hint="Opcional, agiliza el ingreso a parques nacionales. Ej. 1712345678 o AB1234567" error={errors.documento}>
-                  {(p) => <input {...p} className="input" value={form.documento} onChange={set('documento')} maxLength={11} autoCapitalize="characters" />}
+                <Field label="Cédula" hint="Opcional. Cédula ecuatoriana de 10 dígitos, ej. 1710034065; agiliza el ingreso a parques nacionales" error={errors.documento}>
+                  {(p) => <input {...p} className="input" inputMode="numeric" placeholder="1710034065" value={form.documento} onChange={(e) => setForm({ ...form, documento: soloDigitos(e.target.value) })} maxLength={LIMITES.documento} />}
                 </Field>
                 <Field label="Notas para el operador" hint="Alergias, movilidad reducida, hotel de recogida…" className="span-2">
                   {(p) => <textarea {...p} className="textarea" value={form.notas} onChange={set('notas')} maxLength={LIMITES.notas} style={{ minHeight: 80 }} />}

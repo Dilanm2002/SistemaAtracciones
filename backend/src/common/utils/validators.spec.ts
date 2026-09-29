@@ -4,7 +4,7 @@ import { CreateOperadorDto } from '../../modules/atracciones/dto/catalogo.dto';
 import { LocationDto, PriceDto } from '../../modules/atracciones/dto/nested-types.dto';
 import { CancelReservationRequestDto, ReservationRequestDto } from '../../modules/atracciones/dto/reservation.dto';
 import { RegisterDto } from '../../modules/auth/dto/auth.dto';
-import { esCedulaEc, esDocumento, esRucEc, RE_NOMBRE_PERSONA } from './validators';
+import { esCedulaEc, esDocumento, esRucEc, esTextoLegible, maxDigitosSeguidos, RE_NOMBRE_PERSONA, RE_TELEFONO_EC } from './validators';
 
 const errores = <T extends object>(cls: new () => T, plain: object) => validateSync(plainToInstance(cls, plain)).map((e) => e.property);
 const manana = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -14,8 +14,20 @@ describe('Validaciones del dominio', () => {
     expect(esCedulaEc('1710034065')).toBe(true);
     expect(esCedulaEc('1712345678')).toBe(false); // verificador incorrecto
     expect(esCedulaEc('9910034065')).toBe(false); // provincia inexistente
-    expect(esDocumento('AB1234567')).toBe(true);
+    expect(esDocumento('AB1234567')).toBe(false); // solo cédula ecuatoriana
     expect(esDocumento('123')).toBe(false);
+  });
+
+  it('teléfono ecuatoriano: celular 09 + 8 dígitos o fijo 0[2-7] + 7 dígitos', () => {
+    for (const ok of ['0991234567', '022456789', '072845123']) expect(RE_TELEFONO_EC.test(ok)).toBe(true);
+    for (const malo of ['1231230012938129', '+14155550123', '099123456', '0812345678', '12345678', '0991234567 ']) expect(RE_TELEFONO_EC.test(malo)).toBe(false);
+  });
+
+  it('texto legible: rechaza relleno con números o caracteres repetidos', () => {
+    for (const ok of ['Tour al Cotopaxi', 'Ruta 66 en 4x4', 'Av. 6 de Diciembre N34-120', 'Llama al 0991234567 para confirmar']) expect(esTextoLegible(ok)).toBe(true);
+    for (const malo of ['12312312', '----', 'asd123123123', '12312312312312312312312312312312121111', 'Holaaaaaaa', 'a1234567890123']) expect(esTextoLegible(malo)).toBe(false);
+    expect(maxDigitosSeguidos('asdasdasdasdadasd1231231231')).toBe(10);
+    expect(maxDigitosSeguidos('Ruta 66')).toBe(2);
   });
 
   it('RUC ecuatoriano', () => {

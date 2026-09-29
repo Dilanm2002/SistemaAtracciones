@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNumber, IsPositive, Min, IsLatitude, IsLongitude, ValidateNested, IsOptional, IsInt, Max, Length, Matches, MaxLength, MinLength, IsIn } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { ContieneLetras, ECUADOR } from '../../../common/utils/validators';
+import { ContieneLetras, ECUADOR, SinNumerosLargos } from '../../../common/utils/validators';
 import { trim } from '../../../common/utils/transform';
 
 /** Precio máximo por persona aceptado en el catálogo (USD). */
@@ -60,6 +60,7 @@ export class LocationDto {
   @MinLength(5, { message: 'address debe tener al menos 5 caracteres' })
   @MaxLength(255)
   @ContieneLetras()
+  @SinNumerosLargos(5)
   address: string;
 
   @ApiProperty({ description: 'ID numérico de la ciudad/destino', example: 8 })

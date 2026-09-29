@@ -6,7 +6,7 @@ import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, S
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateTime, fmtMoney, fmtRelative, initials } from '../utils/format';
-import { correo, LIMITES, limpiar, nombrePersona, password, telefono } from '../utils/validation';
+import { correo, LIMITES, limpiar, nombrePersona, password, soloDigitos, telefono } from '../utils/validation';
 import { useAdmin } from './AdminLayout';
 import { exportXlsx } from './excel';
 
@@ -104,7 +104,7 @@ function UsuarioModal({ item, onClose, onSaved }) {
           <Field label="Apellidos" required error={err.apellido}>{(p) => <input {...p} className="input" maxLength={LIMITES.nombrePersona} value={f.apellido} onChange={set('apellido')} />}</Field>
         </div>
         <Field label="Correo" required error={err.email}>{(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.email} onChange={set('email')} />}</Field>
-        <Field label="Teléfono" error={err.telefono} hint="7 a 15 dígitos">{(p) => <input {...p} className="input" type="tel" inputMode="tel" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: e.target.value.replace(/[^\d+]/g, '') })} />}</Field>
+        <Field label="Teléfono" error={err.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">{(p) => <input {...p} className="input" type="tel" inputMode="numeric" placeholder="0991234567" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: soloDigitos(e.target.value) })} />}</Field>
         <Field label="Rol" required hint={f.rol === 'ADMIN' ? 'Acceso total al panel' : f.rol === 'OPERADOR' ? 'Solo Dashboard, Reservas y Disponibilidad' : 'Solo puede reservar en el sitio'}>
           {(p) => <select {...p} className="select" value={f.rol} onChange={set('rol')}>{Object.entries(ROL_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
         </Field>

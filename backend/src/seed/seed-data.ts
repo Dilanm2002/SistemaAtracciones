@@ -390,7 +390,7 @@ export const USUARIOS: { nombre: string; apellido: string; email: string; passwo
   { nombre: 'Ana', apellido: 'Torres', email: 'ana.torres@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0987654321', documento: '0926687856' },
   { nombre: 'Luis', apellido: 'Andrade', email: 'luis.andrade@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0981122334' },
   { nombre: 'Sofía', apellido: 'Mendoza', email: 'sofia.mendoza@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0975566778' },
-  { nombre: 'John', apellido: 'Smith', email: 'john.smith@mail.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '+14155550123', documento: 'A1234567' },
+  { nombre: 'John', apellido: 'Smith', email: 'john.smith@mail.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0998877665' },
   { nombre: 'Daniela', apellido: 'Paredes', email: 'daniela.paredes@correo.com', password: 'Cliente123', rol: 'CLIENTE', telefono: '0969988776' },
 ];
 

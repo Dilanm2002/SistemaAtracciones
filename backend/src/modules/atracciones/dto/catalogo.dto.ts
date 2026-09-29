@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEmail, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { trim } from '../../../common/utils/transform';
-import { ContieneLetras, EsRucEc } from '../../../common/utils/validators';
+import { ContieneLetras, EsRucEc, MSG_TELEFONO_EC, RE_TELEFONO_EC } from '../../../common/utils/validators';
 
 const vacioANull = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() || null : value);
 
@@ -143,7 +143,7 @@ export class CreateOperadorDto {
   @ApiPropertyOptional()
   @IsOptional()
   @Transform(vacioANull)
-  @Matches(/^\+?\d{7,15}$/, { message: 'telefono debe tener entre 7 y 15 dígitos' })
+  @Matches(RE_TELEFONO_EC, { message: `telefono ${MSG_TELEFONO_EC}` })
   telefono?: string | null;
 
   @ApiPropertyOptional({ example: 'Av. Charles Darwin y Tomás de Berlanga, Puerto Ayora' })

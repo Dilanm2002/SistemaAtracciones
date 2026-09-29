@@ -3,12 +3,11 @@ import { Transform, Type } from 'class-transformer';
 import { IsBoolean, IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { Rol } from '../../../common/auth/scopes';
 import { trim, lower } from '../../../common/utils/transform';
-import { EsDocumentoEc, RE_NOMBRE_PERSONA } from '../../../common/utils/validators';
+import { EsDocumentoEc, MSG_TELEFONO_EC, RE_NOMBRE_PERSONA, RE_TELEFONO_EC } from '../../../common/utils/validators';
 
 /** Mismas reglas que los dominios de la base (dom_correo, dom_telefono, dom_documento). */
 export const RE_CORREO = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-export const RE_TELEFONO = /^\+?\d{7,15}$/;
-export const RE_DOCUMENTO = /^(\d{10}|[A-Z]{1,2}\d{6,9})$/;
+export const RE_TELEFONO = RE_TELEFONO_EC;
 
 export class RegisterDto {
   @ApiProperty({ example: 'María' })
@@ -44,7 +43,7 @@ export class RegisterDto {
   @ApiPropertyOptional({ example: '0991234567' })
   @IsOptional()
   @Transform(trim)
-  @Matches(RE_TELEFONO, { message: 'telefono debe tener entre 7 y 15 dígitos' })
+  @Matches(RE_TELEFONO, { message: `telefono ${MSG_TELEFONO_EC}` })
   telefono?: string;
 }
 
@@ -83,13 +82,13 @@ export class UpdatePerfilDto {
   @ApiPropertyOptional({ description: 'Vacío para quitarlo' })
   @IsOptional()
   @Transform(trim)
-  @Matches(/^(|\+?\d{7,15})$/, { message: 'telefono debe tener entre 7 y 15 dígitos' })
+  @Matches(/^(|09\d{8}|0[2-7]\d{7})$/, { message: `telefono ${MSG_TELEFONO_EC}` })
   telefono?: string;
 
-  @ApiPropertyOptional({ description: 'Cédula (10 dígitos) o pasaporte (1-2 letras y 6-9 dígitos). Vacío para quitarlo' })
+  @ApiPropertyOptional({ description: 'Cédula ecuatoriana (10 dígitos con dígito verificador). Vacío para quitarlo' })
   @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
-  @EsDocumentoEc({ message: 'documento debe ser una cédula ecuatoriana válida o un pasaporte (1-2 letras y 6-9 dígitos)' })
+  @EsDocumentoEc()
   documento?: string;
 }
 
