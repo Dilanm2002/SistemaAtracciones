@@ -61,6 +61,9 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   if (token) headers.Authorization = `Bearer ${token}`;
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   const retries = method === 'GET' ? MAX_RETRIES : 0;
+  // Si la petición ni siquiera llegó (fallo de red / arranque en frío), también se reintentan
+  // el login y las operaciones con Idempotency-Key: repetirlas no duplica nada.
+  const retriesRed = method === 'GET' || idempotencyKey || path === '/auth/login' ? MAX_RETRIES : 0;
 
   let res;
   for (let attempt = 0; ; attempt++) {
@@ -75,7 +78,7 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
       });
     } catch (e) {
       if (e.name === 'AbortError') throw e;
-      if (attempt < retries) { await wait(400 * 2 ** attempt, signal); continue; }
+      if (attempt < retriesRed) { await wait(400 * 2 ** attempt, signal); continue; }
       throw new ApiError({ status: 0, title: 'Sin conexión', detail: 'No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.' });
     }
     if (!RETRIABLE.has(res.status) || attempt >= retries) break;
