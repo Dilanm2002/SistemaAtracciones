@@ -1,12 +1,19 @@
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
 const TOKEN_KEY = 'dec_token';
 
+/**
+ * Sesión POR PESTAÑA: el token vive en sessionStorage, que cada pestaña o ventana tiene propio.
+ * Si en una pestaña estás como administrador y abres el mismo enlace en otra, esa pestaña
+ * empieza sin sesión y puedes entrar con otro usuario; cerrar la pestaña cierra su sesión local.
+ */
+try { localStorage.removeItem(TOKEN_KEY); } catch { /* versiones anteriores compartían el token entre pestañas */ }
+
 export const tokenStore = {
   get: () => {
-    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
+    try { return sessionStorage.getItem(TOKEN_KEY); } catch { return null; }
   },
   set: (t) => {
-    try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* modo privado */ }
+    try { t ? sessionStorage.setItem(TOKEN_KEY, t) : sessionStorage.removeItem(TOKEN_KEY); } catch { /* modo privado */ }
   },
 };
 

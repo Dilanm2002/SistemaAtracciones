@@ -5,6 +5,7 @@ import { onImgError } from '../components/AttractionCard';
 import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
+import { comprimirImagen } from '../utils/imagen';
 import { ECUADOR, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
 
 const MAX_HORAS = 720; // 30 días: mismo límite que la base (atraccion_duracion_valida)
@@ -187,7 +188,8 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     setPendientes((p) => [...p, ...lote]);
     for (const item of lote) {
       try {
-        const r = await Uploads.image(item.file);
+        // Como en Sal y Canela: se comprime en el navegador, va a Supabase Storage y la tabla atraccion_foto guarda su URL
+        const r = await Uploads.image(await comprimirImagen(item.file));
         setF((p) => ({ ...p, photos: p.photos.includes(r.url) ? p.photos : [...p.photos, r.url] }));
       } catch (e) {
         setFotoErrores((prev) => [...prev, `«${item.nombre}»: ${e.message}`]);

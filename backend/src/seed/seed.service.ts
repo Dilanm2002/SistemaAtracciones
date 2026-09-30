@@ -2,6 +2,7 @@ import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { CatalogosService } from '../common/db/catalogos.service';
+import { moverImagenesAStorage } from '../database/imagenes-storage';
 import { DbService, Sql } from '../common/db/db.service';
 import { AtraccionesService } from '../modules/atracciones/atracciones.service';
 import { cancelarCompra, confirmarCompra, registrarCompra } from '../modules/atracciones/compras';
@@ -65,6 +66,8 @@ export class SeedService implements OnApplicationBootstrap {
     await this.catalogos.precargar();
     await this.db.tx((tx) => this.run(tx));
     this.logger.log('Datos de demostración listos.');
+    // Como en Sal y Canela: las fotos van al bucket de Supabase Storage y la tabla guarda su URL
+    await moverImagenesAStorage((sql, params) => this.db.query(sql, params), { log: (m) => this.logger.log(m) });
     return true;
   }
 

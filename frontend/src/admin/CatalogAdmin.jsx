@@ -5,6 +5,7 @@ import { FALLBACK_IMG, onImgError } from '../components/AttractionCard';
 import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, Switch, useAsync, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
+import { comprimirImagen } from '../utils/imagen';
 import { correo, LIMITES, limpiar, numero, ruc, soloDigitos, telefono, texto } from '../utils/validation';
 import { CATEGORY_ICONS, CategoryIcon } from '../utils/icons';
 
@@ -243,7 +244,14 @@ function DestinoModal({ item, onClose, onSaved }) {
 
   const upload = async (file) => {
     setUploading(true);
-    try { const r = await Uploads.image(file); setF((p) => ({ ...p, imagen: r.url })); } catch (e) { toast(e.message, 'error'); } finally { setUploading(false); }
+    try {
+      if (!file) return;
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Solo se aceptan imágenes JPG, PNG o WebP');
+      if (file.size > 4 * 1024 * 1024) throw new Error('La imagen supera los 4 MB');
+      // Se comprime en el navegador y se guarda en Supabase Storage; la tabla ciudad guarda su URL
+      const r = await Uploads.image(await comprimirImagen(file));
+      setF((p) => ({ ...p, imagen: r.url }));
+    } catch (e) { toast(e.message, 'error'); } finally { setUploading(false); }
   };
 
   return (

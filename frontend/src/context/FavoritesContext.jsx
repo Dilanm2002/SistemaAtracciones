@@ -29,17 +29,18 @@ export function FavoritesProvider({ children }) {
   const { isAuth } = useAuth();
   const toast = useToast();
 
-  useEffect(() => { write(KEY, ids); }, [ids]);
-
-  // Al iniciar sesión: subir los favoritos locales y usar la lista del servidor
+  // Al iniciar sesión: subir los favoritos locales y usar la lista del servidor.
+  // La lista del usuario NO se guarda en el navegador (lo comparten todas las pestañas y
+  // otra pestaña puede tener sesión con otro usuario); al cerrar sesión vuelve la de invitado.
   useEffect(() => {
-    if (!isAuth) return;
+    if (!isAuth) { setIds(read(KEY)); return; }
     let vivo = true;
     (async () => {
       try {
         const remotos = await Favoritos.list();
         const locales = read(KEY).filter((id) => !remotos.includes(id));
         await Promise.all(locales.map((id) => Favoritos.add(id).catch(() => {})));
+        if (locales.length) write(KEY, []); // ya quedaron en la cuenta
         if (vivo) setIds([...locales, ...remotos]);
       } catch { /* sin conexión: se conservan los locales */ }
     })();
@@ -47,7 +48,12 @@ export function FavoritesProvider({ children }) {
   }, [isAuth]);
 
   const persistir = useCallback((id, guardar) => {
-    if (!isAuth) return;
+    if (!isAuth) {
+      // Invitado: la lista vive en el navegador
+      const actual = read(KEY);
+      write(KEY, guardar ? [id, ...actual.filter((x) => x !== id)] : actual.filter((x) => x !== id));
+      return;
+    }
     (guardar ? Favoritos.add(id) : Favoritos.remove(id)).catch(() => toast('No pudimos sincronizar tus favoritos. Intenta de nuevo.', 'error'));
   }, [isAuth, toast]);
 
