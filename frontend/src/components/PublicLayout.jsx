@@ -94,20 +94,13 @@ export function Header() {
   const { isAuth, isStaff } = useAuth();
   const { ids } = useFavorites();
   const { pathname } = useLocation();
-  const [scrolled, setScrolled] = useState(false);
   const [mobile, setMobile] = useState(false);
-  const overHero = pathname === '/';
+  // Misma barra de navegación fija (sticky) en todas las páginas, también en el inicio
 
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
   useEffect(() => { setMobile(false); }, [pathname]);
 
   return (
-    <header className={`site-header ${overHero && !scrolled ? 'transparent' : ''}`}>
+    <header className="site-header">
       <div className="container header-inner">
         <Link to="/" className="brand" aria-label="Descubre EC, ir al inicio">
           <BrandMark />
