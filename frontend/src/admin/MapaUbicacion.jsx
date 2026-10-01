@@ -28,6 +28,7 @@ export default function MapaUbicacion({ lat, lng, onChange, ciudad, onDireccion,
   const [q, setQ] = useState('');
   const [buscando, setBuscando] = useState(false);
   const [aviso, setAviso] = useState(null);
+  const [resultados, setResultados] = useState([]); // varias coincidencias: la persona elige
   const hayPunto = lat !== '' && lng !== '' && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
 
   // Mantiene la última función recibida sin re-crear el mapa
@@ -101,18 +102,22 @@ export default function MapaUbicacion({ lat, lng, onChange, ciudad, onDireccion,
     return () => { vivo = false; };
   }, [ciudad]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Busca en Ecuador (primero cerca del destino elegido). Con varias coincidencias, se listan para elegir. */
   const buscar = async (e) => {
     e?.preventDefault();
     const texto = q.trim();
     if (texto.length < 3) { setAviso('Escribe al menos 3 letras del lugar que buscas.'); return; }
     setBuscando(true);
     setAviso(null);
+    setResultados([]);
+    const consultar = async (consulta) =>
+      (await fetch(`${NOMINATIM}/search?format=jsonv2&limit=5&countrycodes=ec&accept-language=es&q=${encodeURIComponent(consulta)}`)).json();
     try {
-      const r = await fetch(`${NOMINATIM}/search?format=jsonv2&limit=1&countrycodes=ec&accept-language=es&q=${encodeURIComponent(ciudad ? `${texto}, ${ciudad}` : texto)}`);
-      let d = await r.json();
-      if (!d?.length && ciudad) d = await (await fetch(`${NOMINATIM}/search?format=jsonv2&limit=1&countrycodes=ec&accept-language=es&q=${encodeURIComponent(texto)}`)).json();
+      let d = ciudad ? await consultar(`${texto}, ${ciudad}`) : [];
+      if (!d?.length) d = await consultar(texto);
       if (!d?.length) { setAviso('No encontramos ese lugar. Prueba con otro nombre o haz clic en el mapa.'); return; }
-      await elegir(Number(d[0].lat), Number(d[0].lon), { centrar: true });
+      if (d.length === 1) await elegir(Number(d[0].lat), Number(d[0].lon), { centrar: true });
+      else setResultados(d.map((x) => ({ lat: Number(x.lat), lon: Number(x.lon), nombre: x.display_name })));
     } catch {
       setAviso('No pudimos buscar en este momento. Haz clic directamente en el mapa.');
     } finally {
@@ -138,6 +143,17 @@ export default function MapaUbicacion({ lat, lng, onChange, ciudad, onDireccion,
         </div>
         <button type="button" className="btn" onClick={buscar} disabled={buscando}>{buscando ? <Spinner /> : <Search size={16} />} Buscar</button>
       </div>
+      {resultados.length > 0 && (
+        <ul className="mapa-resultados" aria-label="Resultados de la búsqueda: elige el lugar correcto">
+          {resultados.map((x) => (
+            <li key={`${x.lat},${x.lon}`}>
+              <button type="button" onClick={() => { setResultados([]); elegir(x.lat, x.lon, { centrar: true }); }}>
+                {x.nombre}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <div ref={contenedor} className={`mapa-lienzo${error ? ' is-invalid' : ''}`} aria-label="Mapa: haz clic para marcar la ubicación de la actividad" />
       <p className="hint" style={{ margin: '6px 0 0', display: 'flex', gap: 6, alignItems: 'center' }}>
         <Crosshair size={14} aria-hidden="true" />
