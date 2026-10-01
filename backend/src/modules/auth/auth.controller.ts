@@ -41,6 +41,12 @@ export class AuthController {
     return this.auth.login(dto, contexto(req));
   }
 
+  @Get('google/estado')
+  @ApiOperation({ summary: 'Indica si el inicio de sesión con Google está activado' })
+  googleEstado() {
+    return this.auth.googleHabilitado();
+  }
+
   @Post('google')
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

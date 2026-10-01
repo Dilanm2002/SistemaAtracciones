@@ -5,6 +5,7 @@
       "POST /auth/login",
       "POST /auth/register",
       "POST /auth/google",
+      "GET /auth/google/estado",
       "POST /auth/logout",
       "GET /auth/me",
       "PATCH /auth/me",

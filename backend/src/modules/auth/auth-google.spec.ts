@@ -32,6 +32,13 @@ describe('AuthService.loginGoogle', () => {
     emitir = jest.spyOn(service as never, 'emitirToken').mockResolvedValue({ access_token: 't' } as never);
   });
 
+  it('informa si Google está activado en Supabase Auth', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ external: { google: false } }) });
+    await expect(service.googleHabilitado()).resolves.toEqual({ habilitado: false });
+    fetchMock.mockResolvedValue({ ok: true, json: () => Promise.resolve({ external: { google: true } }) });
+    await expect(service.googleHabilitado()).resolves.toEqual({ habilitado: true });
+  });
+
   it('valida el token con Supabase usando la clave de servidor', async () => {
     responder(cuentaGoogle);
     db.one.mockResolvedValue(null);

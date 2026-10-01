@@ -180,6 +180,17 @@ export class AuthService {
    * lo que diga el cliente), se busca o crea el usuario CLIENTE con ese correo y se emite la sesión
    * propia del sistema (ligada con DPoP si el navegador envió la prueba). Google ya verificó el correo.
    */
+  /** ¿Está activado Google en Supabase Auth? El botón lo consulta antes de salir del sitio. */
+  async googleHabilitado(): Promise<{ habilitado: boolean }> {
+    const url = this.config.get<string>('SUPABASE_URL')?.replace(/\/$/, '');
+    const key = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !key) return { habilitado: false };
+    const ajustes = await fetch(`${url}/auth/v1/settings`, { headers: { apikey: key }, signal: AbortSignal.timeout(5000) })
+      .then((r) => (r.ok ? (r.json() as Promise<{ external?: { google?: boolean } }>) : null))
+      .catch(() => null);
+    return { habilitado: ajustes?.external?.google === true };
+  }
+
   async loginGoogle(accessToken: string, ctx: { ip?: string; userAgent?: string; jkt?: string }) {
     const url = this.config.get<string>('SUPABASE_URL')?.replace(/\/$/, '');
     const key = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY');

@@ -3,11 +3,19 @@
  * y vuelve a /ingresar con el access_token en el fragmento (#). Ese token se envía a la API,
  * que lo valida contra Supabase y entrega la sesión propia del sistema (con DPoP).
  */
+import { Auth } from '../api/client';
+
 const SUPABASE = (import.meta.env.VITE_SUPABASE_URL ?? 'https://czpjbpbhwoorbszgrrkq.supabase.co').replace(/\/$/, '');
 const VOLVER = 'google:volver';
 
-/** Sale hacia Google; al volver, se regresa a `volverA` (p. ej. el checkout). */
-export function iniciarConGoogle(volverA) {
+/**
+ * Sale hacia Google; al volver, se regresa a `volverA` (p. ej. el checkout).
+ * Antes se consulta si Google está activado: si no, lanza un Error con un mensaje claro
+ * (en lugar de dejar al usuario en la página de error de Supabase).
+ */
+export async function iniciarConGoogle(volverA) {
+  const { habilitado } = await Auth.googleEstado().catch(() => ({ habilitado: true }));
+  if (!habilitado) throw new Error('El inicio de sesión con Google todavía no está habilitado. Usa tu correo y contraseña.');
   try { if (volverA) sessionStorage.setItem(VOLVER, volverA); } catch { /* sin almacenamiento: vuelve al inicio */ }
   const destino = `${window.location.origin}/ingresar`;
   window.location.assign(`${SUPABASE}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(destino)}`);
