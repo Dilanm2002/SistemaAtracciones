@@ -4,6 +4,7 @@
   "regions": [
     "gru1"
   ],
+  "fluid": true,
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "public",
   "functions": {
