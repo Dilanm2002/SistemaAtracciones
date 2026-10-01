@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Check, Eye, EyeOff, Lock, Mail, Phone, User, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -19,8 +19,15 @@ function PasswordInput({ value, onChange, autoComplete, ...p }) {
   );
 }
 
+/**
+ * Cuentas de demostración para ingresar rápido. El cliente se completa entero; en
+ * administrador y operador se llena solo el correo y el foco pasa a la contraseña,
+ * que no se publica en el código (el repositorio es público; CAL-009 / SEG-014).
+ */
 const DEMO = [
   ['Cliente', 'cliente@descubre-ec.com', 'Cliente123'],
+  ['Administrador', 'admin@descubre-ec.com', null],
+  ['Operador', 'operador@descubre-ec.com', null],
 ];
 
 export function LoginForm({ onSuccess, showDemo = true }) {
@@ -30,6 +37,14 @@ export function LoginForm({ onSuccess, showDemo = true }) {
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
+  const formRef = useRef(null);
+
+  const usarDemo = (email, pw) => {
+    setForm({ email, password: pw ?? '' });
+    setErrors({});
+    // Sin contraseña publicada: el cursor queda listo en el campo de contraseña
+    if (!pw) setTimeout(() => formRef.current?.querySelector('input[autocomplete="current-password"]')?.focus(), 0);
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -53,7 +68,7 @@ export function LoginForm({ onSuccess, showDemo = true }) {
   };
 
   return (
-    <form onSubmit={submit} className="stack" noValidate>
+    <form ref={formRef} onSubmit={submit} className="stack" noValidate>
         <RequiredLegend />
       {error && <Alert tone="danger">{error}</Alert>}
       <Field label="Correo electrónico" required error={errors.email}>
@@ -74,8 +89,8 @@ export function LoginForm({ onSuccess, showDemo = true }) {
         <details className="demo-box">
           <summary>Cuentas de prueba (demo académica)</summary>
           {DEMO.map(([rol, email, pw]) => (
-            <button key={email} type="button" onClick={() => setForm({ email, password: pw })}>
-              <strong>{rol}:</strong> {email} · {pw}
+            <button key={email} type="button" onClick={() => usarDemo(email, pw)}>
+              <strong>{rol}:</strong> {email} · {pw ?? <em>escribe la contraseña</em>}
             </button>
           ))}
         </details>
