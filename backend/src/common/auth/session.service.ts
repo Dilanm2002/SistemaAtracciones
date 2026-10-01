@@ -10,14 +10,6 @@ interface EstadoSesion {
   operador: number | null;
 }
 
-/**
- * Caché por instancia del estado de la sesión. En serverless hay varias instancias sin memoria
- * compartida, así que tras un logout, cambio de contraseña o de rol otra instancia puede seguir
- * aceptando el token como mucho TTL_MS. 3 s acota esa ventana (V2-CON-01) y sigue ahorrando la
- * consulta en ráfagas de peticiones del mismo usuario (una página carga varias a la vez).
- */
-const TTL_MS = 3_000;
-
 export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 
 /**
@@ -25,11 +17,14 @@ export const hashToken = (token: string) => createHash('sha256').update(token).d
  * se comprueba que la sesión no esté revocada ni vencida y que el usuario siga activo,
  * y los permisos se recalculan desde usuario_rol (auditoría SEG-009 y SEG-011).
  * Cerrar sesión, cambiar la contraseña o desactivar al usuario revoca sus sesiones.
+ *
+ * Sin caché en memoria (V2-CON-01): en serverless cada instancia tendría la suya y otra
+ * instancia podría seguir aceptando un token ya revocado. La API corre en la misma región que
+ * la base (gru1 / sa-east-1), así que consultar en cada petición cuesta pocos milisegundos y
+ * la revocación es inmediata en todas las instancias.
  */
 @Injectable()
 export class SessionService {
-  private readonly cache = new Map<string, { at: number; estado: EstadoSesion | null }>();
-
   constructor(private readonly db: DbService) {}
 
   async resolver(payload: AuthUser): Promise<AuthUser | null> {
@@ -51,29 +46,20 @@ export class SessionService {
 
   async revocar(sesId: string) {
     await this.db.query('UPDATE sesion SET ses_revocada = TRUE WHERE ses_id = $1', [sesId]);
-    this.limpiar((k) => k.endsWith(`:${sesId}`));
   }
 
   /** Revoca todas las sesiones del usuario, salvo `excepto` (la actual al cambiar la contraseña). */
   async revocarTodas(usuId: string, excepto?: string) {
     await this.db.query('UPDATE sesion SET ses_revocada = TRUE WHERE usu_id = $1 AND ses_id IS DISTINCT FROM $2', [usuId, excepto ?? null]);
-    this.invalidar(usuId);
   }
 
-  /** Olvida lo cacheado de un usuario (tras cambiarle roles o estado). */
-  invalidar(usuId: string) {
-    this.limpiar((k) => k.startsWith(`${usuId}:`));
-  }
-
-  private limpiar(pred: (k: string) => boolean) {
-    for (const k of [...this.cache.keys()]) if (pred(k)) this.cache.delete(k);
+  /** Compatibilidad: sin caché no hay nada que olvidar; los cambios de rol o estado se ven en la siguiente petición. */
+  invalidar(_usuId: string) {
+    return;
   }
 
   private async estado(usuId: string, sesId: string): Promise<EstadoSesion | null> {
-    const key = `${usuId}:${sesId}`;
-    const hit = this.cache.get(key);
-    if (hit && Date.now() - hit.at < TTL_MS) return hit.estado;
-    const estado = await this.db.one<EstadoSesion>(
+    return this.db.one<EstadoSesion>(
       `SELECT u.usu_activo AS activo,
               (NOT s.ses_revocada AND s.ses_expira_en > now()) AS vigente,
               COALESCE((SELECT array_agg(r.rol_nombre ORDER BY r.rol_id)
@@ -87,8 +73,5 @@ export class SessionService {
         WHERE u.usu_id = $1`,
       [usuId, sesId],
     );
-    this.cache.set(key, { at: Date.now(), estado });
-    if (this.cache.size > 5000) this.cache.clear();
-    return estado;
   }
 }

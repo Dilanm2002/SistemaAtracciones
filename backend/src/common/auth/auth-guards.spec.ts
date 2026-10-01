@@ -84,12 +84,12 @@ describe('SessionService.resolver', () => {
     expect(base.one).not.toHaveBeenCalled();
   });
 
-  it('revocar invalida la caché de inmediato', async () => {
+  it('sin caché por instancia: cada petición consulta la sesión y la revocación es inmediata (V2-CON-01)', async () => {
     const base = { one: jest.fn().mockResolvedValue({ activo: true, vigente: true, roles: ['CLIENTE'], operador: null }), query: jest.fn().mockResolvedValue([]) };
     const s = new SessionService(base as unknown as DbService);
     await s.resolver(payload);
     await s.resolver(payload);
-    expect(base.one).toHaveBeenCalledTimes(1); // cacheado
+    expect(base.one).toHaveBeenCalledTimes(2); // nunca se reutiliza un estado guardado en memoria
     await s.revocar('s1');
     base.one.mockResolvedValue({ activo: true, vigente: false, roles: ['CLIENTE'], operador: null });
     expect(await s.resolver(payload)).toBeNull();

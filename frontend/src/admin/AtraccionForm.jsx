@@ -6,7 +6,7 @@ import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
-import { comprimirImagen } from '../utils/imagen';
+import { ACEPTA, esImagen, normalizarFoto } from '../utils/imagen';
 import { ECUADOR, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
 
 // El mapa (Leaflet) solo se descarga al abrir el formulario
@@ -14,9 +14,8 @@ const MapaUbicacion = lazy(() => import('./MapaUbicacion'));
 
 const MAX_HORAS = 720; // 30 días: mismo límite que la base (atraccion_duracion_valida)
 const MAX_FOTOS = 12;
-const MAX_MB = 4;
-const MIN_ANCHO = 800;
-const MIN_ALTO = 500;
+// Archivo original: se acepta grande porque se convierte en el navegador antes de subirlo
+const MAX_MB_ORIGINAL = 40;
 
 /** Máscaras de los campos numéricos: no se pueden escribir más dígitos de los que admite el campo. */
 const MASCARA = {
@@ -28,16 +27,6 @@ const MASCARA = {
   latitude: { enteros: 1, decimales: 6, negativo: true },
   longitude: { enteros: 2, decimales: 6, negativo: true },
 };
-
-/** Lee el ancho y alto reales de una imagen antes de subirla (null si está dañada). */
-const medirImagen = (file) =>
-  new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url); };
-    img.onerror = () => { resolve(null); URL.revokeObjectURL(url); };
-    img.src = url;
-  });
 
 const EMPTY = {
   name: '', short_description: '', long_description: '', product_type: 'GUIDED_TOUR',
@@ -179,19 +168,23 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     onClose();
   };
 
-  /** Valida cada archivo (tipo, peso, medidas, cupo) y sube los válidos mostrando su vista previa. */
+  /**
+   * Acepta cualquier formato y tamaño de imagen: cada archivo se convierte en el navegador a un
+   * JPEG horizontal listo para mostrar (utils/imagen.js) y luego se sube con su vista previa.
+   */
   const upload = async (files) => {
     const errores = [];
     const libres = MAX_FOTOS - f.photos.length - pendientes.length;
     if (files.length > libres) errores.push(libres > 0 ? `Solo puedes agregar ${libres} foto(s) más (máximo ${MAX_FOTOS}).` : `Ya tienes ${MAX_FOTOS} fotos, el máximo permitido.`);
     const validos = [];
     for (const file of files.slice(0, Math.max(0, libres))) {
-      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { errores.push(`«${file.name}»: solo se aceptan JPG, PNG o WebP.`); continue; }
-      if (file.size > MAX_MB * 1024 * 1024) { errores.push(`«${file.name}»: pesa ${(file.size / 1048576).toFixed(1)} MB (máximo ${MAX_MB} MB).`); continue; }
-      const m = await medirImagen(file);
-      if (!m) { errores.push(`«${file.name}»: el archivo está dañado o no es una imagen.`); continue; }
-      if (m.w < MIN_ANCHO || m.h < MIN_ALTO) { errores.push(`«${file.name}»: mide ${m.w}×${m.h} px; el mínimo es ${MIN_ANCHO}×${MIN_ALTO} px.`); continue; }
-      validos.push(file);
+      if (!esImagen(file)) { errores.push(`«${file.name}»: no es una imagen.`); continue; }
+      if (file.size > MAX_MB_ORIGINAL * 1024 * 1024) { errores.push(`«${file.name}»: pesa ${(file.size / 1048576).toFixed(0)} MB (máximo ${MAX_MB_ORIGINAL} MB).`); continue; }
+      try {
+        validos.push(await normalizarFoto(file));
+      } catch (err) {
+        errores.push(`«${file.name}»: ${err.message}.`);
+      }
     }
     setFotoErrores(errores);
     if (fileRef.current) fileRef.current.value = '';
@@ -202,7 +195,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     for (const item of lote) {
       try {
         // Como en Sal y Canela: se comprime en el navegador, va a Supabase Storage y la tabla atraccion_foto guarda su URL
-        const r = await Uploads.image(await comprimirImagen(item.file));
+        const r = await Uploads.image(item.file); // ya convertida a JPEG 1600×1067
         setF((p) => ({ ...p, photos: p.photos.includes(r.url) ? p.photos : [...p.photos, r.url] }));
       } catch (e) {
         setFotoErrores((prev) => [...prev, `«${item.nombre}»: ${e.message}`]);
@@ -422,7 +415,15 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
                     tocar('longitude');
                     setF((p) => ({ ...p, latitude: String(la), longitude: String(ln) }));
                   }}
-                  onDireccion={(d) => setF((p) => (p.address.trim() ? p : { ...p, address: d.replace(/\d{6,}/g, '').replace(/,\s*,/g, ',').trim().slice(0, LIMITES.direccion) }))}
+                  onDireccion={(d) => {
+                    // Dirección y punto de encuentro se sugieren desde el lugar marcado (solo si están vacíos)
+                    const sugerida = d.replace(/\d{6,}/g, '').replace(/,\s*,/g, ',').trim().slice(0, LIMITES.direccion);
+                    setF((p) => ({
+                      ...p,
+                      address: p.address.trim() ? p.address : sugerida,
+                      meeting_point: p.meeting_point.trim() ? p.meeting_point : sugerida,
+                    }));
+                  }}
                 />
               </Suspense>
               <details className="coords-manual">
@@ -471,10 +472,10 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
               <ImagePlus size={16} aria-hidden="true" /> Elegir fotos
             </button>
             <p id="fotos-reglas" className="hint" style={{ margin: 0 }}>
-              JPG, PNG o WebP · máximo {MAX_MB} MB · mínimo {MIN_ANCHO}×{MIN_ALTO} px · se recomienda horizontal
+              Cualquier formato (JPG, PNG, WebP, HEIC del iPhone, GIF…) y tamaño · las ajustamos automáticamente para que se vean bien
             </p>
             <span className="photo-count" aria-live="polite">{f.photos.length}/{MAX_FOTOS} fotos</span>
-            <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => upload([...e.target.files])} />
+            <input ref={fileRef} type="file" accept={ACEPTA} multiple hidden onChange={(e) => upload([...e.target.files])} />
           </div>
           {fotoErrores.length > 0 && (
             <div style={{ marginTop: 10 }}>

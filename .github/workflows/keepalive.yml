@@ -26,5 +26,7 @@ jobs:
           cat salud.json; echo
           [ "$code" = 200 ] || { echo "::error::La API respondió $code"; exit 1; }
           grep -q '"database":{"status":"UP"' salud.json || { echo '::error::La base de datos no responde'; exit 1; }
+          # SEG-010: Storage solo responde UP si la clave configurada es la de servidor (la pública no puede leer el bucket)
+          grep -q '"storage":{"status":"UP"' salud.json || { echo '::error::Supabase Storage no responde con la clave de servidor'; exit 1; }
       - name: Sitio web
         run: curl -sf -o /dev/null --max-time 30 https://descubre-ec.vercel.app/

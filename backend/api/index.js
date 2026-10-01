@@ -3,6 +3,10 @@
 
 let serverPromise;
 
+// Misma URI que common/errors/problem-types.ts → tipoError('unavailable') (V3-SEG-01). Se calcula
+// aquí porque este archivo responde justamente cuando dist/ (donde vive el catálogo) no cargó.
+const tipoUnavailable = () => `${(process.env.PUBLIC_URL ?? 'http://localhost:3000').replace(/\/$/, '')}/api/v1/errores/unavailable`;
+
 function bootstrap() {
   serverPromise ??= (async () => {
     // require dentro del try de la petición: si dist/ falta, se responde un 503 problem+json (OPS-001)
@@ -30,7 +34,7 @@ module.exports = async (req, res) => {
     res.setHeader('Retry-After', '30');
     res.end(
       JSON.stringify({
-        type: 'https://api.descubre-ec.com/errors/unavailable',
+        type: tipoUnavailable(),
         title: 'Servicio no disponible',
         status: 503,
         detail: 'La API no pudo iniciar. Intenta de nuevo en unos segundos.',

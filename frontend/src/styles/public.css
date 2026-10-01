@@ -358,8 +358,9 @@
 .auth-form h1 { font-size: 1.9rem; }
 .demo-box { margin-top: 20px; font-size: 0.87rem; }
 .demo-box summary { cursor: pointer; font-weight: 600; color: var(--primary); }
-.demo-box button { display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; margin-top: 6px; font-size: 0.85rem; }
-.demo-box button:hover { border-color: var(--primary); }
+/* V3-ACC-01: borde --border-strong (≥ 3:1 sobre el fondo) para que se perciban como botones */
+.demo-box button { display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border-strong); padding: 8px 12px; border-radius: 8px; margin-top: 6px; font-size: 0.85rem; }
+.demo-box button:hover { border-color: var(--primary); background: var(--surface-2); }
 .pw-rules { list-style: none; padding: 0; margin: 4px 0 0; display: grid; gap: 4px; font-size: 0.82rem; }
 .pw-rules li { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 .pw-rules li.ok { color: var(--success); }

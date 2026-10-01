@@ -5,7 +5,7 @@ import { FALLBACK_IMG, onImgError } from '../components/AttractionCard';
 import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, Switch, useAsync, useConfirm } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
-import { comprimirImagen } from '../utils/imagen';
+import { ACEPTA, esImagen, normalizarFoto } from '../utils/imagen';
 import { correo, LIMITES, limpiar, numero, ruc, soloDigitos, telefono, texto } from '../utils/validation';
 import { CATEGORY_ICONS, CategoryIcon } from '../utils/icons';
 
@@ -246,10 +246,10 @@ function DestinoModal({ item, onClose, onSaved }) {
     setUploading(true);
     try {
       if (!file) return;
-      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Solo se aceptan imágenes JPG, PNG o WebP');
-      if (file.size > 4 * 1024 * 1024) throw new Error('La imagen supera los 4 MB');
-      // Se comprime en el navegador y se guarda en Supabase Storage; la tabla ciudad guarda su URL
-      const r = await Uploads.image(await comprimirImagen(file));
+      if (!esImagen(file)) throw new Error('El archivo no es una imagen');
+      if (file.size > 40 * 1024 * 1024) throw new Error('La imagen supera los 40 MB');
+      // Cualquier formato: se convierte en el navegador a un JPEG horizontal y se guarda en Storage
+      const r = await Uploads.image(await normalizarFoto(file).catch((err) => { throw new Error(`No pudimos leer la imagen: ${err.message}`); }));
       setF((p) => ({ ...p, imagen: r.url }));
     } catch (e) { toast(e.message, 'error'); } finally { setUploading(false); }
   };
@@ -270,7 +270,7 @@ function DestinoModal({ item, onClose, onSaved }) {
           <div className="photo-list">
             {f.imagen && <div className="photo-thumb"><img src={f.imagen} alt="Portada del destino" loading="lazy" decoding="async" onError={onImgError} /></div>}
             <button type="button" className="photo-add" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? <Spinner /> : <ImagePlus size={22} />} {f.imagen ? 'Cambiar' : 'Subir imagen'}</button>
-            <input ref={fileRef} type="file" hidden accept="image/jpeg,image/png,image/webp" onChange={(e) => e.target.files[0] && upload(e.target.files[0])} />
+            <input ref={fileRef} type="file" hidden accept={ACEPTA} onChange={(e) => e.target.files[0] && upload(e.target.files[0])} />
           </div>
         </div>
         <div className="span-2"><Switch checked={f.activo} onChange={(v) => setF({ ...f, activo: v })} label="Visible en el sitio" /></div>

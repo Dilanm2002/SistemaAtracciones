@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BadgeCheck, Building2, CheckCircle2, Clock, Mountain, Send, UserPlus } from 'lucide-react';
 import { Geo, Proveedores } from '../api/client';
@@ -24,6 +24,12 @@ export default function Empresas() {
   const { user, isAuth, isStaff, refresh } = useAuth();
   const [sol, setSol] = useState(undefined); // undefined = cargando; null = nunca solicitó
   const [authTab, setAuthTab] = useState('register');
+  const titulo = useRef(null);
+  // V3-ACC-02: al enviar la solicitud el formulario desaparece; el foco pasa al nuevo encabezado
+  const enviada = (s) => {
+    setSol(s);
+    setTimeout(() => titulo.current?.focus(), 0);
+  };
 
   useEffect(() => {
     if (!isAuth || isStaff) return;
@@ -76,7 +82,7 @@ export default function Empresas() {
           <Spinner label="Consultando tu solicitud…" />
         ) : sol?.estado === 'PENDIENTE' ? (
           <div className="stack">
-            <h2 style={{ fontSize: '1.2rem', margin: 0 }}><Clock size={20} style={{ verticalAlign: '-3px' }} /> Tu solicitud está en revisión</h2>
+            <h2 ref={titulo} tabIndex={-1} style={{ fontSize: '1.2rem', margin: 0 }}><Clock size={20} aria-hidden="true" style={{ verticalAlign: '-3px' }} /> Tu solicitud está en revisión</h2>
             <p className="muted">Enviaste <strong>{sol.empresa}</strong> (RUC {sol.ruc}) el {fmtDateTime(sol.creado_en)}. El equipo de Descubre EC la revisará y aquí verás el resultado.</p>
           </div>
         ) : sol?.estado === 'APROBADA' ? (
@@ -86,7 +92,7 @@ export default function Empresas() {
             <div><Link className="btn btn-primary" to="/admin/atracciones?nueva=1" onClick={() => refresh().catch(() => {})}>Subir mi primera experiencia</Link></div>
           </div>
         ) : (
-          <SolicitudForm user={user} anterior={sol} onEnviada={setSol} />
+          <SolicitudForm user={user} anterior={sol} onEnviada={enviada} />
         )}
       </div>
     </div>

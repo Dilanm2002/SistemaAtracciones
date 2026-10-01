@@ -20,6 +20,7 @@ export const PROBLEMAS: Record<string, { titulo: string; descripcion: string; st
   '404': { status: 404, titulo: 'No encontrado', descripcion: 'El recurso no existe o no es visible para ti.' },
   '409': { status: 409, titulo: 'Conflicto', descripcion: 'El estado actual del recurso no permite la operación.' },
   '413': { status: 413, titulo: 'Solicitud demasiado grande', descripcion: 'El cuerpo supera el tamaño máximo permitido.' },
+  unavailable: { status: 503, titulo: 'Servicio no disponible', descripcion: 'La API no pudo iniciar (por ejemplo, la base de datos no responde). Reintenta pasado el tiempo de Retry-After.' },
   '429': { status: 429, titulo: 'Demasiadas solicitudes', descripcion: 'Se superó el límite de solicitudes; espera el tiempo indicado en Retry-After.' },
 };
 

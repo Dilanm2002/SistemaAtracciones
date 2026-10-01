@@ -70,7 +70,7 @@ describeDb('Empresas proveedoras (E2E)', () => {
     expect((await http(app).post(`/proveedores/solicitudes/${s.body.id}/aprobar`).set(bearer(admin))).status).toBe(409);
 
     // El mismo token ya tiene el rol (los permisos se recalculan desde la base en cada petición)
-    await new Promise((r) => setTimeout(r, 3100)); // caché de sesión de 3 s (V2-CON-01)
+    // Sin caché de sesión (V2-CON-01): el rol nuevo vale desde la siguiente petición
     const me = await http(app).get('/auth/me').set(bearer(token));
     expect(me.body.rol).toBe('OPERADOR');
     const tour = await http(app).post('/atracciones').set(bearer(token)).send(nuevaAtraccion(cityId, { operator: { id: ok.body.operador_codigo, name: datos.empresa } }));
