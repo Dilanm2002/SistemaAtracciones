@@ -7,6 +7,40 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.3.0] - 2026-10-01
+
+Cierre de la reauditoría V3. El detalle y las mediciones están en [docs/CORRECCIONES-V3.md](docs/CORRECCIONES-V3.md).
+
+### Seguridad
+- **SEG-008:** el bucket de Supabase es privado.
+  - Las fotos se sirven por `/api/v1/media/…`, solo las que están en uso, con caché en el CDN.
+  - Las recién subidas se ven con un enlace firmado de 2 h.
+- **WEB-008:** DPoP (RFC 9449).
+  - El token queda ligado a una llave no exportable del navegador, así que robado no sirve.
+  - Las integraciones siguen con Bearer.
+- **V2-CON-01:** sin caché de sesión por instancia; la revocación es inmediata.
+- **SEG-010:** el keepalive verifica cada 5 min que Storage responda con la clave de servidor.
+- **V3-SEG-01:** el 503 de arranque usa la URI del catálogo de errores.
+
+### Agregado
+- **Pre-renderizado (WEB-003):** cada página pública y cada atracción tienen HTML propio para buscadores y redes, y el sitemap se genera con todas las atracciones.
+- **Fotos de cualquier formato y tamaño:** JPG, PNG, WebP, GIF, BMP, AVIF, SVG y HEIC del iPhone. Se convierten en el navegador a JPEG 3:2 de 1600×1067; las cuadradas, verticales o pequeñas se colocan completas sobre un fondo desenfocado.
+- **Mapa para la ubicación:** buscar el lugar, hacer clic o arrastrar el marcador. La dirección y el punto de encuentro se sugieren solos.
+- **Galería del detalle:** una foto a la vez, con flechas fuera de la imagen, miniaturas, teclado y deslizamiento.
+
+### Corregido
+- **ACC-026:** contraste del texto sobre la foto del inicio, medido en el peor píxel.
+  - Escritorio: título 3,8:1 y subtítulo 5,05:1.
+  - Celular: título 8,15:1 y subtítulo 6,28:1.
+- **V3-ACC-01:** borde perceptible (≥ 3:1) en los botones de cuentas demo.
+- **V3-ACC-02:** el foco pasa al nuevo encabezado al enviar la solicitud de empresa.
+- **Rendimiento:**
+  - La API se movió a São Paulo (`gru1`), junto a la base.
+  - El catálogo público se sirve desde la caché del CDN.
+  - La sesión y el código de la página se cargan en paralelo.
+  - Se activó Fluid Compute.
+  - Resultado: 9-10 de 10 secciones cargan en ≤ 3 s.
+
 ## [2.2.1] - 2026-10-01
 
 ### Cambiado

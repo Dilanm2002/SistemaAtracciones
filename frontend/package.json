@@ -1,11 +1,11 @@
 {
   "name": "descubre-ec-frontend",
   "private": true,
-  "version": "2.2.1",
+  "version": "2.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/prerender.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "node --test tests/validation.test.js tests/format.test.js"

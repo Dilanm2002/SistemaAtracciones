@@ -88,7 +88,7 @@ Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha 
 
 ## Control de versiones
 
-Versión actual: **2.2.1** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+Versión actual: **2.3.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
 
 Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
 
@@ -207,16 +207,16 @@ Revisado con axe-core (WCAG 2.1 A/AA): **0 violaciones** en Inicio, Explorar, De
 
 | Tema | Decisión |
 |---|---|
-| SPA sin SSR (WEB-003) | El SEO no es requisito de la rúbrica: se cubre con `meta` Open Graph/Twitter, `canonical`, `robots.txt` y `sitemap.xml`. Si hiciera falta indexar cada atracción, migrar a pre-renderizado (vite-plugin-ssg) o Next.js |
-| Token en `sessionStorage` (WEB-008) | Requisito: una sesión por pestaña (una cookie `httpOnly` se compartiría entre pestañas y sería *cross-site* entre subdominios de `vercel.app`). Mitigado con CSP estricta sin *inline scripts*, expiración de 2 h y revocación en servidor (≤ 3 s) |
+| SEO de la SPA (WEB-003) | Pre-renderizado en el build (`scripts/prerender.mjs`): cada página pública y cada atracción tienen HTML propio con título, descripción, Open Graph, `schema.org` y contenido visible; `sitemap.xml` con todas las URLs |
+| Token ligado al navegador (WEB-008) | DPoP (RFC 9449): llave ECDSA no exportable en IndexedDB; cada petición lleva una prueba firmada, así un token robado no sirve fuera del navegador. Sesión por pestaña (`sessionStorage`) y revocación inmediata en el servidor |
 | `xlsx` desde el CDN de SheetJS (WEB-009) | La versión 0.20.3 (sin las vulnerabilidades de la 0.18) ya no se publica en npm; la URL fija la versión exacta |
-| Bucket `uploads` con lectura pública (SEG-008) | Intencional (como Sal y Canela): solo contiene fotos del catálogo, que son públicas. El bucket solo acepta JPG/PNG/WebP ≤ 4 MB; la clave de servidor vive solo en Vercel y `/health` verifica el almacenamiento |
+| Bucket `uploads` privado (SEG-008) | Como en Sal y Canela, las fotos viven en Supabase Storage y la tabla guarda su ruta, pero el bucket es privado: la API (`/api/v1/media/…`) entrega solo las fotos en uso, con caché en el CDN, y las recién subidas con un enlace firmado de 2 h |
 | Swagger y Redoc en producción (SEG-019) | *Opt-in* con `ENABLE_DOCS=true` (activado para la evaluación). Sus recursos se sirven desde `/vendor` del propio dominio, sin CDN de terceros |
 | Dependencias | NestJS 11 / Express 5, Vite 8 y React Router 7: `npm audit` sin vulnerabilidades. CI falla ante cualquier `high` (incluidas las de desarrollo), corre CodeQL y revisa las dependencias de cada PR |
 | `simple-json` y relaciones `eager` (DAT-004, DAT-007) | Resuelto con el modelo relacional: horarios, fotos, idiomas e inclusiones tienen tabla propia y la atracción se lee en una sola consulta |
 | Carrito, cupones y direcciones | Las tablas existen en el modelo y se validan en `02_verificacion.sql`, pero la interfaz todavía reserva una experiencia por compra (sin carrito ni cupones) |
 | Insignias (`badges`) | Se calculan a partir de los datos (ventas de 60 días, ocupación de 14 días, antigüedad); el campo del contrato se acepta pero se ignora al escribir |
-| Verificación de correo al registrarse (SEG-016) | Requiere un proveedor de correo que el proyecto no tiene; el registro está limitado a 5 cuentas por hora por IP. Detalle de todas las correcciones de la auditoría V2 en [docs/CORRECCIONES-V2.md](docs/CORRECCIONES-V2.md) |
+| Verificación de correo al registrarse (SEG-016) | Requiere un proveedor de correo que el proyecto no tiene; el registro está limitado a 5 cuentas por hora por IP. Detalle de las correcciones de las auditorías V2 y V3 en [docs/CORRECCIONES-V2.md](docs/CORRECCIONES-V2.md) y [docs/CORRECCIONES-V3.md](docs/CORRECCIONES-V3.md) |
 
 ## Créditos de imágenes
 
