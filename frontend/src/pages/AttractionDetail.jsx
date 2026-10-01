@@ -10,7 +10,7 @@ import Reviews from '../components/Reviews';
 import { Breadcrumbs, EmptyState, ErrorState, RatingInline, usePageTitle } from '../components/ui';
 import { recentStore, useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
-import { BADGE, fmtDuration, fmtLangs, fmtMoney, PRODUCT_TYPE } from '../utils/format';
+import { BADGE, badgeCls, fmtDuration, fmtLangs, fmtMoney, PRODUCT_TYPE } from '../utils/format';
 
 function Lightbox({ photos, index, onClose, onIndex }) {
   useEffect(() => {
@@ -180,7 +180,7 @@ export default function AttractionDetail() {
             ]}
           />
           <div className="row" style={{ marginTop: 14, gap: 8 }}>
-            {a.badges?.map((b) => <span key={b} className="badge badge-cta">{BADGE[b] ?? b}</span>)}
+            {a.badges?.map((b) => <span key={b} className={`badge ${badgeCls(b)}`}>{BADGE[b] ?? b}</span>)}
             <span className="badge">{PRODUCT_TYPE[a.product_type]}</span>
           </div>
           <h1>{a.name}</h1>

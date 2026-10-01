@@ -8,7 +8,7 @@ import { CurrentUser, Scopes } from '../../common/auth/auth.decorators';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { AuthUser, SCOPES } from '../../common/auth/scopes';
 import { AuthService } from './auth.service';
-import { CambiarPasswordDto, CreateUsuarioDto, LoginDto, RegisterDto, UpdatePerfilDto, UpdateUsuarioDto, UsuariosQueryDto } from './dto/auth.dto';
+import { CambiarPasswordDto, CreateUsuarioDto, GoogleLoginDto, LoginDto, RegisterDto, UpdatePerfilDto, UpdateUsuarioDto, UsuariosQueryDto } from './dto/auth.dto';
 
 /** Datos de la petición para la sesión; con cabecera DPoP, el token se liga a esa llave (WEB-008). */
 const contexto = (req: Request) => {
@@ -39,6 +39,15 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Credenciales incorrectas.' })
   login(@Body() dto: LoginDto, @Req() req: Request) {
     return this.auth.login(dto, contexto(req));
+  }
+
+  @Post('google')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Iniciar sesión con Google (token de Supabase Auth); crea la cuenta de cliente si no existe' })
+  @ApiResponse({ status: 401, description: 'El token de Google no es válido o el correo no está verificado.' })
+  loginGoogle(@Body() dto: GoogleLoginDto, @Req() req: Request) {
+    return this.auth.loginGoogle(dto.access_token, contexto(req));
   }
 
   @Post('logout')

@@ -60,6 +60,7 @@ export function AuthProvider({ children }) {
       hasScope: (s) => !!user?.scope?.includes(s),
       login: async (email, password) => applySession(await Auth.login(email, password)),
       register: async (data) => applySession(await Auth.register(data)),
+      loginGoogle: async (accessToken) => applySession(await Auth.google(accessToken)),
       refresh: async () => setUser(await Auth.me()),
       logout,
     }),

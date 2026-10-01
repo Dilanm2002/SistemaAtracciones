@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Clock, Heart, MapPin } from 'lucide-react';
 import { useFavorites } from '../context/FavoritesContext';
-import { BADGE, fmtDuration, fmtMoney } from '../utils/format';
+import { BADGE, badgeCls, fmtDuration, fmtMoney, insigniasTarjeta } from '../utils/format';
 import { RatingInline } from './ui';
 
 export const FALLBACK_IMG =
@@ -22,8 +22,8 @@ export default function AttractionCard({ a, query = '' }) {
       <div className="a-card-img">
         <img src={a.photos?.[0]?.url ?? FALLBACK_IMG} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
         <div className="a-card-badges">
-          {a.badges?.slice(0, 1).map((b) => (
-            <span key={b} className={`badge ${b === 'likely_to_sell_out' ? 'badge-dark' : 'badge-cta'}`}>{BADGE[b] ?? b}</span>
+          {insigniasTarjeta(a.badges).map((b) => (
+            <span key={b} className={`badge ${badgeCls(b, b === 'likely_to_sell_out' ? 'badge-dark' : 'badge-cta')}`}>{BADGE[b] ?? b}</span>
           ))}
         </div>
       </div>

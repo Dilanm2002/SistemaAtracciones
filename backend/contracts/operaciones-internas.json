@@ -4,6 +4,7 @@
     "autenticacion_y_cuenta": [
       "POST /auth/login",
       "POST /auth/register",
+      "POST /auth/google",
       "POST /auth/logout",
       "GET /auth/me",
       "PATCH /auth/me",

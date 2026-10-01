@@ -365,6 +365,11 @@
 .auth-form { width: 100%; max-width: 420px; }
 .auth-form h1 { font-size: 1.9rem; }
 .demo-box { margin-top: 20px; font-size: 0.87rem; }
+/* Inicio de sesión con Google (como en Sal y Canela) */
+.btn-google { background: #fff; color: #1f1f1f; border: 1.5px solid var(--border-strong); gap: 10px; }
+.btn-google:hover:not(:disabled) { background: #f6f7f8; }
+.auth-sep { display: flex; align-items: center; gap: 12px; color: var(--text-2); font-size: 0.85rem; }
+.auth-sep::before, .auth-sep::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
 .demo-box summary { cursor: pointer; font-weight: 600; color: var(--primary); }
 /* V3-ACC-01: borde --border-strong (≥ 3:1 sobre el fondo) para que se perciban como botones */
 .demo-box button { display: block; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border-strong); padding: 8px 12px; border-radius: 8px; margin-top: 6px; font-size: 0.85rem; }

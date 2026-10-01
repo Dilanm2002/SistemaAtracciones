@@ -123,6 +123,7 @@ const qs = (params) => {
 // ── Endpoints ────────────────────────────────────────────────────────────
 export const Auth = {
   login: (email, password) => api('/auth/login', { method: 'POST', body: { email, password } }),
+  google: (accessToken) => api('/auth/google', { method: 'POST', body: { access_token: accessToken } }),
   register: (data) => api('/auth/register', { method: 'POST', body: data }),
   me: () => api('/auth/me'),
   updateMe: (data) => api('/auth/me', { method: 'PATCH', body: data }),

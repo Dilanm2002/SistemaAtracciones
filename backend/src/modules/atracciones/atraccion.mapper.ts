@@ -16,6 +16,8 @@ import { fechaHoraEc, horasAIso } from './utils/fechas';
 export const PERIODO_ARREPENTIMIENTO_MS = 60 * 60 * 1000;
 /** Una reserva pendiente de pago se cancela sin costo hasta 1 hora antes de la salida. */
 export const CORTE_PENDIENTE_MS = 60 * 60 * 1000;
+/** Días que una atracción recién creada muestra la etiqueta «Nuevo». */
+export const DIAS_NUEVO = 7;
 
 export interface PoliticaCancelacion {
   /** FULL_REFUND: reembolso total · NO_CHARGE: nada cobrado · NO_REFUND: sin reembolso · NOT_ALLOWED */
@@ -55,7 +57,8 @@ export class AtraccionMapper {
     const out: string[] = [];
     if (a.vendidos_60d >= 20) out.push('best_seller');
     if ((a.ocupacion_14d ?? 0) >= 0.7) out.push('likely_to_sell_out');
-    if (Date.now() - new Date(a.creado_en).getTime() < 30 * 86400_000 && a.numero_resenas === 0) out.push('new');
+    // «Nuevo» durante los primeros 7 días desde su creación (como en Sal y Canela); luego desaparece sola
+    if (Date.now() - new Date(a.creado_en).getTime() < DIAS_NUEVO * 86400_000) out.push('new');
     return out;
   }
 

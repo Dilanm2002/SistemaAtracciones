@@ -7,6 +7,17 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.4.0] - 2026-10-01
+
+### Añadido
+- **Inicio de sesión con Google** (como en Sal y Canela). Botón «Continuar con Google» en ingresar, registro, checkout y empresas.
+  - Supabase Auth hace el OAuth con Google y vuelve a `/ingresar` con un `access_token`.
+  - `POST /api/v1/auth/google` valida ese token **contra Supabase** con la clave de servidor y exige un correo verificado por Google.
+  - Si el correo no existe, se crea una cuenta de cliente **ya verificada**, con contraseña aleatoria que nadie conoce. Si existe, se entra a esa cuenta.
+  - Se emite la sesión propia del sistema, ligada con DPoP. Se vuelve a la página desde la que se pulsó el botón.
+  - Cubre SEG-016: con Google, el correo queda verificado sin un proveedor de correo.
+- **Etiqueta «Nuevo»** (como en Sal y Canela): una atracción la muestra en verde durante sus **primeros 7 días** y luego desaparece sola. Antes duraba 30 días y solo sin reseñas.
+
 ## [2.3.0] - 2026-10-01
 
 Cierre de la reauditoría V3. El detalle y las mediciones están en [docs/CORRECCIONES-V3.md](docs/CORRECCIONES-V3.md).

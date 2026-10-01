@@ -63,6 +63,12 @@ export const fmtLangs = (arr = []) => arr.map((l) => LANG[l] ?? l.toUpperCase())
 export const PRODUCT_TYPE = { GUIDED_TOUR: 'Tour guiado', SINGLE_TICKET: 'Entrada / ticket', PACKAGE: 'Paquete' };
 export const REGION = { SIERRA: 'Sierra', COSTA: 'Costa', AMAZONIA: 'Amazonía', GALAPAGOS: 'Galápagos' };
 export const PAYMENT = { TARJETA: 'Tarjeta', TRANSFERENCIA: 'Transferencia', EN_SITIO: 'Pago en sitio' };
+/** Clase de cada insignia; «Nuevo» va en verde, como en Sal y Canela. */
+export const badgeCls = (b, otra = 'badge-cta') => (b === 'new' ? 'badge-nuevo' : otra);
+
+/** Primero «Nuevo» (siempre visible los primeros 7 días) y luego la insignia de ventas más relevante. */
+export const insigniasTarjeta = (badges = []) => [...(badges.includes('new') ? ['new'] : []), ...badges.filter((b) => b !== 'new').slice(0, 1)];
+
 export const BADGE = { best_seller: 'Más vendido', likely_to_sell_out: 'Se agota pronto', new: 'Nuevo' };
 
 export const STATUS = {

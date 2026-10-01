@@ -6,7 +6,7 @@ import { onImgError } from '../components/AttractionCard';
 import { Alert, EmptyState, ErrorState, Field, Modal, Spinner, useConfirm, useDebounce } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { BADGE, fmtDuration, fmtMoney } from '../utils/format';
+import { BADGE, badgeCls, insigniasTarjeta, fmtDuration, fmtMoney } from '../utils/format';
 import { texto } from '../utils/validation';
 import AtraccionForm from './AtraccionForm';
 
@@ -35,7 +35,7 @@ function AdminCard({ a, isAdmin, onEdit, onToggle, onDelete, onApprove, onReject
         <div className="adm-card-badges">
           {a.status !== 'PUBLICADA' && <span className={`badge ${est.cls}`}>{a.status === 'EN_REVISION' ? <Clock size={12} /> : a.status === 'RECHAZADA' ? <XCircle size={12} /> : <EyeOff size={12} />} {est.label}</span>}
           {a.featured && <span className="badge badge-cta"><Star size={12} fill="currentColor" /> Destacada</span>}
-          {a.badges.slice(0, 1).map((b) => <span key={b} className="badge badge-dark">{BADGE[b]}</span>)}
+          {insigniasTarjeta(a.badges).map((b) => <span key={b} className={`badge ${badgeCls(b, 'badge-dark')}`}>{BADGE[b]}</span>)}
         </div>
       </div>
       <div className="adm-card-body">

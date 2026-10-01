@@ -47,6 +47,14 @@ export class RegisterDto {
   telefono?: string;
 }
 
+export class GoogleLoginDto {
+  @ApiProperty({ description: 'access_token que Supabase Auth devuelve tras el inicio de sesión con Google' })
+  @IsString()
+  @MinLength(20, { message: 'access_token no es válido' })
+  @MaxLength(4096, { message: 'access_token no es válido' })
+  access_token: string;
+}
+
 export class LoginDto {
   @ApiProperty({ example: 'admin@descubre-ec.com' })
   @Transform(lower)

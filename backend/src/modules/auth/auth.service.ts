@@ -1,13 +1,15 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { SessionService } from '../../common/auth/session.service';
 import { AuthUser, Rol, rolPrincipal, scopesDe } from '../../common/auth/scopes';
 import { BitacoraService } from '../../common/db/bitacora.service';
 import { CatalogosService } from '../../common/db/catalogos.service';
 import { DbService, Params, Sql } from '../../common/db/db.service';
 import { escapeLike } from '../../common/utils/sql';
+import { RE_NOMBRE_PERSONA } from '../../common/utils/validators';
 import { CambiarPasswordDto, CreateUsuarioDto, LoginDto, RegisterDto, UpdatePerfilDto, UpdateUsuarioDto, UsuariosQueryDto } from './dto/auth.dto';
 
 /** Vista pública de un usuario: lista explícita de columnas, nunca el hash (SEG-024). */
@@ -54,6 +56,14 @@ const SELECT_USUARIO = `
 
 const BCRYPT_ROUNDS = 10;
 
+/** Lo que devuelve Supabase Auth en GET /auth/v1/user (solo los campos que se usan). */
+interface CuentaSupabase {
+  email?: string;
+  email_confirmed_at?: string | null;
+  app_metadata?: { provider?: string; providers?: string[] };
+  user_metadata?: { full_name?: string; name?: string; given_name?: string; family_name?: string };
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -62,6 +72,7 @@ export class AuthService {
     private readonly sessions: SessionService,
     private readonly catalogos: CatalogosService,
     private readonly bitacora: BitacoraService,
+    private readonly config: ConfigService,
   ) {}
 
   toPublic(u: FilaUsuario): UsuarioPublico {
@@ -161,6 +172,61 @@ export class AuthService {
     if (!cred.activo) throw new ForbiddenException('Tu cuenta está desactivada. Contacta al administrador.');
     await this.db.query('UPDATE usuario SET usu_ultimo_acceso = now() WHERE usu_id = $1', [cred.id]);
     return this.emitirToken((await this.fila(cred.id))!, ctx);
+  }
+
+  /**
+   * Inicio de sesión con Google (como en Sal y Canela): Supabase Auth hace el OAuth con Google y
+   * devuelve un access_token al navegador. Aquí ese token se valida CONTRA Supabase (no se confía en
+   * lo que diga el cliente), se busca o crea el usuario CLIENTE con ese correo y se emite la sesión
+   * propia del sistema (ligada con DPoP si el navegador envió la prueba). Google ya verificó el correo.
+   */
+  async loginGoogle(accessToken: string, ctx: { ip?: string; userAgent?: string; jkt?: string }) {
+    const url = this.config.get<string>('SUPABASE_URL')?.replace(/\/$/, '');
+    const key = this.config.get<string>('SUPABASE_SERVICE_ROLE_KEY');
+    if (!url || !key) throw new BadRequestException('El inicio de sesión con Google no está configurado.');
+    const cab = { apikey: key, Authorization: `Bearer ${accessToken}` };
+    const g = await fetch(`${url}/auth/v1/user`, { headers: cab, signal: AbortSignal.timeout(8000) })
+      .then((r) => (r.ok ? (r.json() as Promise<CuentaSupabase>) : null))
+      .catch(() => null);
+    const proveedores = g?.app_metadata?.providers ?? [g?.app_metadata?.provider];
+    const email = g?.email?.trim().toLowerCase();
+    if (!g || !email || !g.email_confirmed_at || !proveedores.includes('google')) {
+      throw new UnauthorizedException('No se pudo validar tu cuenta de Google. Intenta de nuevo.');
+    }
+    // La sesión de Supabase ya no hace falta: el sistema usa su propio token
+    void fetch(`${url}/auth/v1/logout`, { method: 'POST', headers: cab, signal: AbortSignal.timeout(5000) }).catch(() => undefined);
+
+    const existente = await this.db.one<{ id: string; activo: boolean }>(
+      'SELECT usu_id::text AS id, usu_activo AS activo FROM usuario WHERE lower(usu_correo) = $1',
+      [email],
+    );
+    let id: string;
+    if (existente) {
+      if (!existente.activo) throw new ForbiddenException('Tu cuenta está desactivada. Contacta al administrador.');
+      await this.db.query('UPDATE usuario SET usu_ultimo_acceso = now(), usu_verificado = TRUE WHERE usu_id = $1', [existente.id]);
+      id = existente.id;
+    } else {
+      await this.catalogos.precargar();
+      const m = g.user_metadata ?? {};
+      const limpio = (v?: string) => (v ?? '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .-]/g, '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      const valido = (v: string, porDefecto: string) => (RE_NOMBRE_PERSONA.test(v) ? v : porDefecto);
+      const partes = limpio(m.full_name ?? m.name).split(' ');
+      const nombre = valido(limpio(m.given_name) || partes[0], 'Cliente');
+      const apellido = valido(limpio(m.family_name) || partes.slice(1).join(' '), 'Google');
+      // Contraseña aleatoria que nadie conoce: la cuenta entra con Google
+      const hash = await bcrypt.hash(randomBytes(32).toString('base64url'), BCRYPT_ROUNDS);
+      id = await this.db.tx(async (tx) => {
+        const u = await tx.one<{ id: string }>(
+          `INSERT INTO usuario (usu_correo, usu_password, usu_nombre, usu_apellido, usu_verificado)
+           VALUES ($1, $2, $3, $4, TRUE) RETURNING usu_id::text AS id`,
+          [email, hash, nombre, apellido],
+        );
+        await this.asignarRol(tx, u!.id, Rol.CLIENTE, null, null);
+        return u!.id;
+      });
+      await this.bitacora.registrar(id, 'REGISTRO_GOOGLE', 'usuario', id);
+    }
+    return this.emitirToken((await this.fila(id))!, ctx);
   }
 
   async logout(user: AuthUser) {

@@ -12,7 +12,7 @@ Este documento recoge qué se hizo con cada uno y cómo comprobarlo. Las medicio
 | Estado | Hallazgos |
 |---|---|
 | ✅ Corregido (10) | V3-ACC-01, V3-ACC-02, V3-SEG-01, V2-SEG-02, V2-CON-01, SEG-010, SEG-008, WEB-008, WEB-003, ACC-026 |
-| ⏳ Requiere un proveedor de correo (1) | SEG-016 |
+| ✅ Corregido en 2.4.0 con Google (1) | SEG-016 |
 
 ## Detalle
 
@@ -41,11 +41,12 @@ Este documento recoge qué se hizo con cada uno y cómo comprobarlo. Las medicio
 
 Las fotos del catálogo que ya fueron públicas antes de este cambio pueden seguir en la caché del CDN de Supabase (Cloudflare) hasta que venza su `max-age`. Esa caché no se puede purgar desde el proyecto, y esas fotos ya eran públicas en el sitio. **El bucket es privado**: cualquier acceso nuevo responde «Bucket not found», y todo lo que se suba desde ahora solo es accesible a través de la API.
 
-## Pendiente: SEG-016 (verificación de correo)
+## SEG-016 (verificación de correo) — versión 2.4.0
 
-Requiere un servicio que envíe correos, por ejemplo Resend, Brevo o SMTP de Gmail con contraseña de aplicación. Con la clave de ese servicio en Vercel, el flujo sería:
-1. Registro.
-2. Correo con enlace firmado.
-3. Cuenta verificada.
+Se resolvió con **inicio de sesión con Google**, igual que en Sal y Canela, en lugar de un servicio de correo:
+1. El botón «Continuar con Google» lleva a Supabase Auth, que hace el OAuth con Google.
+2. Al volver a `/ingresar`, el navegador envía el `access_token` a `POST /api/v1/auth/google`.
+3. La API lo valida contra Supabase (`GET /auth/v1/user` con la clave de servidor) y exige proveedor `google` y correo confirmado.
+4. La cuenta queda con `usu_verificado = TRUE` y recibe la sesión propia del sistema (con DPoP).
 
-Mientras tanto se mantienen las mitigaciones: 5 registros por hora por IP, política de contraseñas, y que una cuenta nueva solo puede reservar para sí misma.
+El registro con correo y contraseña sigue disponible, con sus mitigaciones: 5 registros por hora por IP, política de contraseñas, y que una cuenta nueva solo puede reservar para sí misma.

@@ -517,7 +517,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
           <div className="field" style={{ marginTop: 14 }}>
             <span className="label">Insignias</span>
             <p className="hint" style={{ margin: 0 }}>
-              Se calculan solas: <strong>{BADGE.best_seller}</strong> (20+ tickets en 60 días), <strong>{BADGE.likely_to_sell_out}</strong> (70 % de ocupación en las próximas 2 semanas) y <strong>{BADGE.new}</strong> (menos de 30 días y sin reseñas).
+              Se calculan solas: <strong>{BADGE.best_seller}</strong> (20+ tickets en 60 días), <strong>{BADGE.likely_to_sell_out}</strong> (70 % de ocupación en las próximas 2 semanas) y <strong>{BADGE.new}</strong> (sus primeros 7 días; después desaparece sola).
               {atraccion?.badges?.length ? <> Ahora: {atraccion.badges.map((b) => BADGE[b] ?? b).join(', ')}.</> : ' Ahora no tiene ninguna.'}
             </p>
           </div>

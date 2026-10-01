@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronDown, Clock, Compass, Heart, Mail, MapPin, Phone, Send, User } from 'lucide-react';
 import { Atracciones, Auth, Destinos, Mensajes } from '../api/client';
@@ -9,6 +9,7 @@ import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
+import { respuestaGoogle, rutaDespuesDeGoogle } from '../utils/google';
 import { correo, documento, LIMITES, limpiar, nombrePersona, password, soloDigitos, telefono, texto } from '../utils/validation';
 
 // ── Favoritos ────────────────────────────────────────────────────────────
@@ -263,8 +264,31 @@ export function Login() {
   usePageTitle('Iniciar sesión');
   const navigate = useNavigate();
   const { state } = useLocation();
+  const { loginGoogle } = useAuth();
+  const toast = useToast();
+  // Vuelta desde Google (Supabase Auth deja el access_token en el fragmento de la URL)
+  const [google, setGoogle] = useState(() => respuestaGoogle());
+  const enviado = useRef(false); // el token se canjea UNA sola vez
+  useEffect(() => {
+    if (!google?.token || enviado.current) return;
+    enviado.current = true;
+    loginGoogle(google.token)
+      .then((u) => {
+        toast(`¡Hola, ${u.nombre.split(' ')[0]}!`, 'success');
+        navigate(rutaDespuesDeGoogle() ?? redirectFor(u, state?.from), { replace: true });
+      })
+      .catch((e) => setGoogle({ error: e.message }));
+  }, [google, loginGoogle, navigate, state, toast]);
+  if (google?.token) {
+    return (
+      <AuthLayout title="Ingresando con Google" subtitle="Un momento, estamos validando tu cuenta.">
+        <div className="center" role="status" style={{ padding: 24 }}><Spinner /> Validando…</div>
+      </AuthLayout>
+    );
+  }
   return (
     <AuthLayout title="Bienvenido de nuevo" subtitle="Ingresa para ver y gestionar tus reservas." footer={<>¿No tienes cuenta? <Link to="/registro" state={state}>Crea una gratis</Link></>}>
+      {google?.error && <Alert tone="danger">{google.error}</Alert>}
       <LoginForm onSuccess={(u) => navigate(redirectFor(u, state?.from), { replace: true })} />
     </AuthLayout>
   );
