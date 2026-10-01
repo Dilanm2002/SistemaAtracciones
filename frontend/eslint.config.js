@@ -30,4 +30,10 @@ export default [
     files: ['vite.config.js', 'eslint.config.js', 'tests/**/*.js'],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // Herramientas de build que corren en Node (pre-renderizado SEO)
+    files: ['scripts/**/*.{js,mjs}'],
+    languageOptions: { globals: { ...globals.node } },
+    rules: { 'no-console': 'off' },
+  },
 ];
