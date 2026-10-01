@@ -33,6 +33,9 @@ export const fmtRelative = (iso) => {
 };
 
 /** Fecha de hoy en Ecuador (AAAA-MM-DD). */
+/** Hora de salida (fecha + hora de Ecuador, UTC−5) en milisegundos. */
+export const salidaEc = (date, time) => new Date(`${date}T${(time || '00:00').slice(0, 5)}:00-05:00`).getTime();
+
 export const todayEc = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
 
 export const addDays = (s, n) => {

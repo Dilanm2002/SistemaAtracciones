@@ -6,6 +6,7 @@ import { ConfirmProvider } from './components/ui';
 import { AuthProvider } from './context/AuthContext';
 import { FavoritesProvider } from './context/FavoritesContext';
 import { ToastProvider } from './context/ToastContext';
+import { recargarPorVersion } from './utils/lazyRecarga';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/public.css';
@@ -29,6 +30,9 @@ const PRECARGA = [
   [/^\/mis-reservas/, () => import('./pages/MyReservations')],
   [/^\/empresas/, () => import('./pages/Empresas')],
 ];
+// Si un archivo de una versión anterior ya no existe, recargar con la nueva (no pantalla en blanco)
+window.addEventListener('vite:preloadError', (e) => { if (recargarPorVersion()) e.preventDefault(); });
+
 PRECARGA.forEach(([re, cargar]) => re.test(window.location.pathname) && cargar().catch(() => {}));
 
 createRoot(document.getElementById('root')).render(

@@ -37,9 +37,14 @@ const PRIORIDAD: Rol[] = [Rol.ADMIN, Rol.OPERADOR, Rol.CLIENTE];
 /** Rol principal (el de más privilegios) de un conjunto de roles. */
 export const rolPrincipal = (roles: string[]): Rol => PRIORIDAD.find((r) => roles.includes(r)) ?? Rol.CLIENTE;
 
-/** Unión de los scopes de todos los roles del usuario. */
-export const scopesDe = (roles: string[]): Scope[] =>
-  [...new Set(roles.filter((r): r is Rol => r in SCOPES_POR_ROL).flatMap((r) => SCOPES_POR_ROL[r]))];
+/**
+ * Unión de los scopes de todos los roles del usuario. Una cuenta sin ningún rol válido es un
+ * cliente común (igual que en rolPrincipal): recibe los permisos de CLIENTE (reservar y cancelar).
+ */
+export const scopesDe = (roles: string[]): Scope[] => {
+  const validos = roles.filter((r): r is Rol => r in SCOPES_POR_ROL);
+  return [...new Set((validos.length ? validos : [Rol.CLIENTE]).flatMap((r) => SCOPES_POR_ROL[r]))];
+};
 
 export interface AuthUser {
   /** usu_id (BIGINT como texto) */

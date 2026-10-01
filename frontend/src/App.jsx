@@ -1,34 +1,35 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { Component, Suspense, useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import PublicLayout from './components/PublicLayout';
 import { Spinner } from './components/ui';
+import { lazyRecarga } from './utils/lazyRecarga';
 import Home from './pages/Home';
 import { Contact, Destinations, Favorites, Help, Login, NotFound, Profile, Register, RequireAuth } from './pages/MiscPages';
 
 // Las páginas más pesadas del sitio se descargan al visitarlas (WEB-007)
-const Explore = lazy(() => import('./pages/Explore'));
-const AttractionDetail = lazy(() => import('./pages/AttractionDetail'));
-const Checkout = lazy(() => import('./pages/Checkout'));
-const Confirmation = lazy(() => import('./pages/Confirmation'));
-const MyReservations = lazy(() => import('./pages/MyReservations'));
+const Explore = lazyRecarga(() => import('./pages/Explore'));
+const AttractionDetail = lazyRecarga(() => import('./pages/AttractionDetail'));
+const Checkout = lazyRecarga(() => import('./pages/Checkout'));
+const Confirmation = lazyRecarga(() => import('./pages/Confirmation'));
+const MyReservations = lazyRecarga(() => import('./pages/MyReservations'));
 
 // El panel admin se carga bajo demanda: los viajeros no descargan su código
-const AdminLayout = lazy(() => import('./admin/AdminLayout'));
-const Dashboard = lazy(() => import('./admin/Dashboard'));
-const AtraccionesAdmin = lazy(() => import('./admin/AtraccionesAdmin'));
-const ReservasAdmin = lazy(() => import('./admin/ReservasAdmin'));
-const DisponibilidadAdmin = lazy(() => import('./admin/DisponibilidadAdmin'));
-const ReportesAdmin = lazy(() => import('./admin/ReportesAdmin'));
-const CategoriasAdmin = lazy(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.CategoriasAdmin })));
-const DestinosAdmin = lazy(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.DestinosAdmin })));
-const OperadoresAdmin = lazy(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.OperadoresAdmin })));
-const ClientesAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ClientesAdmin })));
-const UsuariosAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.UsuariosAdmin })));
-const ResenasAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ResenasAdmin })));
-const IntegracionAdmin = lazy(() => import('./admin/IntegracionAdmin'));
-const Empresas = lazy(() => import('./pages/Empresas'));
-const SolicitudesAdmin = lazy(() => import('./admin/SolicitudesAdmin'));
-const MensajesAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.MensajesAdmin })));
+const AdminLayout = lazyRecarga(() => import('./admin/AdminLayout'));
+const Dashboard = lazyRecarga(() => import('./admin/Dashboard'));
+const AtraccionesAdmin = lazyRecarga(() => import('./admin/AtraccionesAdmin'));
+const ReservasAdmin = lazyRecarga(() => import('./admin/ReservasAdmin'));
+const DisponibilidadAdmin = lazyRecarga(() => import('./admin/DisponibilidadAdmin'));
+const ReportesAdmin = lazyRecarga(() => import('./admin/ReportesAdmin'));
+const CategoriasAdmin = lazyRecarga(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.CategoriasAdmin })));
+const DestinosAdmin = lazyRecarga(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.DestinosAdmin })));
+const OperadoresAdmin = lazyRecarga(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.OperadoresAdmin })));
+const ClientesAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ClientesAdmin })));
+const UsuariosAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.UsuariosAdmin })));
+const ResenasAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ResenasAdmin })));
+const IntegracionAdmin = lazyRecarga(() => import('./admin/IntegracionAdmin'));
+const Empresas = lazyRecarga(() => import('./pages/Empresas'));
+const SolicitudesAdmin = lazyRecarga(() => import('./admin/SolicitudesAdmin'));
+const MensajesAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.MensajesAdmin })));
 
 /** Atajo "/" para enfocar el buscador de la página (flexibilidad y eficiencia de uso). */
 function useSearchShortcut() {
@@ -45,11 +46,28 @@ function useSearchShortcut() {
   }, []);
 }
 
+/** Si una página falla al cargar o al dibujarse, se muestra un aviso con «Recargar» en vez de una pantalla en blanco. */
+class ErrorPagina extends Component {
+  state = { error: null };
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div role="alert" style={{ padding: '80px 16px', textAlign: 'center' }}>
+        <h1 style={{ fontSize: '1.5rem' }}>No pudimos mostrar esta página</h1>
+        <p className="muted">Puede que haya una versión nueva del sitio o que se haya perdido la conexión.</p>
+        <button className="btn btn-primary" onClick={() => window.location.reload()}>Recargar</button>
+      </div>
+    );
+  }
+}
+
 const Loading = () => <div style={{ padding: 60, display: 'flex', gap: 10, justifyContent: 'center' }}><Spinner label="Cargando…" /></div>;
 
 export default function App() {
   useSearchShortcut();
   return (
+    <ErrorPagina>
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route element={<PublicLayout />}>
@@ -87,5 +105,6 @@ export default function App() {
         </Route>
       </Routes>
     </Suspense>
+    </ErrorPagina>
   );
 }

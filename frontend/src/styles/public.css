@@ -327,7 +327,8 @@
 
 /* ── Checkout ────────────────────────────────────────────────────────── */
 .checkout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; align-items: start; }
-@media (max-width: 1000px) { .checkout { grid-template-columns: 1fr; } .checkout aside { order: -1; } }
+/* En celular el resumen va arriba y NO queda fijo: si no, tapaba el formulario al bajar */
+@media (max-width: 1000px) { .checkout { grid-template-columns: 1fr; } .checkout aside { order: -1; } .order-summary { position: static; } }
 .order-summary { position: sticky; top: calc(var(--header-h) + 16px); }
 .order-summary .os-img { aspect-ratio: 16/9; border-radius: var(--r) var(--r) 0 0; overflow: hidden; }
 .order-summary .os-img img { width: 100%; height: 100%; object-fit: cover; }

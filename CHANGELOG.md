@@ -7,6 +7,14 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.4.1] - 2026-10-01
+
+### Corregido
+- **Mis reservas** ordena por **fecha y hora de salida**, no solo por fecha. Una reserva de hoy cuya hora ya pasó se mueve a «Pasadas», en lugar de quedarse en «Próximas» sin botón de cancelar y con el aviso «falta menos de 1 hora». La lista se actualiza sola cada minuto.
+- **Cuentas sin rol:** se tratan como clientes comunes y reciben sus permisos (reservar y cancelar). Antes se mostraban como cliente pero no podían cancelar.
+- **Pantalla en blanco tras mucho tiempo inactivo:** si mientras tanto se publicó una versión nueva, la página se recarga sola con la versión actual. Si aun así falla, aparece un aviso con el botón «Recargar».
+- **Checkout en el celular:** el resumen de la reserva ya no queda fijo encima del formulario, así que se puede bajar hasta los datos y reservar.
+
 ## [2.4.0] - 2026-10-01
 
 ### Añadido

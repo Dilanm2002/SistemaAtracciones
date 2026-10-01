@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarDays, CalendarPlus, CalendarX2, Clock, Eye, Info, MapPin, MessageSquarePlus, Ticket, Users, XCircle } from 'lucide-react';
 import { newIdempotencyKey, Reservas } from '../api/client';
@@ -6,7 +6,7 @@ import { onImgError } from '../components/AttractionCard';
 import { ReviewModal } from '../components/Reviews';
 import { Alert, EmptyState, ErrorState, Field, Modal, Spinner, StatusBadge, useAsync, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
-import { fmtDate, fmtDateLong, fmtDateTime, fmtMoney, PAYMENT, todayEc } from '../utils/format';
+import { fmtDate, fmtDateLong, fmtDateTime, fmtMoney, PAYMENT, salidaEc } from '../utils/format';
 import { downloadIcs } from './Confirmation';
 
 const MOTIVOS = ['Cambio de planes', 'Problemas con mi vuelo o transporte', 'Motivos de salud', 'Clima o seguridad', 'Encontré otra opción', 'Otro'];
@@ -32,7 +32,7 @@ export function politicaTexto(r) {
     default:
       return {
         tone: 'warn',
-        texto: r.status === 'PENDING'
+        texto: r.status === 'PENDING' && Date.now() < salidaEc(r.date, r.time)
           ? 'Falta menos de 1 hora para la salida: tu cupo sigue reservado y ya no puede cancelarse en línea.'
           : 'La experiencia ya comenzó; ya no puede cancelarse en línea.',
       };
@@ -138,8 +138,13 @@ export function ReservationDetailModal({ r, onClose }) {
 
 export default function MyReservations() {
   usePageTitle('Mis reservas');
-  const today = todayEc();
   const [tab, setTab] = useState('upcoming');
+  // Cada minuto se reevalúa: al llegar la hora de salida la reserva pasa a «Pasadas»
+  const [ahora, setAhora] = useState(Date.now);
+  useEffect(() => {
+    const t = setInterval(() => setAhora(Date.now()), 60_000);
+    return () => clearInterval(t);
+  }, []);
   const { data, loading, error, reload, setData } = useAsync(() => Reservas.list(), []);
   const [cancel, setCancel] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -148,11 +153,11 @@ export default function MyReservations() {
   const groups = useMemo(() => {
     const all = data ?? [];
     return {
-      upcoming: all.filter((r) => r.status !== 'CANCELLED' && r.date >= today),
-      past: all.filter((r) => r.status !== 'CANCELLED' && r.date < today).reverse(),
+      upcoming: all.filter((r) => r.status !== 'CANCELLED' && salidaEc(r.date, r.time) > ahora),
+      past: all.filter((r) => r.status !== 'CANCELLED' && salidaEc(r.date, r.time) <= ahora).reverse(),
       cancelled: all.filter((r) => r.status === 'CANCELLED'),
     };
-  }, [data, today]);
+  }, [data, ahora]);
 
   const TABS = [['upcoming', 'Próximas'], ['past', 'Pasadas'], ['cancelled', 'Canceladas']];
   const list = groups[tab];

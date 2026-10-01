@@ -1,4 +1,5 @@
-import { lazy, Suspense, useMemo, useRef, useState } from 'react';
+import { Suspense, useMemo, useRef, useState } from 'react';
+import { lazyRecarga } from '../utils/lazyRecarga';
 import { ArrowLeft, ArrowRight, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Star, Tag, Trash2, UploadCloud, X } from 'lucide-react';
 import { Atracciones, Uploads } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
@@ -10,7 +11,7 @@ import { ACEPTA, esImagen, normalizarFoto } from '../utils/imagen';
 import { ECUADOR, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
 
 // El mapa (Leaflet) solo se descarga al abrir el formulario
-const MapaUbicacion = lazy(() => import('./MapaUbicacion'));
+const MapaUbicacion = lazyRecarga(() => import('./MapaUbicacion'));
 
 const MAX_HORAS = 720; // 30 días: mismo límite que la base (atraccion_duracion_valida)
 const MAX_FOTOS = 12;
