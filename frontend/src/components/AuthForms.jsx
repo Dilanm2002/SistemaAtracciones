@@ -21,8 +21,6 @@ function PasswordInput({ value, onChange, autoComplete, ...p }) {
 
 const DEMO = [
   ['Cliente', 'cliente@descubre-ec.com', 'Cliente123'],
-  ['Administrador', 'admin@descubre-ec.com', 'Admin123'],
-  ['Operador', 'operador@descubre-ec.com', 'Operador123'],
 ];
 
 export function LoginForm({ onSuccess, showDemo = true }) {

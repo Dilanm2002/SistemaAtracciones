@@ -1,0 +1,30 @@
+{
+  "descripcion": "Operaciones implementadas que NO forman parte del contrato de integración (atracciones-openapi.yaml). Son del propio sistema: panel de administración, cuentas, catálogos, reportes y metadatos de integración. Documentadas en Swagger (/api/docs). src/contract-coverage.spec.ts falla si aparece una ruta que no esté ni en el contrato ni aquí (API-015).",
+  "grupos": {
+    "autenticacion_y_cuenta": ["POST /auth/login", "POST /auth/register", "POST /auth/logout", "GET /auth/me", "PATCH /auth/me", "POST /auth/me/password"],
+    "gestion_de_la_atraccion": [
+      "GET /atracciones/{id}/availability/calendar",
+      "GET /atracciones/{id}/blocked-dates",
+      "POST /atracciones/{id}/blocked-dates",
+      "DELETE /atracciones/{id}/blocked-dates/{fecha}",
+      "POST /atracciones/reservations/{reservationId}/confirm",
+      "GET /atracciones/{id}/reviews",
+      "GET /atracciones/{id}/reviews/eligibility",
+      "POST /atracciones/{id}/reviews"
+    ],
+    "catalogos": [
+      "GET /categorias", "POST /categorias", "PATCH /categorias/{id}", "DELETE /categorias/{id}",
+      "GET /destinos", "POST /destinos", "PATCH /destinos/{id}", "DELETE /destinos/{id}",
+      "GET /operadores", "POST /operadores", "PATCH /operadores/{id}", "DELETE /operadores/{id}",
+      "GET /provincias", "GET /idiomas", "POST /uploads"
+    ],
+    "administracion": [
+      "GET /usuarios", "POST /usuarios", "PATCH /usuarios/{id}",
+      "GET /resenas", "PATCH /resenas/{id}", "DELETE /resenas/{id}",
+      "GET /mensajes", "GET /mensajes/stats", "POST /mensajes", "PATCH /mensajes/{id}", "DELETE /mensajes/{id}",
+      "GET /reportes/dashboard", "GET /reportes/ventas", "GET /reportes/clientes"
+    ],
+    "cliente": ["GET /favoritos", "PUT /favoritos/{id}", "DELETE /favoritos/{id}"],
+    "integracion_y_metadatos": ["GET /eventos", "GET /eventos/resumen", "GET /contracts", "GET /contracts/{nombre}", "GET /errores", "GET /errores/{tipo}"]
+  }
+}

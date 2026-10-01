@@ -27,7 +27,7 @@ function fakeDb() {
     const f = filas.get(k(p));
     return f ? { idem_operacion: f.operacion, idem_request_hash: f.hash, idem_estado: f.estado, idem_response: f.respuesta } : null;
   };
-  return { query, one } as unknown as DbService;
+  return Object.assign({ query, one } as unknown as DbService, { filas });
 }
 
 describe('IdempotencyService (tabla idempotencia; CON-001, DAT-003)', () => {
@@ -72,5 +72,18 @@ describe('IdempotencyService (tabla idempotencia; CON-001, DAT-003)', () => {
     };
     await expect(svc.execute(KEY, 'op', '1', {}, falla)).rejects.toThrow('boom');
     await expect(svc.execute(KEY, 'op', '1', {}, async () => 'ok')).resolves.toBe('ok');
+  });
+  it('con referencia guarda solo el identificador (sin PII) y reconstruye la respuesta (SEG-013)', async () => {
+    const db = fakeDb();
+    const svc2 = new IdempotencyService(db);
+    const conPii = { reservation_id: 'r-1', customer_name: 'María Guamán', customer_document: '1710034065' };
+    const reconstruir = jest.fn(async (id: string) => ({ ...conPii, reservation_id: id, status: 'CANCELLED' }));
+    const ref = { referencia: (r: typeof conPii) => r.reservation_id, reconstruir };
+    await expect(svc2.execute(KEY, 'reserve:x', '1', { a: 1 }, async () => conPii, ref)).resolves.toEqual(conPii);
+    const guardado = [...(db as unknown as { filas: Map<string, Fila> }).filas.values()][0].respuesta;
+    expect(guardado).toEqual({ ref: 'r-1' });
+    expect(JSON.stringify(guardado)).not.toContain('María');
+    await expect(svc2.execute(KEY, 'reserve:x', '1', { a: 1 }, async () => conPii, ref)).resolves.toMatchObject({ reservation_id: 'r-1', status: 'CANCELLED' });
+    expect(reconstruir).toHaveBeenCalledWith('r-1');
   });
 });

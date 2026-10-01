@@ -1,8 +1,20 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
 import { DbService } from '../db/db.service';
+import { tipoError } from '../errors/problem-types';
 
 const TTL_HORAS = 24;
+
+/**
+ * Cómo guardar la respuesta sin datos personales (SEG-013): en lugar del cuerpo completo
+ * (nombre, correo, teléfono y documento del titular) solo se guarda una referencia —p. ej.
+ * el UUID de la reserva— y al repetir la petición la respuesta se reconstruye desde la tabla
+ * de origen, que es donde la PII tiene su base legal de conservación.
+ */
+export interface Referencia<T> {
+  referencia: (resultado: T) => string;
+  reconstruir: (referencia: string) => Promise<T>;
+}
 
 interface Registro {
   idem_operacion: string;
@@ -34,9 +46,10 @@ export class IdempotencyService {
    * 3. Si ya existía:
    *    - otra operación o payload distinto → 409 IDEMPOTENCY_CONFLICT
    *    - todavía en curso (petición paralela) → 409 IDEMPOTENCY_IN_PROGRESS
-   *    - terminada → devuelve la respuesta original sin volver a ejecutar.
+   *    - terminada → devuelve la respuesta original sin volver a ejecutar
+   *      (o la reconstruye desde la referencia guardada, si se indicó `ref`).
    */
-  async execute<T>(key: string, operacion: string, sujeto: string, payload: unknown, fn: () => Promise<T>): Promise<T> {
+  async execute<T>(key: string, operacion: string, sujeto: string, payload: unknown, fn: () => Promise<T>, ref?: Referencia<T>): Promise<T> {
     this.purgarCaducados();
     const requestHash = this.hash(payload);
 
@@ -60,6 +73,8 @@ export class IdempotencyService {
       if (existing.idem_estado !== 'DONE') {
         throw this.conflicto('IDEMPOTENCY_IN_PROGRESS', 'La operación se está procesando. Intenta de nuevo en unos segundos.');
       }
+      const guardada = existing.idem_response as { ref?: string } | null;
+      if (ref && guardada && typeof guardada.ref === 'string') return ref.reconstruir(guardada.ref);
       return existing.idem_response as T;
     }
 
@@ -67,7 +82,7 @@ export class IdempotencyService {
       const result = await fn();
       await this.db.query(
         `UPDATE idempotencia SET idem_estado = 'DONE', idem_response = $3 WHERE idem_clave = $1 AND idem_sujeto = $2`,
-        [key, sujeto, JSON.stringify(result ?? null)],
+        [key, sujeto, JSON.stringify(ref ? { ref: ref.referencia(result) } : (result ?? null))],
       );
       return result;
     } catch (err) {
@@ -79,7 +94,7 @@ export class IdempotencyService {
 
   private conflicto(code: string, detail: string) {
     return new ConflictException({
-      type: `https://api.descubre-ec.com/errors/${code.toLowerCase().replace(/_/g, '-')}`,
+      type: tipoError(code.toLowerCase().replace(/_/g, '-')),
       title: 'Conflicto de idempotencia',
       detail,
       code,

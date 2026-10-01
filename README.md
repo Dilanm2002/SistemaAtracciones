@@ -26,7 +26,7 @@ Los módulos y contratos de vuelos, autos y alojamientos que traía la plantilla
 
 Cada `git push` a `main` pasa por CI (`.github/workflows/ci.yml`: lint, tipos, tests, build, `npm audit` y gitleaks) y vuelve a desplegar ambos proyectos.
 
-Variables de la API en Vercel: `DATABASE_URL`, `DB_SSL=true`, `DB_POOL_MAX=1`, `SEED_ON_START=false`, `NODE_ENV=production`, `JWT_SECRET` (≥ 32 caracteres aleatorios), `JWT_EXPIRES_IN=2h`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET=uploads`, `PUBLIC_URL`, `FRONTEND_URL`. Variable del frontend: `VITE_API_URL`. `TRUST_PROXY` solo hace falta si la API está detrás de otro proxy (en Vercel se confía en `X-Forwarded-For` automáticamente; sin proxy, el límite de peticiones usa la IP de la conexión). La API **no arranca** si falta `JWT_SECRET`, si es un valor de ejemplo, si `DATABASE_URL` apunta a `localhost` en producción o si se intenta `DB_SYNC=true` en producción (`src/config/env.validation.ts`). En producción se ignora cualquier archivo `.env`.
+Variables de la API en Vercel: `DATABASE_URL`, `DB_SSL=true`, `DB_POOL_MAX=1`, `SEED_ON_START=false` (obligatorio), `ENABLE_DOCS=true`, `NODE_ENV=production`, `JWT_SECRET` (≥ 32 caracteres aleatorios), `JWT_EXPIRES_IN=2h`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET=uploads`, `PUBLIC_URL`, `FRONTEND_URL`. Variable del frontend: `VITE_API_URL`. `TRUST_PROXY` solo hace falta si la API está detrás de otro proxy (en Vercel se confía en `X-Forwarded-For` automáticamente; sin proxy, el límite de peticiones usa la IP de la conexión). La API **no arranca** si falta `JWT_SECRET`, si es un valor de ejemplo, si `DATABASE_URL` apunta a `localhost` en producción, si se intenta `DB_SYNC=true` o si `SEED_ON_START` no es `false` en producción (`src/config/env.validation.ts`). En producción se ignora cualquier archivo `.env`.
 
 `DB_POOL_MAX=1`: cada instancia serverless abre como mucho una conexión contra el *transaction pooler* de Supabase, cuyo límite es por proyecto; con N instancias concurrentes se usan N conexiones.
 
@@ -74,19 +74,21 @@ npm run lint
 
 ### Cuentas de demostración
 
-> ⚠️ Son **solo para la demo académica** y se crean con el *seed*. En cualquier despliegue real hay que cambiarles la contraseña (Perfil → Cambiar contraseña) o desactivarlas desde *Usuarios y roles*. El login está limitado a 5 intentos por minuto por IP.
+> ⚠️ Solo la cuenta de **cliente** es pública (no tiene permisos administrativos). Las contraseñas de **administrador** y **operador** de producción se rotaron y se entregan por privado al evaluador (CAL-009 / SEG-014). El login está limitado a 5 intentos por minuto por IP y el *seed* está bloqueado en producción (V2-SEG-01).
 
 | Rol | Correo | Contraseña | Acceso |
 |---|---|---|---|
-| Administrador (Andrea Salazar) | admin@descubre-ec.com | Admin123 | Panel completo |
-| Operador | operador@descubre-ec.com | Operador123 | Dashboard, Reservas y Disponibilidad **de su empresa** (Andes Explorer, código 101) |
+| Administrador (Andrea Salazar) | admin@descubre-ec.com | *(por privado)* | Panel completo |
+| Operador | operador@descubre-ec.com | *(por privado)* | Dashboard, Reservas y Disponibilidad **de su empresa** (Andes Explorer, código 101) |
 | Cliente | cliente@descubre-ec.com | Cliente123 | Reservar, Mis reservas, reseñas |
+
+En local (base del `docker-compose` con el *seed*) las contraseñas de demostración son las de `backend/src/seed/seed-data.ts`.
 
 Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha futura y CVV.
 
 ## Control de versiones
 
-Versión actual: **1.0.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+Versión actual: **2.0.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
 
 Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
 
@@ -174,15 +176,15 @@ Revisado con axe-core (WCAG 2.1 A/AA): **0 violaciones** en Inicio, Explorar, De
 | Tema | Decisión |
 |---|---|
 | SPA sin SSR (WEB-003) | El SEO no es requisito de la rúbrica: se cubre con `meta` Open Graph/Twitter, `canonical`, `robots.txt` y `sitemap.xml`. Si hiciera falta indexar cada atracción, migrar a pre-renderizado (vite-plugin-ssg) o Next.js |
-| Token en `localStorage` (WEB-008) | Aceptable para el prototipo, mitigado con CSP estricta y expiración de 2 h. Pendiente: cookie `httpOnly; Secure; SameSite=Strict` + token CSRF |
+| Token en `sessionStorage` (WEB-008) | Requisito: una sesión por pestaña (una cookie `httpOnly` se compartiría entre pestañas y sería *cross-site* entre subdominios de `vercel.app`). Mitigado con CSP estricta sin *inline scripts*, expiración de 2 h y revocación en servidor (≤ 3 s) |
 | `xlsx` desde el CDN de SheetJS (WEB-009) | La versión 0.20.3 (sin las vulnerabilidades de la 0.18) ya no se publica en npm; la URL fija la versión exacta |
-| Bucket `uploads` público (SEG-008) | Intencional: solo contiene fotos del catálogo, que son públicas. La clave `service_role` vive solo en la API (Vercel) y nunca llega al navegador |
-| Swagger en producción (SEG-019) | Se mantiene para la evaluación del contrato; se desactiva con `ENABLE_DOCS=false`. Sus assets vienen de jsDelivr porque la función serverless no sirve `swagger-ui-dist` |
-| Dependencias | CI bloquea vulnerabilidades críticas. Quedan avisos *high/moderate* de `@nestjs/*`, `multer` y `lodash` que exigen migrar a NestJS 11 (cambio mayor pendiente) |
+| Bucket `uploads` con lectura pública (SEG-008) | Intencional (como Sal y Canela): solo contiene fotos del catálogo, que son públicas. El bucket solo acepta JPG/PNG/WebP ≤ 4 MB; la clave de servidor vive solo en Vercel y `/health` verifica el almacenamiento |
+| Swagger y Redoc en producción (SEG-019) | *Opt-in* con `ENABLE_DOCS=true` (activado para la evaluación). Sus recursos se sirven desde `/vendor` del propio dominio, sin CDN de terceros |
+| Dependencias | NestJS 11 / Express 5, Vite 8 y React Router 7: `npm audit` sin vulnerabilidades. CI falla ante cualquier `high` (incluidas las de desarrollo), corre CodeQL y revisa las dependencias de cada PR |
 | `simple-json` y relaciones `eager` (DAT-004, DAT-007) | Resuelto con el modelo relacional: horarios, fotos, idiomas e inclusiones tienen tabla propia y la atracción se lee en una sola consulta |
 | Carrito, cupones y direcciones | Las tablas existen en el modelo y se validan en `02_verificacion.sql`, pero la interfaz todavía reserva una experiencia por compra (sin carrito ni cupones) |
 | Insignias (`badges`) | Se calculan a partir de los datos (ventas de 60 días, ocupación de 14 días, antigüedad); el campo del contrato se acepta pero se ignora al escribir |
-| Verificación de correo al registrarse (SEG-016) | Pendiente; el registro está limitado a 5 cuentas por hora por IP |
+| Verificación de correo al registrarse (SEG-016) | Requiere un proveedor de correo que el proyecto no tiene; el registro está limitado a 5 cuentas por hora por IP. Detalle de todas las correcciones de la auditoría V2 en [docs/CORRECCIONES-V2.md](docs/CORRECCIONES-V2.md) |
 
 ## Créditos de imágenes
 

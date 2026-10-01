@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { Request } from 'express';
+import { tipoError } from '../errors/problem-types';
 
 /**
  * Guard que exige la cabecera `Idempotency-Key` en formato UUID.
@@ -26,7 +27,7 @@ export class IdempotencyKeyGuard implements CanActivate {
     if (!idempotencyKey || idempotencyKey.trim() === '') {
       throw new HttpException(
         {
-          type: 'https://api.booking-hub.com/errors/missing-idempotency-key',
+          type: tipoError('missing-idempotency-key'),
           title: 'Falta la cabecera Idempotency-Key',
           status: HttpStatus.BAD_REQUEST,
           detail:
@@ -41,11 +42,12 @@ export class IdempotencyKeyGuard implements CanActivate {
     if (!IdempotencyKeyGuard.UUID_REGEX.test(idempotencyKey)) {
       throw new HttpException(
         {
-          type: 'https://api.booking-hub.com/errors/invalid-idempotency-key',
+          type: tipoError('invalid-idempotency-key'),
           title: 'Idempotency-Key con formato inválido',
           status: HttpStatus.BAD_REQUEST,
           detail:
-            `La cabecera Idempotency-Key debe ser un UUID v4 válido. Se recibió: "${idempotencyKey}".`,
+            // No se refleja el valor recibido: evita inyectar texto del cliente en la respuesta y en los logs (V2-SEG-02)
+            'La cabecera Idempotency-Key debe ser un UUID v4 válido (p. ej. 3f0c2c1e-8a4b-4c1d-9e2f-5b6a7c8d9e0f).',
           code: 'VALIDATION_FAILED',
         },
         HttpStatus.BAD_REQUEST,

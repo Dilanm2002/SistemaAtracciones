@@ -117,6 +117,21 @@ button:disabled { cursor: not-allowed; }
   outline: 3px solid var(--primary);
   outline-offset: 2px;
 }
+/*
+ * Superficies oscuras (ACC-001, WCAG 1.4.11): el anillo verde no llega a 3:1 sobre el sidebar del
+ * panel, el pie de página, las fotos del hero/login ni los toasts, así que ahí el foco es ámbar
+ * claro (#fcd34d ≈ 9:1 sobre #0f2a26) con un halo oscuro que lo separa del fondo.
+ */
+.adm-sidebar :focus-visible,
+.site-footer :focus-visible,
+.hero :focus-visible,
+.auth-visual :focus-visible,
+.toast :focus-visible {
+  outline-color: #fcd34d;
+  box-shadow: 0 0 0 5px rgba(15, 23, 20, 0.85);
+}
+/* Los campos blancos dentro del hero siguen usando el anillo verde (fondo claro) */
+.hero .input:focus-visible, .hero input:focus-visible, .hero .searchbar :focus-visible { outline-color: var(--primary); box-shadow: none; }
 /* El foco programático de los contenedores (main, contenido del panel) no muestra anillo */
 [tabindex='-1']:focus:not(:focus-visible) { outline: none; }
 

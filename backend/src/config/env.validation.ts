@@ -28,6 +28,11 @@ export function validateEnv(env: Record<string, unknown>): Record<string, unknow
   }
 
   if (prod && get('DB_SYNC') === 'true') errores.push('DB_SYNC=true no está permitido en producción: usa migraciones.');
+  // El seed crea usuarios de demostración con contraseñas conocidas: en producción debe estar
+  // apagado de forma EXPLÍCITA; si la variable falta, la API no arranca (V2-SEG-01).
+  if (prod && get('SEED_ON_START') !== 'false') {
+    errores.push('SEED_ON_START debe ser false en producción (el seed crea usuarios con contraseñas conocidas).');
+  }
 
   if (errores.length) {
     throw new Error(`Configuración inválida:\n - ${errores.join('\n - ')}`);

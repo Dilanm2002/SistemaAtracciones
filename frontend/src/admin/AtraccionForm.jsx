@@ -448,7 +448,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
                 ))}
                 {pendientes.map((p) => (
                   <li key={p.id} className="photo-card is-uploading" aria-label={`Subiendo ${p.nombre}`}>
-                    <img src={p.url} alt="" />
+                    <img src={p.url} alt="" loading="eager" decoding="async" /* vista previa local (blob:) ya visible */ />
                     <div className="ph-overlay"><Spinner /> Subiendo…</div>
                   </li>
                 ))}

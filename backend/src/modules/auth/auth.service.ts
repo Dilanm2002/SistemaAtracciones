@@ -199,7 +199,7 @@ export class AuthService {
     }
     if (query.q?.trim()) {
       const t = p.add(`%${escapeLike(query.q.trim())}%`);
-      where.push(`(u.usu_nombre ILIKE ${t} OR u.usu_apellido ILIKE ${t} OR u.usu_correo ILIKE ${t})`);
+      where.push(`(u.usu_nombre ILIKE ${t} ESCAPE '\\' OR u.usu_apellido ILIKE ${t} ESCAPE '\\' OR u.usu_correo ILIKE ${t} ESCAPE '\\')`);
     }
     const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const [{ total }] = await this.db.query<{ total: number }>(`SELECT COUNT(*)::int AS total FROM usuario u ${w}`, p.values);

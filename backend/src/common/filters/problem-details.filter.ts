@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { QueryFailedError } from 'typeorm';
+import { tipoError } from '../errors/problem-types';
 
 /** Error de `http-errors` (lo lanzan body-parser y otros middlewares) con estado 4xx pensado para el cliente. */
 const esErrorHttpCliente = (e: unknown): e is Error & { status: number } => {
@@ -52,7 +53,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         // Errores de class-validator
         const messages = (payload as { message: string[] }).message;
         body = {
-          type: 'https://api.descubre-ec.com/errors/validation',
+          type: tipoError('validation'),
           title: 'Datos de entrada inválidos',
           detail: messages[0],
           code: 'VALIDATION_FAILED',
@@ -62,7 +63,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
         const obj = typeof payload === 'object' && payload !== null ? (payload as { message?: string; code?: string }) : {};
         const message = typeof payload === 'string' ? payload : obj.message;
         body = {
-          type: `https://api.descubre-ec.com/errors/${status}`,
+          type: tipoError(status),
           title: ProblemDetailsFilter.TITLES[status] ?? 'Error',
           detail: message,
           ...(obj.code ? { code: obj.code } : {}),
@@ -72,7 +73,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       // Valor con formato inválido para la columna (p. ej. un UUID mal formado): es un 400, no un 500
       status = HttpStatus.BAD_REQUEST;
       body = {
-        type: 'https://api.descubre-ec.com/errors/invalid-value',
+        type: tipoError('invalid-value'),
         title: 'Solicitud inválida',
         detail: 'Uno de los valores enviados no tiene el formato esperado.',
         code: 'VALIDATION_FAILED',
@@ -81,7 +82,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       // Restricción CHECK o dominio (dom_correo, dom_ruc, dom_documento…), NOT NULL o valor fuera de rango
       status = HttpStatus.BAD_REQUEST;
       body = {
-        type: 'https://api.descubre-ec.com/errors/constraint',
+        type: tipoError('constraint'),
         title: 'Solicitud inválida',
         detail: 'Alguno de los datos no cumple las reglas del sistema (formato de correo, RUC, documento, teléfono o un valor fuera de rango).',
         code: 'CONSTRAINT_VIOLATION',
@@ -90,7 +91,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     } else if (exception instanceof QueryFailedError && pgCode(exception) === '23503') {
       status = HttpStatus.CONFLICT;
       body = {
-        type: 'https://api.descubre-ec.com/errors/in-use',
+        type: tipoError('in-use'),
         title: 'Conflicto',
         detail: 'La operación no es posible porque el registro está relacionado con otros datos.',
         code: 'FOREIGN_KEY',
@@ -98,7 +99,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     } else if (exception instanceof QueryFailedError && pgCode(exception) === '23505') {
       status = HttpStatus.CONFLICT;
       body = {
-        type: 'https://api.descubre-ec.com/errors/duplicate',
+        type: tipoError('duplicate'),
         title: 'Registro duplicado',
         detail: 'Ya existe un registro con esos datos únicos.',
         code: 'DUPLICATE',
@@ -107,14 +108,14 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       // Errores 4xx de los middlewares de Express (body-parser: cuerpo > 100 kB, charset no soportado…)
       status = exception.status;
       body = {
-        type: `https://api.descubre-ec.com/errors/${status}`,
+        type: tipoError(status),
         title: ProblemDetailsFilter.TITLES[status] ?? 'Solicitud inválida',
         detail: status === HttpStatus.PAYLOAD_TOO_LARGE ? 'El cuerpo de la solicitud supera el tamaño máximo permitido (100 kB).' : exception.message,
       };
     } else {
       this.logger.error(`[${(req as Request & { id?: string }).id ?? '-'}] ${exception instanceof Error ? exception.stack : String(exception)}`);
       body = {
-        type: 'https://api.descubre-ec.com/errors/internal',
+        type: tipoError('internal'),
         title: ProblemDetailsFilter.TITLES[500],
         detail: 'Ocurrió un error inesperado. Intenta nuevamente en unos minutos.',
       };

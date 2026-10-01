@@ -8,10 +8,10 @@ import helmet from 'helmet';
 import { join } from 'path';
 import { AppModule } from './app.module';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
+import { JsonLogger, registroPeticiones } from './common/logging/json-logger';
 import { confianzaProxy } from './config/proxy';
 import { API_VERSION } from './config/version';
 
-const SWAGGER_CDN = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14';
 export { API_VERSION };
 
 /**
@@ -20,7 +20,13 @@ export { API_VERSION };
  */
 export async function createApp(): Promise<NestExpressApplication> {
   // abortOnError=false: si falla el arranque se lanza la excepción en vez de hacer process.exit(1)
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { abortOnError: false, bodyParser: true });
+  // En producción los logs son JSON de una línea con request_id (OPS-005)
+  const prod = process.env.NODE_ENV === 'production';
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    abortOnError: false,
+    bodyParser: true,
+    ...(prod ? { logger: new JsonLogger() } : {}),
+  });
 
   // IP real para el límite de peticiones y los logs (SEG-021). Solo se confía en X-Forwarded-For
   // detrás de un proxy que la reescribe (Vercel, o el que indique TRUST_PROXY); expuesta
@@ -37,6 +43,7 @@ export async function createApp(): Promise<NestExpressApplication> {
     res.setHeader('X-Request-Id', req.id);
     next();
   });
+  if (prod || process.env.LOG_REQUESTS === 'true') app.use(registroPeticiones);
 
   // Cuerpos pequeños: ningún payload legítimo de la API supera 100 kB (SEG-022)
   app.useBodyParser('json', { limit: '100kb' });
@@ -49,10 +56,10 @@ export async function createApp(): Promise<NestExpressApplication> {
         directives: {
           defaultSrc: ["'self'"],
           imgSrc: ["'self'", 'data:', 'https://*.supabase.co', 'https://validator.swagger.io', 'https://cdn.redoc.ly'],
-          scriptSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+          scriptSrc: ["'self'"],
           // Redoc usa un web worker creado desde un blob
           workerSrc: ["'self'", 'blob:'],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          styleSrc: ["'self'", "'unsafe-inline'"],
           connectSrc: ["'self'"],
           frameAncestors: ["'none'"],
           objectSrc: ["'none'"],
@@ -96,8 +103,9 @@ export async function createApp(): Promise<NestExpressApplication> {
   // Errores en formato RFC 7807 (application/problem+json)
   app.useGlobalFilters(new ProblemDetailsFilter());
 
-  // Swagger: activo por defecto (proyecto API-First); se apaga con ENABLE_DOCS=false (SEG-019)
-  if (process.env.ENABLE_DOCS !== 'false') {
+  // Documentación (SEG-019): en producción solo si se habilita explícitamente con ENABLE_DOCS=true
+  // (lo está, porque el proyecto es API-First y la rúbrica pide Swagger/Redoc públicos).
+  if (process.env.ENABLE_DOCS === 'true' || process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('Descubre EC - API de Atracciones')
       .setDescription(
@@ -110,10 +118,10 @@ export async function createApp(): Promise<NestExpressApplication> {
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
-    // Los recursos de Swagger UI se cargan desde CDN (versión fijada) para que funcione también en serverless
+    // Swagger UI desde /vendor (copiado de node_modules por scripts/vendor-docs.js en postinstall)
     SwaggerModule.setup('api/docs', app, document, {
-      customCssUrl: `${SWAGGER_CDN}/swagger-ui.css`,
-      customJs: [`${SWAGGER_CDN}/swagger-ui-bundle.js`, `${SWAGGER_CDN}/swagger-ui-standalone-preset.js`],
+      customCssUrl: '/vendor/swagger-ui/swagger-ui.css',
+      customJs: ['/vendor/swagger-ui/swagger-ui-bundle.js', '/vendor/swagger-ui/swagger-ui-standalone-preset.js'],
     });
 
     // Redoc del CONTRATO oficial (API-First): contracts/atracciones-openapi.yaml.
@@ -123,7 +131,7 @@ export async function createApp(): Promise<NestExpressApplication> {
 <html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Contrato OpenAPI · Atracciones · Descubre EC</title><link rel="icon" href="data:,"></head>
 <body><redoc spec-url="/api/v1/contracts/atracciones-openapi.yaml" hide-download-button="false"></redoc>
-<script src="https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js"></script></body></html>`);
+<script src="/vendor/redoc-2.1.5/redoc.standalone.js"></script></body></html>`);
     });
   }
 

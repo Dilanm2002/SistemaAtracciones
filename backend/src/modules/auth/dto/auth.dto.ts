@@ -53,7 +53,7 @@ export class LoginDto {
   @IsEmail({}, { message: 'email no tiene un formato válido' })
   email: string;
 
-  @ApiProperty({ example: 'Admin123' })
+  @ApiProperty({ example: 'MiClave2026' })
   @IsString()
   @MinLength(1, { message: 'password es obligatorio' })
   @MaxLength(200)

@@ -10,6 +10,7 @@ import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SCOPES } from '../../common/auth/scopes';
 import { DbService } from '../../common/db/db.service';
 import { EVENTOS } from '../../common/db/eventos';
+import { PROBLEMAS, tipoError } from '../../common/errors/problem-types';
 
 const TIPOS = Object.values(EVENTOS) as string[];
 
@@ -119,6 +120,25 @@ export class ContratosController {
   }
 }
 
+/** Tipos de problema resolubles: la URI del campo `type` de cada error apunta aquí (RFC 7807 §3.1). */
+@ApiTags('Errores')
+@Controller('errores')
+export class ErroresController {
+  @Get()
+  @ApiOperation({ summary: 'Catálogo de tipos de error (application/problem+json)' })
+  listar() {
+    return Object.entries(PROBLEMAS).map(([tipo, p]) => ({ type: tipoError(tipo), status: p.status, title: p.titulo, description: p.descripcion }));
+  }
+
+  @Get(':tipo')
+  @ApiOperation({ summary: 'Qué significa un tipo de error y cómo resolverlo' })
+  uno(@Param('tipo') tipo: string) {
+    const p = PROBLEMAS[tipo];
+    if (!p) throw new NotFoundException('Ese tipo de error no existe.');
+    return { type: tipoError(tipo), status: p.status, title: p.titulo, description: p.descripcion };
+  }
+}
+
 /** Preparación para la integración con otros sistemas (SOA/EDA). */
-@Module({ controllers: [EventosController, ContratosController] })
+@Module({ controllers: [EventosController, ContratosController, ErroresController] })
 export class IntegracionModule {}

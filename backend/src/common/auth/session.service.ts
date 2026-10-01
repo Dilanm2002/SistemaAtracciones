@@ -10,7 +10,13 @@ interface EstadoSesion {
   operador: number | null;
 }
 
-const TTL_MS = 15_000;
+/**
+ * Caché por instancia del estado de la sesión. En serverless hay varias instancias sin memoria
+ * compartida, así que tras un logout, cambio de contraseña o de rol otra instancia puede seguir
+ * aceptando el token como mucho TTL_MS. 3 s acota esa ventana (V2-CON-01) y sigue ahorrando la
+ * consulta en ráfagas de peticiones del mismo usuario (una página carga varias a la vez).
+ */
+const TTL_MS = 3_000;
 
 export const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
 

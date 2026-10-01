@@ -3,7 +3,7 @@ import { AuthUser, esAdmin, SCOPES } from '../../common/auth/scopes';
 import { BitacoraService } from '../../common/db/bitacora.service';
 import { CatalogosService } from '../../common/db/catalogos.service';
 import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
-import { IdempotencyService } from '../../common/idempotency/idempotency.service';
+import { IdempotencyService, Referencia } from '../../common/idempotency/idempotency.service';
 import { escapeLike } from '../../common/utils/sql';
 import { AtraccionMapper } from './atraccion.mapper';
 import { cancelarCompra, confirmarCompra, registrarCompra } from './compras';
@@ -50,6 +50,16 @@ export class ReservasService {
   private async fila(uuid: string, sql: Sql = this.db): Promise<FilaReserva | null> {
     return sql.one<FilaReserva>(`${SELECT_RESERVA} WHERE r.res_uuid = $1`, [uuid]);
   }
+
+  /** Idempotencia sin PII: se guarda solo el UUID de la reserva y la respuesta se rehace al repetir (SEG-013). */
+  private readonly porReferencia: Referencia<ReservationResponseDto> = {
+    referencia: (r) => r.reservation_id,
+    reconstruir: async (uuid) => {
+      const f = await this.fila(uuid);
+      if (!f) throw new NotFoundException('La reserva ya no existe.');
+      return this.mapper.toReservation(f);
+    },
+  };
 
   // ── Crear reserva ─────────────────────────────────────────────────────
   reserve(atrUuid: string, dto: ReservationRequestDto, key: string, user: AuthUser): Promise<ReservationResponseDto> {
@@ -149,7 +159,7 @@ export class ReservasService {
       });
       await this.bitacora.registrar(user.sub, 'CREAR', 'reserva', uuid, { atraccion: atrUuid });
       return this.mapper.toReservation((await this.fila(uuid))!);
-    });
+    }, this.porReferencia);
   }
 
   // ── Consultas ─────────────────────────────────────────────────────────
@@ -169,7 +179,7 @@ export class ReservasService {
     if (query.attraction_id) w.push(`a.atr_uuid = ${p.add(query.attraction_id)}`);
     if (query.q?.trim()) {
       const q = p.add(`%${escapeLike(query.q.trim())}%`);
-      w.push(`(r.res_codigo ILIKE ${q} OR pax.pax_nombre ILIKE ${q} OR u.usu_correo ILIKE ${q} OR pax.pax_correo ILIKE ${q})`);
+      w.push(`(r.res_codigo ILIKE ${q} ESCAPE '\\' OR pax.pax_nombre ILIKE ${q} ESCAPE '\\' OR u.usu_correo ILIKE ${q} ESCAPE '\\' OR pax.pax_correo ILIKE ${q} ESCAPE '\\')`);
     }
     const where = w.length ? `WHERE ${w.join(' AND ')}` : '';
     const dir = query.when === 'past' ? 'DESC' : 'ASC';
@@ -216,7 +226,7 @@ export class ReservasService {
       });
       await this.bitacora.registrar(user.sub, 'CANCELAR', 'reserva', uuid, { motivo: dto.reason });
       return this.mapper.toReservation((await this.fila(uuid))!);
-    });
+    }, this.porReferencia);
   }
 
   // ── Confirmar (pago verificado por el operador) ───────────────────────
@@ -233,6 +243,6 @@ export class ReservasService {
       });
       await this.bitacora.registrar(user.sub, 'CONFIRMAR_PAGO', 'reserva', uuid);
       return this.mapper.toReservation((await this.fila(uuid))!);
-    });
+    }, this.porReferencia);
   }
 }

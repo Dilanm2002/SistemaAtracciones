@@ -35,6 +35,25 @@ export class StorageService {
     this.bucket = config.get<string>('SUPABASE_BUCKET', 'uploads');
   }
 
+  /**
+   * Estado del almacenamiento para /health (SEG-010): prueba que la clave configurada es la de
+   * servidor leyendo la configuración del bucket (la clave pública no puede hacerlo). No expone la clave.
+   */
+  async estado(): Promise<Record<string, unknown>> {
+    if (!this.url || !this.key) return { status: 'LOCAL', detalle: 'public/uploads (desarrollo)' };
+    try {
+      const res = await fetch(`${this.url}/storage/v1/bucket/${this.bucket}`, {
+        headers: { Authorization: `Bearer ${this.key}`, apikey: this.key },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!res.ok) return { status: 'DOWN', bucket: this.bucket, http: res.status };
+      const b = (await res.json()) as { public?: boolean; file_size_limit?: number | null; allowed_mime_types?: string[] | null };
+      return { status: 'UP', provider: 'supabase', bucket: this.bucket, public_read: b.public, file_size_limit: b.file_size_limit, allowed_mime_types: b.allowed_mime_types };
+    } catch {
+      return { status: 'DOWN', bucket: this.bucket };
+    }
+  }
+
   /** Devuelve una ruta relativa (/uploads/x.jpg) o una URL absoluta pública. */
   async save(file: { buffer: Buffer; mimetype: string; originalname: string }): Promise<string> {
     const tipo = detectarImagen(file.buffer);

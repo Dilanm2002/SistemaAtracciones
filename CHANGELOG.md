@@ -7,6 +7,61 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.0.0] - 2026-09-30
+
+Versión que cierra los hallazgos abiertos de la reauditoría V2. Es **MAYOR** porque cambia
+la plataforma (NestJS 11 / Express 5, React Router 7, Vite 8), las URIs `type` de los
+errores, el acceso a la documentación y las credenciales de producción. El detalle por
+hallazgo está en [docs/CORRECCIONES-V2.md](docs/CORRECCIONES-V2.md).
+
+### Cambiado (incompatible)
+- **Plataforma:**
+  - Backend en NestJS 11 + Express 5 (`@nestjs/swagger` 11, `@nestjs/config` 4, `@nestjs/jwt` 11).
+  - Frontend en Vite 8 + React Router 7.
+  - `npm audit`: **0 vulnerabilidades** en el backend y en el frontend, incluidas las dependencias de desarrollo (antes 13 y 2).
+- **Errores RFC 7807:**
+  - El campo `type` apunta al propio dominio y se puede resolver: `GET /api/v1/errores/{tipo}` describe cada tipo.
+  - El guard de `Idempotency-Key` ya no refleja el valor recibido (V2-SEG-02).
+- **Documentación de la API:**
+  - Swagger y Redoc son opt-in en producción (`ENABLE_DOCS=true`).
+  - Sus recursos se sirven desde `/vendor` del propio dominio, sin CDN de terceros (SEG-019).
+- **Credenciales de producción:**
+  - Se rotaron las contraseñas de administrador y operador.
+  - Solo la cuenta de cliente de demo es pública (CAL-009 / SEG-014).
+
+### Seguridad
+- **Seed (V2-SEG-01):**
+  - Es *fail-closed*: la API no arranca en producción sin `SEED_ON_START=false`.
+  - El seed se niega a ejecutarse con `NODE_ENV=production`.
+- **Migraciones (V2-OPS-01):** solo en el despliegue de producción; los builds de *preview* compilan sin tocar el esquema.
+- **Idempotencia (SEG-013):** guarda solo el UUID de la reserva (sin datos personales) y reconstruye la respuesta al repetir.
+- **Sesiones (V2-CON-01):** la caché de sesión baja de 15 s a 3 s, así que la revocación tarda como máximo 3 s entre instancias.
+- **Búsquedas (V2-DAT-01):** `ESCAPE '\'` explícito en todos los `ILIKE` parametrizados.
+- **Bucket de imágenes (SEG-008):**
+  - Supabase solo acepta JPG/PNG/WebP de hasta 4 MB.
+  - `/health` comprueba el almacenamiento con la clave de servidor (SEG-010).
+- **CI (V2-CAL-01):** CodeQL (`security-extended`), revisión de dependencias en los PR y `npm audit --audit-level=high` sobre todas las dependencias.
+
+### Agregado
+- **Observabilidad (OPS-005):**
+  - Logs JSON de una línea con `request_id`, método, ruta, estado y duración.
+  - Métricas de la instancia en `/health`.
+- **Cobertura del contrato (API-015):** `contract-coverage.spec.ts` compara el contrato OpenAPI con las rutas de Nest y falla ante una ruta sin documentar o una promesa sin implementar.
+- **Sesión y datos por pestaña:**
+  - Cada pestaña tiene su propio inicio de sesión.
+  - Los favoritos son por usuario y no quedan guardados en el navegador.
+- **Fotos en Supabase Storage**, como en Sal y Canela: se comprimen en el navegador, se suben al bucket y la tabla guarda la URL.
+- **Formularios:**
+  - Validación en vivo con máscaras numéricas.
+  - Cédula y teléfono ecuatorianos (migración 004).
+  - Gestor de fotos con arrastrar y soltar.
+- **Interfaz:** barra de navegación fija también en el inicio.
+- **Disponibilidad:** el workflow *keepalive* consulta la API cada 10 min (Vercel siempre caliente y Supabase sin pausa).
+
+### Corregido
+- **Foco visible (ACC-001):** sobre superficies oscuras (panel, pie, hero, toasts) el anillo es ámbar con contraste ≥ 8:1.
+- **Imágenes (WEB-006):** las 2 que se ven de inmediato declaran `loading="eager"` de forma explícita.
+
 ## [1.0.0] - 2026-09-29
 
 Primera versión estable: sitio público, panel de administración y API de Atracciones.

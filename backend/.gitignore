@@ -39,3 +39,6 @@ lerna-debug.log*
 .env.production
 .vercel
 .env*
+
+# Copia de Swagger UI generada en postinstall (scripts/vendor-docs.js)
+/public/vendor/swagger-ui/

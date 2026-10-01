@@ -54,12 +54,17 @@ export class SeedService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    if (this.config.get('SEED_ON_START', 'true') === 'false') return;
+    // Fail-closed (V2-SEG-01): solo siembra si se pide explícitamente y nunca en producción
+    const prod = this.config.get('NODE_ENV') === 'production';
+    if (prod || this.config.get('SEED_ON_START', 'true') !== 'true') return;
     await this.sembrar();
   }
 
   /** Devuelve true si cargó datos (false si la base ya tenía atracciones). */
   async sembrar(): Promise<boolean> {
+    if (this.config.get('NODE_ENV') === 'production' && this.config.get('SEED_DEMO_EN_PRODUCCION') !== 'true') {
+      throw new Error('El seed de demostración está bloqueado en producción (crea usuarios con contraseñas conocidas). Usa SEED_DEMO_EN_PRODUCCION=true solo para poblar una base nueva de demo.');
+    }
     const hay = await this.db.one<{ n: number }>('SELECT COUNT(*)::int AS n FROM atraccion');
     if (hay && hay.n > 0) return false;
     this.logger.log('Base vacía: cargando datos de demostración…');

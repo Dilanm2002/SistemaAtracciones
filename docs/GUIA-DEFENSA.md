@@ -4,8 +4,8 @@
 
 1. **Está en la nube** — abrir `…/api/v1/atracciones/health`: muestra la API y la base de datos de Supabase (`status: UP`, 44 tablas, migraciones aplicadas, conteos reales).
 2. **Marketplace** — https://descubre-ec.vercel.app: buscar por región o categoría, abrir una atracción, elegir fecha en el calendario (cupos reales), reservar con tarjeta de prueba `4111 1111 1111 1111` (cliente@descubre-ec.com / Cliente123), ver la confirmación y "Mis reservas", cancelar.
-3. **Administración** — admin@descubre-ec.com / Admin123: crear/editar una atracción (tarifas, horarios, fotos), categorías con subcategorías, destinos, operadores; confirmar un pago pendiente en Reservas; bloquear una fecha en Disponibilidad; ver Reportes y exportar a Excel.
-4. **Operador** — operador@descubre-ec.com / Operador123: solo ve las reservas y la disponibilidad de su empresa.
+3. **Administración** — admin@descubre-ec.com (contraseña entregada por privado): crear/editar una atracción (tarifas, horarios, fotos), categorías con subcategorías, destinos, operadores; confirmar un pago pendiente en Reservas; bloquear una fecha en Disponibilidad; ver Reportes y exportar a Excel.
+4. **Operador** — operador@descubre-ec.com (contraseña entregada por privado): solo ve las reservas y la disponibilidad de su empresa.
 5. **APIs** — Swagger (`/api/docs`, probar un endpoint con el token) y Redoc (`/api/redoc`, el contrato acordado).
 6. **Integración** — panel › Eventos y contratos: los eventos que generó la reserva del paso 2 y los contratos OpenAPI / AsyncAPI / GraphQL / gRPC.
 7. **Base de datos** — Supabase › Table Editor (esquema `public`) o SQL Editor: `SELECT * FROM ops.migracion;` y `SELECT count(*) FROM reserva;`.

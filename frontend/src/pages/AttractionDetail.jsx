@@ -26,7 +26,7 @@ function Lightbox({ photos, index, onClose, onIndex }) {
 
   return (
     <div className="lightbox" role="dialog" aria-modal="true" aria-label="Galería de fotos" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <img src={photos[index].url} alt={`Foto ${index + 1} de ${photos.length}`} decoding="async" />
+      <img src={photos[index].url} alt={`Foto ${index + 1} de ${photos.length}`} loading="eager" decoding="async" /* foto abierta en el visor: visible de inmediato (WEB-006) */ />
       <button className="icon-btn lb-close" onClick={onClose} aria-label="Cerrar galería" autoFocus><X size={24} /></button>
       {photos.length > 1 && (
         <>

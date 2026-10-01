@@ -31,8 +31,8 @@ jobs:
       - run: npx tsc --noEmit -p tsconfig.json
       - run: npm test -- --ci
       - run: npm run build
-      - name: npm audit (dependencias de producción)
-        run: npm audit --omit=dev --audit-level=critical
+      - name: npm audit (todas las dependencias, también las de desarrollo; falla con high o critical)
+        run: npm audit --audit-level=high
 
   database:
     name: Modelo relacional (migraciones · seed · 02_verificacion.sql · E2E)
@@ -92,8 +92,8 @@ jobs:
       - run: npm run build
         env:
           VITE_API_URL: https://sistemaatracciones-backend.vercel.app/api/v1
-      - name: npm audit (dependencias de producción)
-        run: npm audit --omit=dev --audit-level=critical
+      - name: npm audit (todas las dependencias, también las de desarrollo; falla con high o critical)
+        run: npm audit --audit-level=high
 
   secrets:
     name: Escaneo de secretos (gitleaks)
@@ -105,3 +105,30 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  codeql:
+    name: Análisis estático de seguridad (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: '/language:javascript-typescript'
+
+  dependency-review:
+    name: Revisión de dependencias del PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

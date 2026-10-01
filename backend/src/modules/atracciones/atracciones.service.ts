@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { AuthUser, esAdmin } from '../../common/auth/scopes';
 import { API_VERSION } from '../../config/version';
@@ -6,6 +6,8 @@ import { BitacoraService } from '../../common/db/bitacora.service';
 import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
 import { emitirEvento, EVENTOS, TipoEvento } from '../../common/db/eventos';
 import { paginate } from '../../common/utils/hateoas';
+import { metricas } from '../../common/logging/json-logger';
+import { StorageService } from '../../common/storage/storage.service';
 import { escapeLike } from '../../common/utils/sql';
 import { AtraccionMapper } from './atraccion.mapper';
 import { AvailabilityResponseDto, BlockDateDto, CalendarDayDto } from './dto/availability.dto';
@@ -21,10 +23,13 @@ const VISIBLE = `a.atr_eliminado_en IS NULL`;
 
 @Injectable()
 export class AtraccionesService {
+  private readonly logger = new Logger('Atracciones');
+
   constructor(
     private readonly db: DbService,
     private readonly mapper: AtraccionMapper,
     private readonly bitacora: BitacoraService,
+    private readonly storage: StorageService,
   ) {}
 
   /** Carga filas completas por atr_id conservando el orden recibido. */
@@ -38,6 +43,14 @@ export class AtraccionesService {
   /** Healthcheck para el API Gateway: incluye el estado real de la base de datos. */
   async estado() {
     const inicio = Date.now();
+    const storage = await this.storage.estado();
+    const instancia = {
+      uptime_s: Math.round((Date.now() - metricas.inicio) / 1000),
+      requests: metricas.peticiones,
+      errors_4xx: metricas.errores4xx,
+      errors_5xx: metricas.errores5xx,
+      slow_requests: metricas.lentas,
+    };
     try {
       const r = await this.db.one<{ tablas: number; migraciones: string[]; atracciones: number; reservas: number; eventos: number }>(
         `SELECT (SELECT COUNT(*)::int FROM pg_tables WHERE schemaname = 'public') AS tablas,
@@ -52,9 +65,13 @@ export class AtraccionesService {
         version: API_VERSION,
         timestamp: new Date().toISOString(),
         database: { status: 'UP', latency_ms: Date.now() - inicio, model: 'database/01_esquema.sql', ...r },
+        storage,
+        instance: instancia,
       };
     } catch (e) {
-      return { status: 'DEGRADED', service: 'atracciones', version: API_VERSION, timestamp: new Date().toISOString(), database: { status: 'DOWN', error: (e as Error).message } };
+      // El detalle del error va al log (con request_id), no a la respuesta pública
+      this.logger.error(`Health: la base no responde: ${(e as Error).message}`);
+      return { status: 'DEGRADED', service: 'atracciones', version: API_VERSION, timestamp: new Date().toISOString(), database: { status: 'DOWN' }, storage, instance: instancia };
     }
   }
 
@@ -77,7 +94,7 @@ export class AtraccionesService {
     if (dto.cities?.length) w.push(`a.ciu_id = ANY(${p.add(dto.cities)}::int[])`);
     if (f.query?.trim()) {
       const q = p.add(`%${escapeLike(f.query.trim())}%`);
-      w.push(`(a.atr_nombre ILIKE ${q} OR a.atr_descripcion ILIKE ${q} OR c.ciu_nombre ILIKE ${q} OR pv.prov_nombre ILIKE ${q})`);
+      w.push(`(a.atr_nombre ILIKE ${q} ESCAPE '\\' OR a.atr_descripcion ILIKE ${q} ESCAPE '\\' OR c.ciu_nombre ILIKE ${q} ESCAPE '\\' OR pv.prov_nombre ILIKE ${q} ESCAPE '\\')`);
     }
     if (f.categories?.length) {
       w.push(`EXISTS (SELECT 1 FROM atraccion_categoria ac JOIN categoria ca ON ca.cat_id = ac.cat_id
@@ -191,7 +208,7 @@ export class AtraccionesService {
 
     if (query.q?.trim()) {
       const q = p.add(`%${escapeLike(query.q.trim())}%`);
-      w.push(`(a.atr_nombre ILIKE ${q} OR c.ciu_nombre ILIKE ${q})`);
+      w.push(`(a.atr_nombre ILIKE ${q} ESCAPE '\\' OR c.ciu_nombre ILIKE ${q} ESCAPE '\\')`);
     }
     if (query.category) {
       w.push(`EXISTS (SELECT 1 FROM atraccion_categoria ac JOIN categoria ca ON ca.cat_id = ac.cat_id

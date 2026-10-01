@@ -62,3 +62,23 @@ export async function moverImagenesAStorage(query: Consulta, opciones: OpcionesS
   log(movidas ? `Imágenes: ${movidas} foto(s) del catálogo subidas a Supabase Storage (${bucket}/catalogo).` : 'Imágenes: el catálogo ya está en Supabase Storage.');
   return movidas;
 }
+
+/**
+ * Endurece el bucket (SEG-008): lectura pública solo porque son fotos del catálogo que cualquier
+ * visitante debe ver (igual que Sal y Canela), pero Supabase rechaza en el propio bucket todo lo
+ * que no sea JPG/PNG/WebP de hasta 4 MB. Escribir sigue siendo posible únicamente desde la API.
+ */
+export async function configurarBucket(opciones: OpcionesStorage = {}): Promise<boolean> {
+  const url = (opciones.url ?? process.env.SUPABASE_URL)?.replace(/\/$/, '');
+  const key = opciones.key ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = opciones.bucket ?? process.env.SUPABASE_BUCKET ?? 'uploads';
+  if (!url || !key) return false;
+  const res = await fetch(`${url}/storage/v1/bucket/${bucket}`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public: true, file_size_limit: 4 * 1024 * 1024, allowed_mime_types: Object.values(MIME).filter((m, i, a) => a.indexOf(m) === i) }),
+  });
+  if (!res.ok) throw new Error(`Supabase Storage ${res.status} al configurar el bucket ${bucket}: ${await res.text()}`);
+  opciones.log?.(`Imágenes: bucket ${bucket} limitado a JPG/PNG/WebP de hasta 4 MB.`);
+  return true;
+}

@@ -18,6 +18,14 @@ describe('validateEnv (SEG-003, OPS-006, OPS-007)', () => {
     expect(() => validateEnv({ ...base, NODE_ENV: 'production', DB_SYNC: 'true' })).toThrow(/DB_SYNC/);
   });
 
+  it('en producción exige SEED_ON_START=false de forma explícita (V2-SEG-01)', () => {
+    const prod = { ...base, NODE_ENV: 'production' };
+    expect(() => validateEnv(prod)).toThrow(/SEED_ON_START/);
+    expect(() => validateEnv({ ...prod, SEED_ON_START: 'true' })).toThrow(/SEED_ON_START/);
+    expect(() => validateEnv({ ...prod, SEED_ON_START: 'false' })).not.toThrow();
+    expect(() => validateEnv({ ...base })).not.toThrow(); // en desarrollo no se exige
+  });
+
   it('exige SUPABASE_URL y la clave secreta juntas, y rechaza la clave pública', () => {
     expect(() => validateEnv({ ...base, SUPABASE_URL: 'https://x.supabase.co' })).toThrow(/deben definirse juntas/);
     expect(() => validateEnv({ ...base, SUPABASE_URL: 'https://x.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'sb_publishable_abc' })).toThrow(/clave pública/);
