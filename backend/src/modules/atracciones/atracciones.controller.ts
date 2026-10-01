@@ -16,6 +16,7 @@ import {
   Res,
   UseGuards,
 } from '@nestjs/common';
+import { CachePublico } from '../../common/http/cache-publico';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { CurrentUser, Scopes } from '../../common/auth/auth.decorators';
@@ -142,9 +143,9 @@ export class AtraccionesController {
 
   // ── Colección ─────────────────────────────────────────────────────────
   @Get()
+  @CachePublico(60)
   @UseGuards(OptionalJwtGuard)
   @Header('X-API-Deprecation-Date', '2027-12-31')
-  @Header('Cache-Control', 'max-age=300')
   @ApiOperation({ summary: 'Obtener el listado paginado de atracciones' })
   @ApiResponse({ status: 200, description: 'Listado recuperado exitosamente.', type: PaginatedResponseDto })
   findAll(@Query() query: ListAtraccionesQueryDto, @CurrentUser() user?: AuthUser) {
@@ -166,9 +167,9 @@ export class AtraccionesController {
 
   // ── Recurso individual ────────────────────────────────────────────────
   @Get(':id')
+  @CachePublico(60)
   @UseGuards(OptionalJwtGuard)
   @Header('X-API-Deprecation-Date', '2027-12-31')
-  @Header('Cache-Control', 'max-age=300')
   @ApiOperation({ summary: 'Obtener el detalle de una atracción por su ID' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, type: AtraccionResponseDto })
@@ -230,6 +231,7 @@ export class AtraccionesController {
 
   // ── Disponibilidad ────────────────────────────────────────────────────
   @Get(':id/availability')
+  @CachePublico(10)
   @ApiOperation({ summary: 'Consultar disponibilidad de cupos para una fecha' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, type: AvailabilityResponseDto })
@@ -239,6 +241,7 @@ export class AtraccionesController {
   }
 
   @Get(':id/availability/calendar')
+  @CachePublico(30)
   @ApiOperation({ summary: '[Extensión] Disponibilidad diaria de un mes (para el calendario)' })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, type: [CalendarDayDto] })
@@ -298,6 +301,7 @@ export class AtraccionesController {
 
   // ── Reseñas ───────────────────────────────────────────────────────────
   @Get(':id/reviews')
+  @CachePublico(60)
   @ApiOperation({ summary: '[Extensión] Reseñas visibles de la atracción + distribución de estrellas' })
   @ApiParam({ name: 'id', format: 'uuid' })
   listReviews(@Param('id', ParseUUIDPipe) id: string, @Query() query: ResenasQueryDto) {

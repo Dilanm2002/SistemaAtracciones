@@ -14,6 +14,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
+import { CachePublico } from '../../common/http/cache-publico';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
@@ -48,12 +49,14 @@ export class CatalogoController {
 
   // ── Geografía e idiomas ───────────────────────────────────────────────
   @Get('provincias')
+  @CachePublico(3600)
   @ApiOperation({ summary: 'Provincias del Ecuador con su región (tabla provincia)' })
   listProvincias() {
     return this.catalogo.listProvincias();
   }
 
   @Get('idiomas')
+  @CachePublico(3600)
   @ApiOperation({ summary: 'Idiomas en que se pueden ofrecer las atracciones (tabla idioma)' })
   listIdiomas() {
     return this.catalogo.listIdiomas();
@@ -61,6 +64,7 @@ export class CatalogoController {
 
   // ── Categorías ────────────────────────────────────────────────────────
   @Get('categorias')
+  @CachePublico(300)
   @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Listar categorías (activas; ?all=true con attractions:write)' })
   listCategorias(@Query() q: CatalogoQueryDto, @CurrentUser() u?: AuthUser) {
@@ -94,6 +98,7 @@ export class CatalogoController {
 
   // ── Destinos ──────────────────────────────────────────────────────────
   @Get('destinos')
+  @CachePublico(300)
   @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Listar destinos (tabla ciudad; `codigo` = ciu_id = city del contrato). Públicamente solo los que tienen atracciones' })
   listDestinos(@Query() q: CatalogoQueryDto, @CurrentUser() u?: AuthUser) {
@@ -127,6 +132,7 @@ export class CatalogoController {
 
   // ── Operadores ────────────────────────────────────────────────────────
   @Get('operadores')
+  @CachePublico(300)
   @UseGuards(OptionalJwtGuard)
   @ApiOperation({ summary: 'Listar empresas operadoras' })
   listOperadores(@Query() q: CatalogoQueryDto, @CurrentUser() u?: AuthUser) {
