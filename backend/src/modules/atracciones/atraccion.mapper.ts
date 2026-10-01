@@ -13,6 +13,8 @@ import { fechaHoraEc, horasAIso } from './utils/fechas';
  */
 /** Tras reservar, el cliente puede arrepentirse y cancelar con reembolso total durante 1 hora. */
 export const PERIODO_ARREPENTIMIENTO_MS = 60 * 60 * 1000;
+/** Una reserva pendiente de pago se cancela sin costo hasta 1 hora antes de la salida. */
+export const CORTE_PENDIENTE_MS = 60 * 60 * 1000;
 
 export interface PoliticaCancelacion {
   /** FULL_REFUND: reembolso total · NO_CHARGE: nada cobrado · NO_REFUND: sin reembolso · NOT_ALLOWED */
@@ -113,8 +115,9 @@ export class AtraccionMapper {
   /**
    * Política de cancelación del CLIENTE (lógica de negocio):
    * - Ya cancelada, completada o la experiencia ya empezó → no se puede (NOT_ALLOWED).
-   * - Pendiente de pago (transferencia / pago en sitio) → se cancela gratis hasta la hora de
-   *   salida: no hay cobro que devolver, se anula el pago y se libera el cupo (NO_CHARGE).
+   * - Pendiente de pago (transferencia / pago en sitio) → se cancela gratis hasta 1 hora antes
+   *   de la salida: no hay cobro que devolver, se anula el pago y se libera el cupo (NO_CHARGE).
+   *   Después, el cupo queda guardado para el cliente y ya no se cancela en línea.
    * - Pagada y antes del plazo de cancelación gratuita de la experiencia → reembolso total.
    * - Pagada y reservada a último momento (dentro del plazo) → periodo de arrepentimiento:
    *   reembolso total durante 1 h desde la reserva, sin pasar de la hora de salida.
@@ -129,7 +132,12 @@ export class AtraccionMapper {
     if (r.estado === 'COMPLETADA') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya se realizó; no puede cancelarse.' };
     const salida = fechaHoraEc(r.fecha, r.hora).getTime();
     if (ahora >= salida) return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya comenzó; ya no puede cancelarse.' };
-    if (r.estado === 'PENDIENTE_PAGO') return { policy: 'NO_CHARGE', freeUntil: new Date(salida) };
+    if (r.estado === 'PENDIENTE_PAGO') {
+      const corte = salida - CORTE_PENDIENTE_MS;
+      return ahora < corte
+        ? { policy: 'NO_CHARGE', freeUntil: new Date(corte) }
+        : { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'Las reservas pendientes de pago se cancelan hasta 1 hora antes de la salida.' };
+    }
     const limite = r.cancelacion_gratuita ? salida - (r.horas_cancelacion ?? 24) * 3_600_000 : null;
     const arrepentimiento = Math.min(new Date(r.creado_en).getTime() + PERIODO_ARREPENTIMIENTO_MS, salida);
     const gratisHasta = Math.max(limite ?? 0, arrepentimiento);

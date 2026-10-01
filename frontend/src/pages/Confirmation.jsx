@@ -81,7 +81,7 @@ export default function Confirmation() {
         {r.status !== 'CANCELLED' && (
           <div style={{ marginTop: 16 }}>
             {r.cancellation_policy === 'NO_CHARGE' ? (
-              <Alert tone="info">Aún no has pagado: puedes cancelar sin costo desde "Mis reservas" hasta la hora de salida.</Alert>
+              <Alert tone="info">Aún no has pagado: puedes cancelar sin costo desde "Mis reservas" hasta 1 hora antes de la salida.</Alert>
             ) : r.cancellation_policy === 'FULL_REFUND' ? (
               <Alert tone="success">Puedes cancelar gratis desde "Mis reservas" hasta el {fmtDateTime(r.free_cancellation_until)}.</Alert>
             ) : (

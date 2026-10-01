@@ -88,7 +88,7 @@ Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha 
 
 ## Control de versiones
 
-Versión actual: **2.2.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+Versión actual: **2.2.1** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
 
 Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
 
@@ -120,7 +120,7 @@ Para volver a una versión anterior: `git checkout v1.0.0` (solo lectura) o crea
 
 | Situación | ¿Puede cancelar? | Reembolso |
 |---|---|---|
-| Pendiente de pago (transferencia o en sitio) | Sí, hasta la hora de salida | No hay cobro: se anula el pago y se libera el cupo |
+| Pendiente de pago (transferencia o en sitio) | Sí, hasta **1 hora antes** de la salida | No hay cobro: se anula el pago y se libera el cupo |
 | Pagada, antes del plazo gratuito de la experiencia | Sí | 100 % |
 | Pagada a último momento (ya dentro del plazo) | Sí, con **1 hora de arrepentimiento** tras reservar | 100 % |
 | Pagada, fuera de esos plazos | Sí, confirmando `accept_no_refund` | 0 %; se libera el cupo |

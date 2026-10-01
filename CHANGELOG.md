@@ -7,6 +7,14 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.2.1] - 2026-10-01
+
+### Cambiado
+- **Reservas pendientes de pago** (transferencia o pago en sitio):
+  - Se cancelan sin costo hasta **1 hora antes** de la salida, ya no hasta la hora de salida.
+  - Pasado ese corte, el cupo queda guardado para el cliente y ya no se cancela en línea.
+  - La API expone ese corte en `free_cancellation_until`.
+
 ## [2.2.0] - 2026-10-01
 
 ### Corregido

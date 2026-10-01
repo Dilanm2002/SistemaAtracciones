@@ -34,10 +34,13 @@ describe('AtraccionMapper: reservas', () => {
     expect(mapper.politicaCancelacion({ ...base, creado_en: tarde })).toMatchObject({ policy: 'FULL_REFUND', freeUntil: new Date('2026-10-10T13:00:00Z') });
   });
 
-  it('pendiente de pago: se cancela sin costo hasta la hora de salida', () => {
-    ahora('2026-10-10T12:59:00Z');
-    expect(pol({ estado: 'PENDIENTE_PAGO', cancelacion_gratuita: false })).toBe('NO_CHARGE');
-    ahora('2026-10-10T13:00:00Z');
+  it('pendiente de pago: se cancela sin costo hasta 1 hora antes de la salida', () => {
+    ahora('2026-10-10T11:59:00Z'); // 1 h 1 min antes
+    expect(mapper.politicaCancelacion({ ...base, estado: 'PENDIENTE_PAGO', cancelacion_gratuita: false })).toMatchObject({
+      policy: 'NO_CHARGE',
+      freeUntil: new Date('2026-10-10T12:00:00Z'),
+    });
+    ahora('2026-10-10T12:00:00Z'); // exactamente 1 h antes
     expect(pol({ estado: 'PENDIENTE_PAGO' })).toBe('NOT_ALLOWED');
   });
 

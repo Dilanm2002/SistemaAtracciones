@@ -198,7 +198,7 @@ export default function Checkout() {
         </div>
         <div className="summary-total"><span>Total a pagar</span><span className="price">{fmtMoney(total)}</span></div>
         <p className="small" style={{ color: a.free_cancellation && !ultimoMomento ? 'var(--success)' : 'var(--warning)', margin: 0, display: 'flex', gap: 6 }}>
-          <ShieldCheck size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} /> {politica} Si pagas por transferencia o en sitio, puedes cancelar sin costo hasta la salida.
+          <ShieldCheck size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} /> {politica} Si pagas por transferencia o en sitio, puedes cancelar sin costo hasta 1 hora antes de la salida.
         </p>
       </div>
     </aside>

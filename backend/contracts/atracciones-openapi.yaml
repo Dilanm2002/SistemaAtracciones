@@ -1000,7 +1000,7 @@ components:
           description: >-
             Qué pasa si el cliente cancela ahora. FULL_REFUND reembolso total (dentro del plazo de la
             experiencia o en la hora de arrepentimiento tras reservar); NO_CHARGE pendiente de pago, nada
-            que devolver; NO_REFUND puede cancelar pero sin reembolso; NOT_ALLOWED la experiencia ya empezó.
+            que devolver (hasta 1 hora antes de la salida); NO_REFUND puede cancelar pero sin reembolso; NOT_ALLOWED la experiencia ya empezó.
         refundable:
           type: boolean
           description: Si cancelar ahora no tiene costo para el cliente.

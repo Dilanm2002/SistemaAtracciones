@@ -21,7 +21,7 @@ export function politicaTexto(r) {
     case 'FULL_REFUND':
       return { tone: 'ok', texto: `Cancelación gratuita hasta el ${hasta}.` };
     case 'NO_CHARGE':
-      return { tone: 'ok', texto: 'Aún no has pagado: puedes cancelar sin costo hasta la hora de salida.' };
+      return { tone: 'ok', texto: `Aún no has pagado: puedes cancelar sin costo hasta el ${hasta} (1 hora antes de la salida).` };
     case 'NO_REFUND':
       return {
         tone: 'warn',
@@ -30,7 +30,12 @@ export function politicaTexto(r) {
           : 'Esta experiencia no tiene cancelación gratuita. Puedes cancelar para liberar tu cupo, pero sin reembolso.',
       };
     default:
-      return { tone: 'warn', texto: 'La experiencia ya comenzó; ya no puede cancelarse en línea.' };
+      return {
+        tone: 'warn',
+        texto: r.status === 'PENDING'
+          ? 'Falta menos de 1 hora para la salida: tu cupo sigue reservado y ya no puede cancelarse en línea.'
+          : 'La experiencia ya comenzó; ya no puede cancelarse en línea.',
+      };
   }
 }
 
