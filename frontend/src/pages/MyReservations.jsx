@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalendarDays, CalendarPlus, CalendarX2, Clock, Eye, MapPin, MessageSquarePlus, Ticket, Users, XCircle } from 'lucide-react';
+import { CalendarDays, CalendarPlus, CalendarX2, Clock, Eye, Info, MapPin, MessageSquarePlus, Ticket, Users, XCircle } from 'lucide-react';
 import { newIdempotencyKey, Reservas } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { ReviewModal } from '../components/Reviews';
@@ -10,6 +10,14 @@ import { fmtDate, fmtDateLong, fmtDateTime, fmtMoney, PAYMENT, todayEc } from '.
 import { downloadIcs } from './Confirmation';
 
 const MOTIVOS = ['Cambio de planes', 'Problemas con mi vuelo o transporte', 'Motivos de salud', 'Clima o seguridad', 'Encontré otra opción', 'Otro'];
+
+/** Por qué ya no se puede cancelar en línea: sin cancelación gratuita, o pasado el plazo (hora de Ecuador). */
+export function motivoNoCancelable(r) {
+  if (!r.attraction?.free_cancellation) return 'Esta experiencia no admite cancelación gratuita.';
+  const salida = new Date(`${r.date}T${r.time}:00-05:00`);
+  const limite = new Date(salida.getTime() - (r.attraction.cancellation_hours ?? 24) * 3600000);
+  return `La cancelación gratuita terminó el ${fmtDateTime(limite)} (${r.attraction.cancellation_hours ?? 24} h antes de la salida).`;
+}
 
 export function CancelModal({ reservation, onClose, onDone, staff = false }) {
   const toast = useToast();
@@ -159,7 +167,9 @@ export default function MyReservations() {
                   <strong>{fmtMoney(r.total_price.total)}</strong>
                 </div>
                 {tab === 'upcoming' && r.status !== 'CANCELLED' && !r.can_cancel && (
-                  <p className="tiny muted" style={{ margin: '6px 0 0' }}>Fuera del plazo de cancelación gratuita. Escríbenos si necesitas ayuda.</p>
+                  <p id={`nocancel-${r.reservation_id}`} className="res-nocancel">
+                    <Info size={15} aria-hidden="true" /> {motivoNoCancelable(r)} Si tienes un imprevisto, pide ayuda y lo revisamos con la empresa.
+                  </p>
                 )}
               </div>
               <div className="res-actions">
@@ -170,7 +180,10 @@ export default function MyReservations() {
                     {r.can_cancel ? (
                       <button className="btn btn-sm btn-outline-danger" onClick={() => setCancel(r)}><XCircle size={16} /> Cancelar</button>
                     ) : (
-                      <Link to={`/contacto?asunto=CANCELACION&codigo=${r.code}`} className="btn btn-sm btn-ghost">Solicitar ayuda</Link>
+                      <>
+                        <button className="btn btn-sm btn-outline-danger" disabled aria-describedby={`nocancel-${r.reservation_id}`} title={motivoNoCancelable(r)}><XCircle size={16} /> Cancelar</button>
+                        <Link to={`/contacto?asunto=CANCELACION&codigo=${r.code}`} className="btn btn-sm btn-primary">Solicitar ayuda</Link>
+                      </>
                     )}
                   </>
                 )}
