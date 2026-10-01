@@ -43,7 +43,7 @@ describe('AtraccionMapper', () => {
   const mapper = new AtraccionMapper(new ConfigService({ PUBLIC_URL: 'https://api.test', FRONTEND_URL: 'https://web.test' }));
   const fila: FilaAtraccion = {
     id: '7', uuid: '123e4567-e89b-42d3-a456-426614174000', nombre: 'Tour', slug: 'tour', descripcion: 'Descripción larga', descripcion_corta: null,
-    tipo: 'PACKAGE', estado: 'PUBLICADA', latitud: -0.2, longitud: -78.5, direccion: null, punto_encuentro: null, duracion_horas: 96,
+    tipo: 'PACKAGE', estado: 'PUBLICADA', aprobada: true, motivo_rechazo: null, latitud: -0.2, longitud: -78.5, direccion: null, punto_encuentro: null, duracion_horas: 96,
     moneda: 'USD', cancelacion_gratuita: true, horas_cancelacion: 72, destacada: false, rating: 4.8, numero_resenas: 10,
     creado_en: new Date('2025-01-01'), ciu_id: 3, ciudad: 'Quito', prov_id: 19, provincia: 'Pichincha', region: Region.SIERRA,
     ope_id: '1', ope_codigo: 101, operador: 'Andes', precio_adulto: 420, precio_nino: null, vendidos_60d: 25, ocupacion_14d: 0.8,

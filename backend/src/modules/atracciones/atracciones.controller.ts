@@ -27,7 +27,7 @@ import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 import { AtraccionesService } from './atracciones.service';
 import { AtraccionResponseDto } from './dto/atraccion-response.dto';
 import { AvailabilityQueryDto, AvailabilityResponseDto, BlockDateDto, CalendarDayDto, CalendarQueryDto } from './dto/availability.dto';
-import { CreateAtraccionDto } from './dto/create-atraccion.dto';
+import { CreateAtraccionDto, RevisionAtraccionDto } from './dto/create-atraccion.dto';
 import { DetailsRequestDto } from './dto/details-request.dto';
 import { ListAtraccionesQueryDto } from './dto/list-atracciones.dto';
 import { CancelReservationRequestDto, ReservationRequestDto, ReservationResponseDto, ReservationsQueryDto } from './dto/reservation.dto';
@@ -39,7 +39,6 @@ import { ResenasService } from './resenas.service';
 import { ReservasService } from './reservas.service';
 
 const IDEMPOTENCY_HEADER = { name: 'Idempotency-Key', required: true, description: 'UUID v4 único por operación' };
-const canWrite = (u?: AuthUser) => !!u?.scope?.includes(SCOPES.WRITE);
 
 /**
  * Endpoints definidos en contracts/atracciones-openapi.yaml.
@@ -149,7 +148,7 @@ export class AtraccionesController {
   @ApiOperation({ summary: 'Obtener el listado paginado de atracciones' })
   @ApiResponse({ status: 200, description: 'Listado recuperado exitosamente.', type: PaginatedResponseDto })
   findAll(@Query() query: ListAtraccionesQueryDto, @CurrentUser() user?: AuthUser) {
-    return this.atraccionesService.findAll(query, canWrite(user));
+    return this.atraccionesService.findAll(query, user);
   }
 
   @Post()
@@ -175,7 +174,7 @@ export class AtraccionesController {
   @ApiResponse({ status: 200, type: AtraccionResponseDto })
   @ApiResponse({ status: 404, description: 'La atracción no existe.' })
   findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user?: AuthUser) {
-    return this.atraccionesService.findOne(id, canWrite(user));
+    return this.atraccionesService.findOne(id, user);
   }
 
   @Put(':id')
@@ -213,6 +212,20 @@ export class AtraccionesController {
   @ApiResponse({ status: 409, description: 'Tiene reservas próximas; debe desactivarse en su lugar.' })
   remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     return this.atraccionesService.remove(id, user);
+  }
+
+  // ── Revisión de lo que suben las empresas (marketplace) ───────────────
+  @Post(':id/review')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @Scopes(SCOPES.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Aprobar (publicar) o rechazar con motivo una experiencia en revisión' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, type: AtraccionResponseDto })
+  @ApiResponse({ status: 409, description: 'La experiencia no está en revisión.' })
+  review(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RevisionAtraccionDto, @CurrentUser() user: AuthUser) {
+    return this.atraccionesService.revisar(id, dto, user);
   }
 
   // ── Disponibilidad ────────────────────────────────────────────────────

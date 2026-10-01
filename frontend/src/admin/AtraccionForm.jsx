@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Clock, ImagePlus, Info, ListChecks, MapPin, Plus
 import { Atracciones, Uploads } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from '../components/ui';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
 import { comprimirImagen } from '../utils/imagen';
@@ -57,7 +58,7 @@ const fromApi = (a) => ({
 });
 
 /** Convierte el formulario al esquema CreateAtraccionRequest del contrato. */
-const toApi = (f, destinos, operadores) => {
+const toApi = (f, destinos, operadores, { esAdmin = true, aprobada = true } = {}) => {
   const h = Number(f.duration_hours);
   const hh = Math.floor(h);
   const mm = Math.round((h - hh) * 60);
@@ -69,7 +70,7 @@ const toApi = (f, destinos, operadores) => {
     duration: `PT${hh ? `${hh}H` : ''}${mm ? `${mm}M` : ''}`,
     price: { currency: 'USD', total: Number(f.price) },
     ...(f.child_price !== '' ? { child_price: Number(f.child_price) } : {}),
-    operator: { id: op.codigo, name: op.nombre },
+    operator: { id: Number(f.operator), name: op?.nombre ?? '' },
     product_type: f.product_type,
     includes: f.includes.map((x) => x.trim()).filter(Boolean),
     not_includes: f.not_includes.map((x) => x.trim()).filter(Boolean),
@@ -83,8 +84,8 @@ const toApi = (f, destinos, operadores) => {
     times: [...f.times].sort(),
     capacity_per_slot: Number(f.capacity_per_slot),
     meeting_point: f.meeting_point.trim() || undefined,
-    featured: f.featured,
-    is_active: f.is_active,
+    ...(esAdmin ? { featured: f.featured } : {}),
+    ...(esAdmin || aprobada ? { is_active: f.is_active } : {}),
   };
 };
 
@@ -134,7 +135,14 @@ function TimesInput({ value, onChange, error, errorId }) {
 export default function AtraccionForm({ atraccion, categorias, destinos, operadores, idiomas, onClose, onSaved }) {
   const toast = useToast();
   const confirm = useConfirm();
-  const initial = useMemo(() => (atraccion ? fromApi(atraccion) : EMPTY), [atraccion]);
+  const { isAdmin, user } = useAuth();
+  // Una experiencia ya aprobada se puede pausar/reactivar; si no, el operador la envía a revisión
+  const aprobada = !!atraccion && (atraccion.status === 'PUBLICADA' || atraccion.status === 'INACTIVA');
+  const enviaARevision = !isAdmin && !aprobada;
+  const initial = useMemo(
+    () => (atraccion ? fromApi(atraccion) : { ...EMPTY, operator: isAdmin ? '' : user?.operadorCodigo ?? '' }),
+    [atraccion, isAdmin, user],
+  );
   const [f, setF] = useState(initial);
   const [tocados, setTocados] = useState(() => new Set());
   const [enviado, setEnviado] = useState(false);
@@ -272,9 +280,14 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     setSaving(true);
     setApiError(null);
     try {
-      const body = toApi(f, destinos, operadores);
+      const body = toApi(f, destinos, operadores, { esAdmin: isAdmin, aprobada });
       const saved = atraccion ? await Atracciones.update(atraccion.id, body) : await Atracciones.create(body);
-      toast(atraccion ? 'Cambios guardados' : `"${saved.name}" publicada`, 'success');
+      toast(
+        saved.status === 'EN_REVISION'
+          ? `"${saved.name}" se envió a revisión. Te avisaremos en este panel cuando se apruebe.`
+          : atraccion ? 'Cambios guardados' : `"${saved.name}" publicada`,
+        'success',
+      );
       onSaved(saved, !atraccion);
     } catch (e) {
       setApiError(e.message);
@@ -295,13 +308,27 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
         <>
           {dirty && <span className="muted small" style={{ marginRight: 'auto' }}>Cambios sin guardar</span>}
           <button className="btn" onClick={close}>Cancelar</button>
-          <button className="btn btn-primary" form="atr-form" disabled={saving || uploading}>{saving && <Spinner />} {atraccion ? 'Guardar cambios' : 'Publicar atracción'}</button>
+          <button className="btn btn-primary" form="atr-form" disabled={saving || uploading}>{saving && <Spinner />} {enviaARevision ? 'Enviar a revisión' : atraccion ? 'Guardar cambios' : 'Publicar atracción'}</button>
         </>
       }
     >
       <form id="atr-form" onSubmit={save} noValidate>
         <RequiredLegend />
         {apiError && <div style={{ marginBottom: 16 }}><Alert tone="danger" title="No se pudo guardar">{apiError}</Alert></div>}
+        {atraccion?.status === 'RECHAZADA' && atraccion.rejection_reason && (
+          <div style={{ marginBottom: 16 }}>
+            <Alert tone="danger" title="El equipo de Descubre EC pidió cambios">
+              {atraccion.rejection_reason} {!isAdmin && 'Corrige lo indicado y vuelve a enviarla a revisión.'}
+            </Alert>
+          </div>
+        )}
+        {enviaARevision && atraccion?.status !== 'RECHAZADA' && (
+          <div style={{ marginBottom: 16 }}>
+            <Alert tone="info" title="Pasará a revisión">
+              Al enviarla, el equipo de Descubre EC la revisa antes de publicarla. Mientras tanto no se muestra en el sitio.
+            </Alert>
+          </div>
+        )}
 
         <div className="form-section">
           <h3><Info size={18} aria-hidden="true" /> Información general</h3>
@@ -312,9 +339,9 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             <Field label="Tipo de producto" required>
               {(p) => <select {...p} className="select" value={f.product_type} onChange={set('product_type')}>{Object.entries(PRODUCT_TYPE).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
             </Field>
-            <Field label="Operador" required error={errors.operator}>
+            <Field label={isAdmin ? 'Operador' : 'Empresa'} required error={errors.operator} hint={isAdmin ? undefined : 'Solo puedes publicar experiencias de tu empresa'}>
               {(p) => (
-                <select {...p} className="select" value={f.operator} onChange={set('operator')}>
+                <select {...p} className="select" value={f.operator} onChange={set('operator')} disabled={!isAdmin}>
                   <option value="">Selecciona…</option>
                   {operadores.map((o) => <option key={o.id} value={o.codigo} disabled={!o.activo}>{o.nombre}{!o.activo ? ' (inactivo)' : ''}</option>)}
                 </select>
@@ -456,8 +483,8 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             </>
           )}
           <div className="row" style={{ marginTop: 18, gap: 24 }}>
-            <Switch checked={f.is_active} onChange={set('is_active')} label="Visible en el sitio" />
-            <Switch checked={f.featured} onChange={set('featured')} label="Destacada en el inicio" />
+            {(isAdmin || aprobada) && <Switch checked={f.is_active} onChange={set('is_active')} label={isAdmin && !aprobada && atraccion ? 'Aprobar y publicar en el sitio' : 'Visible en el sitio'} />}
+            {isAdmin && <Switch checked={f.featured} onChange={set('featured')} label="Destacada en el inicio" />}
           </div>
           <div className="field" style={{ marginTop: 14 }}>
             <span className="label">Insignias</span>

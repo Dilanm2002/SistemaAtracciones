@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CalendarCheck, ChevronLeft, ChevronRight, Info, ShieldCheck } from 'lucide-react';
 import { Atracciones } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { fmtDateLong, fmtMoney, fmtMonth, todayEc } from '../utils/format';
 
 /** Máximo de tickets por reserva (igual que la API: ticket_count ≤ 30). */
@@ -84,6 +85,7 @@ export function AvailabilityCalendar({ attractionId, value, onChange }) {
 
 export default function BookingWidget({ a, initialDate, initialPeople }) {
   const navigate = useNavigate();
+  const { isAuth } = useAuth();
   const [date, setDate] = useState(initialDate && initialDate >= todayEc() ? initialDate : '');
   const [avail, setAvail] = useState(null);
   const [loadingAvail, setLoadingAvail] = useState(false);
@@ -188,7 +190,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           <CalendarCheck size={20} aria-hidden="true" /> Reservar ahora
         </button>
         <p id="book-hint" className={`small center ${touched && missing ? 'error-text' : 'muted'}`} style={{ margin: '10px 0 0', justifyContent: 'center' }}>
-          {touched && missing ? missing : missing ? <><Info size={14} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {missing}</> : 'No se te cobrará nada todavía'}
+          {touched && missing ? missing : missing ? <><Info size={14} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {missing}</> : isAuth ? 'No se te cobrará nada todavía' : 'Para reservar necesitas una cuenta: inicias sesión o te registras en el siguiente paso, sin perder tu selección'}
         </p>
       </div>
     </div>

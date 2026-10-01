@@ -7,6 +7,28 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.1.0] - 2026-10-01
+
+### Agregado
+- **Empresas proveedoras (marketplace):**
+  - Nueva página **Para empresas** (`/empresas`). Con cuenta, una agencia solicita vender sus tours y paquetes.
+  - El administrador aprueba la solicitud: se crea la empresa y la persona pasa a ser OPERADOR. O la rechaza con motivo, y la persona corrige y vuelve a solicitar.
+  - Endpoints `/api/v1/proveedores/solicitudes` (crear, la mía, listar, aprobar, rechazar).
+- **Revisión de experiencias:**
+  - El operador sube tours y paquetes de su empresa ("Mis experiencias"). Quedan `EN_REVISION` hasta que el administrador las aprueba (`PUBLICADA`) o las rechaza con motivo (`RECHAZADA`).
+  - `POST /api/v1/atracciones/{id}/review`.
+  - El panel muestra el estado, los contadores y las acciones de aprobar/rechazar.
+- **Migración `006_proveedores.sql`:**
+  - Tabla `solicitud_operador`.
+  - Estados `EN_REVISION` y `RECHAZADA`.
+  - Columnas de revisión en `atraccion`.
+- **Aviso al reservar:** el botón de reserva indica a los invitados que necesitan una cuenta, que se pide en el siguiente paso sin perder la selección.
+- **Pruebas:** 8 E2E nuevas del flujo de empresas, de la revisión y de los permisos por empresa.
+
+### Cambiado
+- **Permisos del operador:** recibe `attractions:write`, limitado a **su** empresa. No puede destacar ni asignar experiencias a otra empresa, y lo ajeno responde 404.
+- **Catálogos globales y reseñas:** categorías, destinos y operadores, y la moderación de reseñas, pasan a exigir `admin:full`.
+
 ## [2.0.0] - 2026-09-30
 
 Versión que cierra los hallazgos abiertos de la reauditoría V2. Es **MAYOR** porque cambia

@@ -1,6 +1,6 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { AuthUser, esAdmin } from '../../common/auth/scopes';
+import { AuthUser, esAdmin, SCOPES } from '../../common/auth/scopes';
 import { API_VERSION } from '../../config/version';
 import { BitacoraService } from '../../common/db/bitacora.service';
 import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
@@ -11,7 +11,7 @@ import { StorageService } from '../../common/storage/storage.service';
 import { escapeLike } from '../../common/utils/sql';
 import { AtraccionMapper } from './atraccion.mapper';
 import { AvailabilityResponseDto, BlockDateDto, CalendarDayDto } from './dto/availability.dto';
-import { CreateAtraccionDto } from './dto/create-atraccion.dto';
+import { CreateAtraccionDto, RevisionAtraccionDto } from './dto/create-atraccion.dto';
 import { DetailsRequestDto } from './dto/details-request.dto';
 import { ListAtraccionesQueryDto } from './dto/list-atracciones.dto';
 import { SearchAtraccionesDto } from './dto/search-atracciones.dto';
@@ -21,9 +21,46 @@ import { diasDelMes, horaActualEc, hoyEc, isoAHoras, sumarDias } from './utils/f
 
 const VISIBLE = `a.atr_eliminado_en IS NULL`;
 
+/**
+ * Quién gestiona el inventario (marketplace de proveedores, migración 006):
+ * - admin: todo el catálogo; publica, aprueba y rechaza.
+ * - operador: solo las experiencias de SU empresa; lo que crea queda EN_REVISION.
+ * - publico: solo lo publicado.
+ */
+type Alcance = { tipo: 'admin' } | { tipo: 'operador'; codigo: number } | { tipo: 'publico' };
+type Gestor = Exclude<Alcance, { tipo: 'publico' }>;
+
+const FILTRO_ESTADO: Record<string, string> = {
+  active: "= 'PUBLICADA'",
+  inactive: "<> 'PUBLICADA'",
+  review: "= 'EN_REVISION'",
+  rejected: "= 'RECHAZADA'",
+};
+
 @Injectable()
 export class AtraccionesService {
   private readonly logger = new Logger('Atracciones');
+
+  private alcance(user?: AuthUser): Alcance {
+    if (!user?.scope?.includes(SCOPES.WRITE)) return { tipo: 'publico' };
+    if (esAdmin(user)) return { tipo: 'admin' };
+    return user.operador != null ? { tipo: 'operador', codigo: user.operador } : { tipo: 'publico' };
+  }
+
+  /** Alcance de quien escribe: un operador sin empresa vinculada no puede crear ni editar. */
+  private gestor(user: AuthUser): Gestor {
+    const al = this.alcance(user);
+    if (al.tipo === 'publico') throw new ForbiddenException('Tu cuenta no está vinculada a ninguna empresa operadora.');
+    return al;
+  }
+
+  /** Lo que un operador NO puede tocar: destacar en el inicio ni asignar la experiencia a otra empresa. */
+  private datosPermitidos<T extends Partial<CreateAtraccionDto>>(dto: T, al: Gestor, crear: boolean): T {
+    if (al.tipo === 'admin') return dto;
+    if (dto.featured !== undefined) throw new ForbiddenException('Solo el administrador puede destacar experiencias en el inicio.');
+    if (dto.operator && dto.operator.id !== al.codigo) throw new ForbiddenException('Solo puedes publicar experiencias de tu propia empresa.');
+    return dto.operator || crear ? { ...dto, operator: { id: al.codigo, name: dto.operator?.name ?? '' } } : dto;
+  }
 
   constructor(
     private readonly db: DbService,
@@ -195,16 +232,18 @@ export class AtraccionesService {
   }
 
   // ── Listado paginado (GET /atracciones) ───────────────────────────────
-  async findAll(query: ListAtraccionesQueryDto, canSeeInactive: boolean) {
+  async findAll(query: ListAtraccionesQueryDto, user?: AuthUser) {
+    const al = this.alcance(user);
     const limit = query.limit ?? 10;
     const offset = query.offset ?? ((query.page ?? 1) - 1) * limit;
     const page = Math.floor(offset / limit) + 1;
     const p = new Params();
     const w = [VISIBLE];
 
-    const status = canSeeInactive ? query.status ?? 'active' : 'active';
-    if (status === 'active') w.push(`a.atr_estado = 'PUBLICADA'`);
-    else if (status === 'inactive') w.push(`a.atr_estado <> 'PUBLICADA'`);
+    const status = al.tipo === 'publico' ? 'active' : query.status ?? 'active';
+    if (status !== 'all') w.push(`a.atr_estado ${FILTRO_ESTADO[status]}`);
+    // En el panel (con status) el operador solo ve el inventario de su empresa
+    if (al.tipo === 'operador' && query.status) w.push(`o.ope_codigo = ${p.add(al.codigo)}`);
 
     if (query.q?.trim()) {
       const q = p.add(`%${escapeLike(query.q.trim())}%`);
@@ -232,7 +271,7 @@ export class AtraccionesService {
       query.city && `&city=${query.city}`,
       query.featured && `&featured=${query.featured}`,
       query.operator && `&operator=${query.operator}`,
-      canSeeInactive && query.status && `&status=${query.status}`,
+      al.tipo !== 'publico' && query.status && `&status=${query.status}`,
     ]
       .filter(Boolean)
       .join('');
@@ -247,8 +286,14 @@ export class AtraccionesService {
     return a;
   }
 
-  async findOne(uuid: string, canSeeInactive: boolean) {
-    return this.mapper.toResponse(await this.getRow(uuid, canSeeInactive));
+  async findOne(uuid: string, user?: AuthUser) {
+    const al = this.alcance(user);
+    const a = await this.getRow(uuid, al.tipo !== 'publico');
+    // Un operador ve lo publicado de todos, pero lo no publicado solo de su empresa
+    if (al.tipo === 'operador' && a.estado !== 'PUBLICADA' && a.ope_codigo !== al.codigo) {
+      throw new NotFoundException('La atracción no existe o ya no está disponible.');
+    }
+    return this.mapper.toResponse(a);
   }
 
   // ── Escritura (attractions:write) ─────────────────────────────────────
@@ -341,8 +386,12 @@ export class AtraccionesService {
     }
   }
 
-  /** Crea (atrId null) o actualiza una atracción dentro de la transacción `tx`. También lo usa el seed. */
-  async guardar(tx: Sql, atrId: string | null, dto: Partial<CreateAtraccionDto>): Promise<string> {
+  /**
+   * Crea (atrId null) o actualiza una atracción dentro de la transacción `tx`. También lo usa el seed.
+   * Al crear, el estado es `estadoInicial` o, si no se indica, PUBLICADA/INACTIVA según is_active.
+   * Al actualizar, el estado lo decide aplicarEstado() (reglas de revisión).
+   */
+  async guardar(tx: Sql, atrId: string | null, dto: Partial<CreateAtraccionDto>, estadoInicial?: string): Promise<string> {
     const p = new Params();
     const cols: Record<string, string> = {};
     let nombre: string | undefined;
@@ -365,7 +414,6 @@ export class AtraccionesService {
     if (dto.cancellation_hours !== undefined) cols.atr_horas_cancelacion = p.add(dto.cancellation_hours);
     if (dto.meeting_point !== undefined) cols.atr_punto_encuentro = p.add(dto.meeting_point || null);
     if (dto.featured !== undefined) cols.atr_destacada = p.add(dto.featured);
-    if (dto.is_active !== undefined) cols.atr_estado = p.add(dto.is_active ? 'PUBLICADA' : 'INACTIVA');
     if (dto.operator !== undefined) {
       const op = await tx.one<{ ope_id: string }>('SELECT ope_id::text FROM operador WHERE ope_codigo = $1', [dto.operator.id]);
       if (!op) throw new BadRequestException(`El operador ${dto.operator.id} no existe.`);
@@ -384,7 +432,9 @@ export class AtraccionesService {
 
     let id = atrId;
     if (id === null) {
-      if (cols.atr_estado === undefined) cols.atr_estado = p.add('PUBLICADA');
+      const estado = estadoInicial ?? (dto.is_active === false ? 'INACTIVA' : 'PUBLICADA');
+      cols.atr_estado = p.add(estado);
+      cols.atr_aprobada = p.add(estado === 'PUBLICADA' || estado === 'INACTIVA');
       const nombres = Object.keys(cols);
       const r = await tx.one<{ id: string }>(
         `INSERT INTO atraccion (${nombres.join(', ')}) VALUES (${nombres.map((k) => cols[k]).join(', ')}) RETURNING atr_id::text AS id`,
@@ -463,39 +513,116 @@ export class AtraccionesService {
   }
 
   async create(dto: CreateAtraccionDto, user: AuthUser) {
+    const al = this.gestor(user);
+    const datos = this.datosPermitidos(dto, al, true);
     const fila = await this.db.tx(async (tx) => {
-      const id = await this.guardar(tx, null, { times: ['09:00'], ...dto });
+      // Lo que sube una empresa queda EN_REVISION: no se ve hasta que el administrador la aprueba
+      const id = await this.guardar(tx, null, { times: ['09:00'], ...datos }, al.tipo === 'operador' ? 'EN_REVISION' : undefined);
+      await tx.query('UPDATE atraccion SET atr_creado_por = $2 WHERE atr_id = $1', [id, user.sub]);
       const fila = (await this.cargar([id], tx))[0];
-      await this.eventoAtraccion(tx, EVENTOS.ATRACCION_PUBLICADA, fila);
+      if (fila.estado === 'PUBLICADA') await this.eventoAtraccion(tx, EVENTOS.ATRACCION_PUBLICADA, fila);
       return fila;
     });
-    await this.bitacora.registrar(user.sub, 'CREAR', 'atraccion', fila.uuid, { nombre: fila.nombre });
+    await this.bitacora.registrar(user.sub, 'CREAR', 'atraccion', fila.uuid, { nombre: fila.nombre, estado: fila.estado });
     return this.mapper.toResponse(fila);
   }
 
-  async replace(uuid: string, dto: CreateAtraccionDto, user: AuthUser) {
-    await this.db.tx(async (tx) => {
-      const id = await this.guardar(tx, await this.idPorUuid(tx, uuid), dto);
-      await this.eventoAtraccion(tx, EVENTOS.ATRACCION_ACTUALIZADA, (await this.cargar([id], tx))[0]);
+  /**
+   * Estado tras editar (reglas de revisión):
+   * - Ya aprobada alguna vez: is_active la pausa (INACTIVA) o la reactiva (PUBLICADA), sin revisión.
+   * - No aprobada y la edita el operador: vuelve a EN_REVISION (corregida y reenviada).
+   * - No aprobada y el administrador la marca visible: queda PUBLICADA y aprobada.
+   */
+  private async aplicarEstado(tx: Sql, id: string, antes: FilaAtraccion, isActive: boolean | undefined, al: Gestor, usuario: string) {
+    let nuevo: string | null = null;
+    let aprobar = false;
+    if (antes.aprobada) {
+      if (isActive !== undefined) nuevo = isActive ? 'PUBLICADA' : 'INACTIVA';
+    } else if (al.tipo === 'operador') {
+      nuevo = 'EN_REVISION';
+    } else if (isActive) {
+      nuevo = 'PUBLICADA';
+      aprobar = true;
+    }
+    if (!nuevo || (nuevo === antes.estado && !aprobar)) return;
+    if (aprobar) {
+      await tx.query(
+        `UPDATE atraccion SET atr_estado = $2, atr_aprobada = TRUE, atr_motivo_rechazo = NULL, atr_revisado_por = $3, atr_revisado_en = now() WHERE atr_id = $1`,
+        [id, nuevo, usuario],
+      );
+    } else {
+      await tx.query('UPDATE atraccion SET atr_estado = $2, atr_motivo_rechazo = NULL WHERE atr_id = $1', [id, nuevo]);
+    }
+  }
+
+  /** PUT y PATCH: el operador solo edita lo de su empresa (lo ajeno responde 404, sin revelar que existe). */
+  private async editar(uuid: string, dto: Partial<CreateAtraccionDto>, user: AuthUser): Promise<FilaAtraccion> {
+    const al = this.gestor(user);
+    return this.db.tx(async (tx) => {
+      const id = await this.idPorUuid(tx, uuid);
+      const antes = (await this.cargar([id], tx))[0];
+      if (al.tipo === 'operador' && antes.ope_codigo !== al.codigo) throw new NotFoundException('La atracción no existe o ya no está disponible.');
+      const { is_active: isActive, ...resto } = this.datosPermitidos(dto, al, false);
+      await this.guardar(tx, id, resto);
+      await this.aplicarEstado(tx, id, antes, isActive, al, user.sub);
+      const fila = (await this.cargar([id], tx))[0];
+      // Eventos para otros sistemas: solo cuando cambia lo que ve el público
+      if (fila.estado === 'PUBLICADA') {
+        await this.eventoAtraccion(tx, antes.estado === 'PUBLICADA' ? EVENTOS.ATRACCION_ACTUALIZADA : EVENTOS.ATRACCION_PUBLICADA, fila);
+      } else if (antes.estado === 'PUBLICADA') {
+        await emitirEvento(tx, EVENTOS.ATRACCION_RETIRADA, 'atraccion', uuid, { attraction_id: uuid, status: fila.estado });
+      }
+      return fila;
     });
-    await this.bitacora.registrar(user.sub, 'REEMPLAZAR', 'atraccion', uuid);
+  }
+
+  async replace(uuid: string, dto: CreateAtraccionDto, user: AuthUser) {
+    const fila = await this.editar(uuid, dto, user);
+    await this.bitacora.registrar(user.sub, 'REEMPLAZAR', 'atraccion', uuid, { estado: fila.estado });
   }
 
   async update(uuid: string, dto: UpdateAtraccionDto, user: AuthUser) {
+    const fila = await this.editar(uuid, dto, user);
+    await this.bitacora.registrar(user.sub, 'ACTUALIZAR', 'atraccion', uuid, { campos: Object.keys(dto), estado: fila.estado });
+    return this.mapper.toResponse(fila);
+  }
+
+  /** Revisión del administrador de lo que subió una empresa: publicar o rechazar con motivo. */
+  async revisar(uuid: string, dto: RevisionAtraccionDto, user: AuthUser) {
     const fila = await this.db.tx(async (tx) => {
-      const id = await this.guardar(tx, await this.idPorUuid(tx, uuid), dto);
+      const id = await this.idPorUuid(tx, uuid);
+      const antes = (await this.cargar([id], tx))[0];
+      if (antes.estado !== 'EN_REVISION') {
+        throw new ConflictException(`Solo se revisan experiencias en revisión (estado actual: ${antes.estado}).`);
+      }
+      if (dto.decision === 'APPROVE') {
+        await tx.query(
+          `UPDATE atraccion SET atr_estado = 'PUBLICADA', atr_aprobada = TRUE, atr_motivo_rechazo = NULL, atr_revisado_por = $2, atr_revisado_en = now() WHERE atr_id = $1`,
+          [id, user.sub],
+        );
+      } else {
+        await tx.query(
+          `UPDATE atraccion SET atr_estado = 'RECHAZADA', atr_motivo_rechazo = $3, atr_revisado_por = $2, atr_revisado_en = now() WHERE atr_id = $1`,
+          [id, user.sub, (dto.reason ?? '').trim()],
+        );
+      }
       const fila = (await this.cargar([id], tx))[0];
-      await this.eventoAtraccion(tx, EVENTOS.ATRACCION_ACTUALIZADA, fila);
+      if (fila.estado === 'PUBLICADA') await this.eventoAtraccion(tx, EVENTOS.ATRACCION_PUBLICADA, fila);
       return fila;
     });
-    await this.bitacora.registrar(user.sub, 'ACTUALIZAR', 'atraccion', uuid, { campos: Object.keys(dto) });
+    await this.bitacora.registrar(user.sub, dto.decision === 'APPROVE' ? 'APROBAR' : 'RECHAZAR', 'atraccion', uuid, dto.reason ? { motivo: dto.reason } : undefined);
     return this.mapper.toResponse(fila);
   }
 
   /** Borrado lógico (atr_eliminado_en); no se permite con reservas próximas activas. */
   async remove(uuid: string, user: AuthUser) {
+    const al = this.gestor(user);
     await this.db.tx(async (tx) => {
       const id = await this.idPorUuid(tx, uuid);
+      if (al.tipo === 'operador') {
+        const propia = await tx.one('SELECT 1 FROM atraccion a JOIN operador o ON o.ope_id = a.ope_id WHERE a.atr_id = $1 AND o.ope_codigo = $2', [id, al.codigo]);
+        if (!propia) throw new NotFoundException('La atracción no existe o ya no está disponible.');
+      }
       const r = await tx.one<{ n: number }>(
         `SELECT COUNT(*)::int AS n FROM reserva r JOIN disponibilidad d ON d.dis_id = r.dis_id JOIN estado e ON e.est_id = r.est_id
           WHERE d.atr_id = $1 AND r.res_fecha >= ${HOY_EC} AND e.est_codigo IN ('CONFIRMADA', 'PENDIENTE_PAGO')`,

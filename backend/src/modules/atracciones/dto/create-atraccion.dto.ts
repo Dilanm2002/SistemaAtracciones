@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -227,4 +228,20 @@ export class CreateAtraccionDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+}
+
+/** Decisión del administrador sobre una experiencia que subió una empresa (EN_REVISION). */
+export class RevisionAtraccionDto {
+  @ApiProperty({ enum: ['APPROVE', 'REJECT'], description: 'APPROVE la publica; REJECT la devuelve a la empresa con el motivo' })
+  @IsIn(['APPROVE', 'REJECT'], { message: 'decision debe ser APPROVE o REJECT' })
+  decision: 'APPROVE' | 'REJECT';
+
+  @ApiPropertyOptional({ description: 'Obligatorio al rechazar: qué debe corregir la empresa', example: 'Las fotos no corresponden al lugar; sube fotos propias del tour.' })
+  @ValidateIf((o: { decision?: string }) => o.decision === 'REJECT')
+  @Transform(trim)
+  @IsString({ message: 'reason es obligatorio al rechazar' })
+  @MinLength(10, { message: 'reason debe explicar el motivo (mínimo 10 caracteres)' })
+  @MaxLength(500)
+  @ContieneLetras()
+  reason?: string;
 }

@@ -3,9 +3,9 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import '../styles/admin.css';
 import {
   BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, Home, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
-  MessageSquareText, Mountain, Shapes, UserCog, Users, Webhook,
+  MessageSquareText, Mountain, Shapes, Store, UserCog, Users, Webhook,
 } from 'lucide-react';
-import { Auth, Mensajes, Reservas } from '../api/client';
+import { Atracciones, Auth, Mensajes, Proveedores, Reservas } from '../api/client';
 import { Field, Modal, RequiredLegend, Spinner } from '../components/ui';
 import { LIMITES, password } from '../utils/validation';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
@@ -21,10 +21,12 @@ export const NAV = [
   {
     group: 'CATÁLOGO',
     items: [
-      { to: '/admin/atracciones', label: 'Atracciones', icon: Mountain, scope: 'attractions:write' },
-      { to: '/admin/categorias', label: 'Categorías', icon: Shapes, scope: 'attractions:write' },
-      { to: '/admin/destinos', label: 'Destinos', icon: Map, scope: 'attractions:write' },
-      { to: '/admin/operadores', label: 'Operadores', icon: Building2, scope: 'attractions:write' },
+      // El operador ve aquí solo las experiencias de su empresa ("Mis experiencias")
+      { to: '/admin/atracciones', label: 'Atracciones', labelOperador: 'Mis experiencias', icon: Mountain, scope: 'attractions:write', badge: 'revision' },
+      { to: '/admin/categorias', label: 'Categorías', icon: Shapes, scope: 'admin:full' },
+      { to: '/admin/destinos', label: 'Destinos', icon: Map, scope: 'admin:full' },
+      { to: '/admin/operadores', label: 'Operadores', icon: Building2, scope: 'admin:full' },
+      { to: '/admin/solicitudes', label: 'Solicitudes de empresas', icon: Store, scope: 'admin:full', badge: 'solicitudes' },
     ],
   },
   {
@@ -45,7 +47,7 @@ export const NAV = [
     group: 'ANÁLISIS',
     items: [
       { to: '/admin/reportes', label: 'Reportes', icon: BarChart3, scope: 'admin:full' },
-      { to: '/admin/resenas', label: 'Reseñas', icon: MessageSquareText, scope: 'attractions:write' },
+      { to: '/admin/resenas', label: 'Reseñas', icon: MessageSquareText, scope: 'admin:full' },
       { to: '/admin/mensajes', label: 'Mensajes', icon: Mail, scope: 'admin:full', badge: 'unread' },
     ],
   },
@@ -97,11 +99,18 @@ export default function AdminLayout() {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [pwOpen, setPwOpen] = useState(false);
-  const [counts, setCounts] = useState({ pending: 0, unread: 0 });
+  const [counts, setCounts] = useState({ pending: 0, unread: 0, revision: 0, solicitudes: 0 });
+  const esAdmin = hasScope('admin:full');
+  const etiqueta = useCallback((i) => (!esAdmin && i.labelOperador ? i.labelOperador : i.label), [esAdmin]);
 
   const refreshCounts = useCallback(() => {
     if (hasScope('attractions:manage')) Reservas.list({ all: 'true', status: 'PENDING', when: 'upcoming' }).then((r) => setCounts((c) => ({ ...c, pending: r.length }))).catch(() => {});
-    if (hasScope('admin:full')) Mensajes.stats().then((s) => setCounts((c) => ({ ...c, unread: s.unread }))).catch(() => {});
+    if (hasScope('admin:full')) {
+      Mensajes.stats().then((s) => setCounts((c) => ({ ...c, unread: s.unread }))).catch(() => {});
+      // Lo que las empresas esperan que revises
+      Atracciones.list({ status: 'review', limit: 1 }).then((r) => setCounts((c) => ({ ...c, revision: r.meta?.totalItems ?? 0 }))).catch(() => {});
+      Proveedores.list('PENDIENTE').then((r) => setCounts((c) => ({ ...c, solicitudes: r.total }))).catch(() => {});
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
@@ -130,8 +139,8 @@ export default function AdminLayout() {
   const current = NAV.flatMap((g) => g.items).find((i) => (i.end ? pathname === i.to : pathname.startsWith(i.to))) ?? NAV[0].items[0];
 
   useEffect(() => {
-    document.title = `${current.label} · Panel Descubre EC`;
-  }, [current.label]);
+    document.title = `${etiqueta(current)} · Panel Descubre EC`;
+  }, [current, etiqueta]);
 
   return (
     <AdminCtx.Provider value={{ counts, refreshCounts }}>
@@ -152,9 +161,9 @@ export default function AdminLayout() {
                 {g.items.map((i) => (
                   <NavLink key={i.to} to={i.to} end={i.end} className={({ isActive }) => `adm-nav-item ${isActive ? 'active' : ''}`}>
                     <i.icon size={18} aria-hidden="true" />
-                    {i.label}
+                    {etiqueta(i)}
                     {i.badge && counts[i.badge] > 0 && (
-                      <span className="adm-nav-badge" aria-label={`${counts[i.badge]} ${i.badge === 'pending' ? 'pendientes' : 'sin leer'}`}>{counts[i.badge]}</span>
+                      <span className="adm-nav-badge" aria-label={`${counts[i.badge]} ${i.badge === 'unread' ? 'sin leer' : i.badge === 'revision' ? 'en revisión' : 'pendientes'}`}>{counts[i.badge]}</span>
                     )}
                   </NavLink>
                 ))}
@@ -183,7 +192,7 @@ export default function AdminLayout() {
             <button ref={toggleRef} className="icon-btn adm-menu-toggle" onClick={() => setOpen(true)} aria-label="Abrir menú" aria-expanded={open} aria-controls="adm-sidebar">
               <Menu size={22} aria-hidden="true" />
             </button>
-            <h1>{current.label}</h1>
+            <h1>{etiqueta(current)}</h1>
             <div className="adm-topbar-right">
               <span className="muted small hide-mobile">Atajo <span className="kbd">/</span> buscar</span>
               <span className="adm-topbar-user hide-mobile">{user.nombre.split(' ')[0]} · {ROL_LABEL[user.rol]}</span>

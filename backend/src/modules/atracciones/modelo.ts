@@ -70,6 +70,9 @@ export interface FilaAtraccion {
   descripcion_corta: string | null;
   tipo: string;
   estado: string;
+  /** TRUE si el administrador la aprobó alguna vez (puede pausarse y reactivarse sin revisión) */
+  aprobada: boolean;
+  motivo_rechazo: string | null;
   latitud: number;
   longitud: number;
   direccion: string | null;
@@ -109,7 +112,7 @@ export interface FilaAtraccion {
 export const SELECT_ATRACCION = `
   SELECT a.atr_id::text AS id, a.atr_uuid::text AS uuid, a.atr_nombre AS nombre, a.atr_slug AS slug,
          a.atr_descripcion AS descripcion, a.atr_descripcion_corta AS descripcion_corta,
-         a.atr_tipo AS tipo, a.atr_estado AS estado,
+         a.atr_tipo AS tipo, a.atr_estado AS estado, a.atr_aprobada AS aprobada, a.atr_motivo_rechazo AS motivo_rechazo,
          a.atr_latitud::float8 AS latitud, a.atr_longitud::float8 AS longitud,
          a.atr_direccion AS direccion, a.atr_punto_encuentro AS punto_encuentro,
          a.atr_duracion_horas::float8 AS duracion_horas, a.atr_moneda AS moneda,

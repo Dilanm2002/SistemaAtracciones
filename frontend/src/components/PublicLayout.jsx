@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useId, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  CalendarCheck, Compass, Heart, HelpCircle, Home, LayoutDashboard, LogIn, LogOut, Mail, Map, Menu, Mountain, User, X,
+  CalendarCheck, Compass, Heart, HelpCircle, Home, LayoutDashboard, LogIn, LogOut, Mail, Map, Menu, Mountain, Store, User, X,
 } from 'lucide-react';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
@@ -20,6 +20,7 @@ const NAV = [
   { to: '/', label: 'Inicio', icon: Home, end: true },
   { to: '/explorar', label: 'Explorar', icon: Compass },
   { to: '/destinos', label: 'Destinos', icon: Map },
+  { to: '/empresas', label: 'Para empresas', icon: Store },
   { to: '/ayuda', label: 'Ayuda', icon: HelpCircle },
   { to: '/contacto', label: 'Contacto', icon: Mail },
 ];
@@ -189,7 +190,7 @@ export function Footer() {
             <ul>
               <li><Link to="/mis-reservas">Mis reservas</Link></li>
               <li><Link to="/favoritos">Favoritos</Link></li>
-              <li><Link to="/contacto?asunto=PROVEEDOR">Publica tus tours</Link></li>
+              <li><Link to="/empresas">Publica tus tours (empresas)</Link></li>
             </ul>
           </div>
         </div>

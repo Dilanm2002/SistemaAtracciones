@@ -148,6 +148,8 @@ export const Atracciones = {
   create: (data) => api('/atracciones', { method: 'POST', body: data }),
   update: (id, data) => api(`/atracciones/${id}`, { method: 'PATCH', body: data }),
   remove: (id) => api(`/atracciones/${id}`, { method: 'DELETE' }),
+  /** Admin: aprobar (APPROVE) o rechazar con motivo (REJECT) lo que subió una empresa */
+  review: (id, decision, reason) => api(`/atracciones/${id}/review`, { method: 'POST', body: { decision, ...(reason ? { reason } : {}) } }),
   availability: (id, date) => api(`/atracciones/${id}/availability${qs({ date })}`),
   calendar: (id, month) => api(`/atracciones/${id}/availability/calendar${qs({ month })}`),
   blocked: (id) => api(`/atracciones/${id}/blocked-dates`),
@@ -202,6 +204,15 @@ export const Usuarios = {
   list: (params = {}) => api(`/usuarios${qs(params)}`),
   create: (data) => api('/usuarios', { method: 'POST', body: data }),
   update: (id, data) => api(`/usuarios/${id}`, { method: 'PATCH', body: data }),
+};
+
+/** Empresas que piden vender sus tours y paquetes (marketplace). */
+export const Proveedores = {
+  solicitar: (data) => api('/proveedores/solicitudes', { method: 'POST', body: data }),
+  mia: () => api('/proveedores/solicitudes/mia'),
+  list: (estado) => api(`/proveedores/solicitudes${qs({ estado })}`),
+  aprobar: (id) => api(`/proveedores/solicitudes/${id}/aprobar`, { method: 'POST' }),
+  rechazar: (id, motivo) => api(`/proveedores/solicitudes/${id}/rechazar`, { method: 'POST', body: { motivo } }),
 };
 
 export const Uploads = {

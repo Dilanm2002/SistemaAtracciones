@@ -158,10 +158,54 @@ describeDb('Catálogo, reseñas, favoritos, contacto e integración (E2E)', () =
       expect(r.status).toBe(400);
     });
 
-    it('un OPERADOR no puede crear ni editar atracciones (requiere attractions:write)', async () => {
+    it('el OPERADOR sube experiencias de SU empresa: quedan EN_REVISION y no se ven hasta aprobarlas', async () => {
+      // Aunque diga otra empresa, no puede: solo la suya; tampoco puede destacar
+      expect((await http(app).post('/atracciones').set(bearer(operador)).send(nuevaAtraccion(cityId, { operator: { id: 102, name: 'x' } }))).status).toBe(403);
+      expect((await http(app).post('/atracciones').set(bearer(operador)).send(nuevaAtraccion(cityId, { featured: true }))).status).toBe(403);
+      const r = await http(app).post('/atracciones').set(bearer(operador)).send(nuevaAtraccion(cityId));
+      expect(r.status).toBe(201);
+      expect(r.body).toMatchObject({ status: 'EN_REVISION', is_active: false, operator: { id: 101 } });
+      // El público no la ve; el operador sí (es suya); el admin la lista en "review"
+      expect((await http(app).get(`/atracciones/${r.body.id}`)).status).toBe(404);
+      expect((await http(app).get(`/atracciones/${r.body.id}`).set(bearer(operador))).status).toBe(200);
+      const enRevision = await http(app).get('/atracciones?status=review&limit=100').set(bearer(admin));
+      expect(enRevision.body.data.some((a: { id: string }) => a.id === r.body.id)).toBe(true);
+      // El operador no puede aprobarse a sí mismo
+      expect((await http(app).post(`/atracciones/${r.body.id}/review`).set(bearer(operador)).send({ decision: 'APPROVE' })).status).toBe(403);
+      const ok = await http(app).post(`/atracciones/${r.body.id}/review`).set(bearer(admin)).send({ decision: 'APPROVE' });
+      expect(ok.status).toBe(200);
+      expect(ok.body).toMatchObject({ status: 'PUBLICADA', is_active: true });
+      expect((await http(app).get(`/atracciones/${r.body.id}`)).status).toBe(200);
+      expect((await http(app).post(`/atracciones/${r.body.id}/review`).set(bearer(admin)).send({ decision: 'APPROVE' })).status).toBe(409);
+      // Ya aprobada: el operador la pausa y la reactiva sin nueva revisión
+      expect((await http(app).patch(`/atracciones/${r.body.id}`).set(bearer(operador)).send({ is_active: false })).body.status).toBe('INACTIVA');
+      expect((await http(app).patch(`/atracciones/${r.body.id}`).set(bearer(operador)).send({ is_active: true })).body.status).toBe('PUBLICADA');
+    });
+
+    it('rechazo con motivo: la empresa lo ve, corrige y la experiencia vuelve a revisión', async () => {
+      const r = await http(app).post('/atracciones').set(bearer(operador)).send(nuevaAtraccion(cityId));
+      expect((await http(app).post(`/atracciones/${r.body.id}/review`).set(bearer(admin)).send({ decision: 'REJECT' })).status).toBe(400);
+      const no = await http(app).post(`/atracciones/${r.body.id}/review`).set(bearer(admin)).send({ decision: 'REJECT', reason: 'Las fotos no corresponden al tour; sube fotos propias.' });
+      expect(no.body).toMatchObject({ status: 'RECHAZADA', rejection_reason: 'Las fotos no corresponden al tour; sube fotos propias.' });
+      // Mientras no esté aprobada, el operador no puede publicarla por su cuenta
+      const corregida = await http(app).patch(`/atracciones/${r.body.id}`).set(bearer(operador)).send({ is_active: true, short_description: 'Recorrido corregido con fotos propias' });
+      expect(corregida.body.status).toBe('EN_REVISION');
+      expect(corregida.body.rejection_reason).toBeUndefined();
+    });
+
+    it('el OPERADOR no ve ni toca experiencias de otras empresas, ni administra catálogos', async () => {
+      const ajena = await crearAtraccion({ operator: { id: 102, name: 'Galápagos Blue Tours' } });
+      expect((await http(app).patch(`/atracciones/${ajena.id}`).set(bearer(operador)).send({ short_description: 'Intento de cambio ajeno' })).status).toBe(404);
+      expect((await http(app).delete(`/atracciones/${ajena.id}`).set(bearer(operador))).status).toBe(404);
+      const mias = await http(app).get('/atracciones?status=all&limit=100').set(bearer(operador));
+      expect(mias.body.data.every((a: { operator: { id: number } }) => a.operator.id === 101)).toBe(true);
+      expect((await http(app).post('/operadores').set(bearer(operador)).send({ nombre: 'Empresa Pirata', provincia_id: 1 })).status).toBe(403);
+      expect((await http(app).post('/destinos').set(bearer(operador)).send({ nombre: 'Lugar', provincia_id: 1, codigo_inec: '170199' })).status).toBe(403);
+    });
+
+    it('lo que crea el administrador se publica directamente', async () => {
       const a = await crearAtraccion();
-      expect((await http(app).post('/atracciones').set(bearer(operador)).send(nuevaAtraccion(cityId))).status).toBe(403);
-      expect((await http(app).patch(`/atracciones/${a.id}`).set(bearer(operador)).send({ featured: true })).status).toBe(403);
+      expect(a.status).toBe('PUBLICADA');
     });
 
     it('fechas bloqueadas: el operador gestiona solo las de su empresa', async () => {

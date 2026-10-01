@@ -11,6 +11,7 @@ import { AtraccionesModule } from './modules/atracciones/atracciones.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ContactoModule } from './modules/contacto/contacto.module';
 import { IntegracionModule } from './modules/integracion/integracion.module';
+import { ProveedoresModule } from './modules/proveedores/proveedores.module';
 import { SeedService } from './seed/seed.service';
 
 @Module({
@@ -67,6 +68,7 @@ import { SeedService } from './seed/seed.service';
 
     // Preparación para la integración: feed de eventos (EDA) y contratos publicados
     IntegracionModule,
+    ProveedoresModule,
   ],
   controllers: [],
   providers: [MigracionesService, SeedService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

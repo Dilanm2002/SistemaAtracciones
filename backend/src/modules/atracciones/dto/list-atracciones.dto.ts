@@ -38,10 +38,13 @@ export class ListAtraccionesQueryDto extends PaginationQueryDto {
   @IsInt()
   operator?: number;
 
-  @ApiPropertyOptional({ description: 'Solo con attractions:write → active | inactive | all', enum: ['active', 'inactive', 'all'] })
+  @ApiPropertyOptional({
+    description: 'Solo con attractions:write (el operador ve únicamente su empresa): active | inactive | review (en revisión) | rejected | all',
+    enum: ['active', 'inactive', 'review', 'rejected', 'all'],
+  })
   @IsOptional()
-  @IsIn(['active', 'inactive', 'all'])
-  status?: 'active' | 'inactive' | 'all';
+  @IsIn(['active', 'inactive', 'review', 'rejected', 'all'])
+  status?: 'active' | 'inactive' | 'review' | 'rejected' | 'all';
 
   @ApiPropertyOptional({ description: 'Solo destacadas', enum: ['true', 'false'] })
   @IsOptional()

@@ -418,3 +418,9 @@
 .site-header .drawer .nav-link.active { color: var(--primary); }
 .res-card .res-title { margin: 4px 0 6px; font-size: 1.05rem; }
 .drawer .brand b { color: #b45309; }
+
+/* Página "Para empresas": pasos del alta como proveedor */
+.steps-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.steps-grid li { position: relative; color: var(--primary); }
+.steps-grid li h2, .steps-grid li p { color: var(--text); }
+.steps-grid .step-num { position: absolute; top: 12px; right: 14px; width: 26px; height: 26px; border-radius: 999px; background: var(--primary); color: #fff; font-weight: 700; font-size: 0.85rem; display: grid; place-items: center; }

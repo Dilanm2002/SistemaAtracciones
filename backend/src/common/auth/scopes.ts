@@ -26,7 +26,9 @@ export enum Rol {
 
 export const SCOPES_POR_ROL: Record<Rol, Scope[]> = {
   [Rol.CLIENTE]: [SCOPES.READ, SCOPES.BOOK, SCOPES.CANCEL],
-  [Rol.OPERADOR]: [SCOPES.READ, SCOPES.BOOK, SCOPES.CANCEL, SCOPES.MANAGE],
+  // El operador mantiene el inventario de SU empresa (attractions:write): lo que crea queda
+  // EN_REVISION hasta que el administrador lo aprueba. Los catálogos globales exigen admin:full.
+  [Rol.OPERADOR]: [SCOPES.READ, SCOPES.BOOK, SCOPES.CANCEL, SCOPES.MANAGE, SCOPES.WRITE],
   [Rol.ADMIN]: [SCOPES.READ, SCOPES.BOOK, SCOPES.CANCEL, SCOPES.MANAGE, SCOPES.WRITE, SCOPES.ADMIN],
 };
 

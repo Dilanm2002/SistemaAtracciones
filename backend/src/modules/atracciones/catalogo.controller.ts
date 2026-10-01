@@ -39,7 +39,7 @@ import { ReportesService } from './reportes.service';
 import { ResenasService } from './resenas.service';
 import { hoyEc, sumarDias } from './utils/fechas';
 
-const verTodo = (q: CatalogoQueryDto, u?: AuthUser) => q.all === 'true' && !!u?.scope?.includes(SCOPES.WRITE);
+const verTodo = (q: CatalogoQueryDto, u?: AuthUser) => q.all === 'true' && !!u?.scope?.includes(SCOPES.ADMIN);
 
 @ApiTags('Atracciones - Catálogo auxiliar')
 @Controller()
@@ -69,7 +69,7 @@ export class CatalogoController {
 
   @Post('categorias')
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   createCategoria(@Body() dto: CreateCategoriaDto, @CurrentUser() u: AuthUser) {
     return this.catalogo.createCategoria(dto, u);
@@ -77,7 +77,7 @@ export class CatalogoController {
 
   @Patch('categorias/:id')
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   updateCategoria(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdateCategoriaDto, @CurrentUser() u: AuthUser) {
     return this.catalogo.updateCategoria(id, dto, u);
@@ -86,7 +86,7 @@ export class CatalogoController {
   @Delete('categorias/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   deleteCategoria(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
     return this.catalogo.deleteCategoria(id, u);
@@ -102,7 +102,7 @@ export class CatalogoController {
 
   @Post('destinos')
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   createDestino(@Body() dto: CreateDestinoDto, @CurrentUser() u: AuthUser) {
     return this.catalogo.createDestino(dto, u);
@@ -110,7 +110,7 @@ export class CatalogoController {
 
   @Patch('destinos/:id')
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   updateDestino(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdateDestinoDto, @CurrentUser() u: AuthUser) {
     return this.catalogo.updateDestino(id, dto, u);
@@ -119,7 +119,7 @@ export class CatalogoController {
   @Delete('destinos/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   deleteDestino(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
     return this.catalogo.deleteDestino(id, u);
@@ -135,7 +135,7 @@ export class CatalogoController {
 
   @Post('operadores')
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   createOperador(@Body() dto: CreateOperadorDto, @CurrentUser() u: AuthUser) {
     return this.catalogo.createOperador(dto, u);
@@ -143,7 +143,7 @@ export class CatalogoController {
 
   @Patch('operadores/:id')
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   updateOperador(@Param('id', ParseIdPipe) id: string, @Body() dto: UpdateOperadorDto, @CurrentUser() u: AuthUser) {
     return this.catalogo.updateOperador(id, dto, u);
@@ -152,7 +152,7 @@ export class CatalogoController {
   @Delete('operadores/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiBearerAuth()
   deleteOperador(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
     return this.catalogo.deleteOperador(id, u);
@@ -173,14 +173,14 @@ export class AdminAtraccionesController {
 
   // ── Moderación de reseñas ─────────────────────────────────────────────
   @Get('resenas')
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiOperation({ summary: 'Todas las reseñas (moderación)' })
   listResenas(@Query() q: ResenasQueryDto) {
     return this.resenas.listAdmin(q);
   }
 
   @Patch('resenas/:id')
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   @ApiOperation({ summary: 'Mostrar u ocultar una reseña' })
   moderar(@Param('id', ParseIdPipe) id: string, @Body() dto: ModerarResenaDto, @CurrentUser() u: AuthUser) {
     return this.resenas.moderar(id, dto.visible, u);
@@ -188,7 +188,7 @@ export class AdminAtraccionesController {
 
   @Delete('resenas/:id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @Scopes(SCOPES.WRITE)
+  @Scopes(SCOPES.ADMIN)
   deleteResena(@Param('id', ParseIdPipe) id: string, @CurrentUser() u: AuthUser) {
     return this.resenas.remove(id, u);
   }

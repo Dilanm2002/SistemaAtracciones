@@ -88,7 +88,7 @@ Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha 
 
 ## Control de versiones
 
-Versión actual: **2.0.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+Versión actual: **2.1.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
 
 Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
 
@@ -112,6 +112,25 @@ El trabajo del día a día se anota en `CHANGELOG.md` bajo **[Sin publicar]**. P
 
 Para volver a una versión anterior: `git checkout v1.0.0` (solo lectura) o crear una rama desde la etiqueta: `git switch -c arreglo-1.0 v1.0.0`.
 
+## Reglas de negocio: reservas y empresas proveedoras
+
+**Reservar exige cuenta.** Cualquiera puede explorar y elegir fecha y entradas, pero para pagar hay que iniciar sesión o registrarse. El checkout lo pide sin perder la selección, y la API rechaza con 401 una reserva sin token.
+
+**Una empresa que quiere vender sus tours o paquetes** (página *Para empresas*, `/empresas`):
+
+1. **Cuenta.** La persona responsable crea su cuenta o inicia sesión.
+2. **Solicitud.** Envía los datos de su empresa: nombre comercial, RUC válido, provincia, correo y teléfono ecuatorianos, y qué ofrece. Queda **PENDIENTE**, y solo puede haber una pendiente por persona y por RUC.
+3. **Revisión de la empresa.** El administrador la revisa en *Solicitudes de empresas*.
+   - **Aprobar:** en una sola transacción se crea la empresa (`operador`), se vincula a la persona y esta recibe el rol **OPERADOR**.
+   - **Rechazar:** exige un motivo, que la persona ve para corregir y volver a solicitar.
+4. **Carga de experiencias.** El operador sube sus tours y paquetes en *Mis experiencias*.
+   - Solo puede publicar para **su** empresa y no puede destacarlos en el inicio.
+   - Todo lo nuevo queda **EN REVISIÓN** y no se ve en el sitio.
+5. **Revisión de cada experiencia.** El administrador la **aprueba**, y queda publicada y reservable, o la **rechaza con motivo**. Si se rechaza, el operador la corrige y vuelve a revisión.
+6. **Pausa y reactivación.** Una experiencia ya aprobada se puede pausar y reactivar sin pasar otra vez por revisión.
+
+**Permisos:** los catálogos globales (categorías, destinos, operadores) y la moderación de reseñas son solo del administrador. Tablas: `solicitud_operador`, más los estados y columnas de revisión de `atraccion` (migración `006_proveedores.sql`).
+
 ## Páginas
 
 **Sitio público**: Inicio (buscador, categorías, destacadas, regiones, destinos, vistos recientemente) · Explorar (filtros por destino, región, categoría, precio, duración, tipo, calificación y cancelación gratis; orden; paginación por token) · Detalle (galería, calendario de disponibilidad real, horarios con cupos, adultos/niños, mapa, reseñas) · Checkout en 3 pasos (login dentro del flujo, datos, pago con tarjeta/transferencia/en sitio) · Confirmación (código, .ics, imprimir) · Mis reservas (próximas/pasadas/canceladas, cancelar, reseñar) · Favoritos · Destinos · Ayuda (FAQ) · Contacto · Ingresar/Registro · Perfil · 404.
@@ -121,7 +140,7 @@ Para volver a una versión anterior: `git checkout v1.0.0` (solo lectura) o crea
 | Grupo | Módulos |
 |---|---|
 | General | Dashboard: bienvenida, KPIs, accesos rápidos, ingresos 7 días, próximas salidas |
-| Catálogo | Atracciones (tarjetas agrupadas, formulario por secciones, fotos), Categorías, Destinos, Operadores |
+| Catálogo | Atracciones (tarjetas agrupadas, formulario por secciones, fotos, estados de revisión con aprobar/rechazar) — para el operador, *Mis experiencias* de su empresa —, Categorías, Destinos, Operadores, Solicitudes de empresas |
 | Operación | Reservas (confirmar pago, cancelar, exportar Excel), Disponibilidad (ocupación mensual, bloquear fechas) |
 | Personas | Clientes, Usuarios y roles |
 | Análisis | Reportes (gráficas + Excel), Reseñas (moderación), Mensajes |

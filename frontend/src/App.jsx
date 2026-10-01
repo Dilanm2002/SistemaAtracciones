@@ -26,6 +26,8 @@ const ClientesAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ de
 const UsuariosAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.UsuariosAdmin })));
 const ResenasAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ResenasAdmin })));
 const IntegracionAdmin = lazy(() => import('./admin/IntegracionAdmin'));
+const Empresas = lazy(() => import('./pages/Empresas'));
+const SolicitudesAdmin = lazy(() => import('./admin/SolicitudesAdmin'));
 const MensajesAdmin = lazy(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.MensajesAdmin })));
 
 /** Atajo "/" para enfocar el buscador de la página (flexibilidad y eficiencia de uso). */
@@ -62,6 +64,7 @@ export default function App() {
           <Route path="favoritos" element={<Favorites />} />
           <Route path="ayuda" element={<Help />} />
           <Route path="contacto" element={<Contact />} />
+          <Route path="empresas" element={<Empresas />} />
           <Route path="ingresar" element={<Login />} />
           <Route path="registro" element={<Register />} />
           <Route path="*" element={<NotFound />} />
@@ -80,6 +83,7 @@ export default function App() {
           <Route path="resenas" element={<ResenasAdmin />} />
           <Route path="mensajes" element={<MensajesAdmin />} />
           <Route path="integracion" element={<IntegracionAdmin />} />
+          <Route path="solicitudes" element={<SolicitudesAdmin />} />
         </Route>
       </Routes>
     </Suspense>

@@ -62,7 +62,8 @@ export class AtraccionResponseDto extends BaseResponseDto {
 
   // ── Extensiones ───────────────────────────────────────────────────────
   @ApiPropertyOptional({ example: 'tour-parque-nacional-cotopaxi' }) slug?: string;
-  @ApiPropertyOptional({ enum: ['BORRADOR', 'PUBLICADA', 'INACTIVA'] }) status?: string;
+  @ApiPropertyOptional({ enum: ['BORRADOR', 'EN_REVISION', 'PUBLICADA', 'RECHAZADA', 'INACTIVA'], description: 'EN_REVISION: subida por la empresa, pendiente de aprobación' }) status?: string;
+  @ApiPropertyOptional({ description: 'Motivo indicado por el administrador cuando status = RECHAZADA' }) rejection_reason?: string;
   @ApiPropertyOptional() short_description?: string;
   @ApiPropertyOptional({ type: PriceDto }) child_price?: PriceDto;
   @ApiPropertyOptional() duration_hours?: number;

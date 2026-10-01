@@ -84,6 +84,7 @@ export class AtraccionMapper {
       featured: a.destacada,
       is_active: a.estado === 'PUBLICADA',
       status: a.estado,
+      ...(a.motivo_rechazo && a.estado === 'RECHAZADA' ? { rejection_reason: a.motivo_rechazo } : {}),
       ratings: { number_of_reviews: a.numero_resenas, score: a.rating },
       url: { web: `${this.frontendUrl}/atraccion/${a.uuid}`, app: `descubreec://attractions/${a.uuid}` },
       _links: {

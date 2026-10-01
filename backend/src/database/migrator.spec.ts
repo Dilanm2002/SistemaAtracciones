@@ -5,7 +5,7 @@ import { leerMigraciones, SQL_DIR } from './migrator';
 describe('Migraciones SQL-first', () => {
   it('se aplican en orden numérico y cada una tiene checksum', () => {
     const m = leerMigraciones();
-    expect(m.map((x) => x.nombre)).toEqual(['001_modelo_relacional.sql', '002_seguridad.sql', '003_eventos.sql', '004_documento_telefono_ec.sql', '005_contacto_pasajero.sql']);
+    expect(m.map((x) => x.nombre)).toEqual(['001_modelo_relacional.sql', '002_seguridad.sql', '003_eventos.sql', '004_documento_telefono_ec.sql', '005_contacto_pasajero.sql', '006_proveedores.sql']);
     m.forEach((x) => expect(x.checksum).toMatch(/^[0-9a-f]{64}$/));
   });
 
@@ -41,5 +41,12 @@ describe('Migraciones SQL-first', () => {
     if (!existsSync(original)) return;
     const norm = (s: string) => s.replace(/\r\n/g, '\n');
     expect(norm(readFileSync(join(SQL_DIR, '005_contacto_pasajero.sql'), 'utf8'))).toBe(norm(readFileSync(original, 'utf8')));
+  });
+
+  it('006 (proveedores) es copia exacta de database/06_proveedores.sql', () => {
+    const original = join(__dirname, '..', '..', '..', 'database', '06_proveedores.sql');
+    if (!existsSync(original)) return;
+    const norm = (s: string) => s.replace(/\r\n/g, '\n');
+    expect(norm(readFileSync(join(SQL_DIR, '006_proveedores.sql'), 'utf8'))).toBe(norm(readFileSync(original, 'utf8')));
   });
 });
