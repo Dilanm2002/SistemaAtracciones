@@ -1,12 +1,12 @@
 name: Mantener servicios activos
 
-# Cada 10 minutos consulta la API en producción:
+# Cada 5 minutos consulta la API en producción:
 # - mantiene "caliente" la función serverless de Vercel (evita arranques en frío lentos);
 # - el endpoint de salud consulta la base, así Supabase (plan gratuito) no pausa el
 #   proyecto por inactividad (lo hace tras 7 días sin peticiones).
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:

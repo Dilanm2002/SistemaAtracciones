@@ -223,3 +223,24 @@ export const Uploads = {
     return api('/uploads', { method: 'POST', form });
   },
 };
+
+/**
+ * Datos de la sesión que ya trae el token (nombre, rol, permisos). Se usan SOLO para pintar la
+ * interfaz al instante mientras llega /auth/me; la firma la verifica el servidor en cada petición,
+ * así que no dan acceso a nada. Si el token venció, no se usan.
+ */
+export function usuarioDelToken(token) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    const p = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+    if (!p.sub || (p.exp && p.exp * 1000 < Date.now())) return null;
+    return { id: p.sub, email: p.email, nombre: p.nombre, rol: p.rol, scope: p.scope ?? [], operadorCodigo: p.operador ?? null, _provisional: true };
+  } catch {
+    return null;
+  }
+}
+
+/** Rendimiento: la sesión se valida en paralelo con la descarga del resto de la página. */
+export const sesionInicial = tokenStore.get() ? api('/auth/me') : null;
+sesionInicial?.catch(() => {}); // el error lo maneja AuthContext

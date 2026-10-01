@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Auth, tokenStore } from '../api/client';
+import { Auth, sesionInicial, tokenStore, usuarioDelToken } from '../api/client';
 import { useToast } from './ToastContext';
 
 const AuthCtx = createContext(null);
@@ -7,8 +7,10 @@ const AuthCtx = createContext(null);
 export const ROL_LABEL = { ADMIN: 'Administrador', OPERADOR: 'Operador', CLIENTE: 'Viajero' };
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(!!tokenStore.get());
+  // Con token, la interfaz se pinta de inmediato con los datos del token (usuario provisional)
+  // y las páginas piden sus datos en paralelo con /auth/me, que luego trae el perfil completo.
+  const [user, setUser] = useState(() => (tokenStore.get() ? usuarioDelToken(tokenStore.get()) : null));
+  const [loading, setLoading] = useState(() => !!tokenStore.get() && !usuarioDelToken(tokenStore.get()));
   const toast = useToast();
 
   const logout = useCallback((silent = false) => {
@@ -22,9 +24,12 @@ export function AuthProvider({ children }) {
   // Restaurar sesión al cargar
   useEffect(() => {
     if (!tokenStore.get()) return;
-    Auth.me()
+    (sesionInicial ?? Auth.me())
       .then(setUser)
-      .catch(() => tokenStore.set(null))
+      .catch(() => {
+        tokenStore.set(null);
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 

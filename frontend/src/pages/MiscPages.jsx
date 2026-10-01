@@ -283,6 +283,13 @@ export function Register() {
 
 // ── Perfil ───────────────────────────────────────────────────────────────
 export function Profile() {
+  const { user } = useAuth();
+  // El formulario se inicia con el perfil completo (no con el provisional del token)
+  if (user?._provisional) return <div className="container" style={{ padding: 60 }}><Spinner label="Cargando tu perfil…" /></div>;
+  return <ProfileForm />;
+}
+
+function ProfileForm() {
   usePageTitle('Mi perfil');
   const { user, refresh } = useAuth();
   const toast = useToast();
