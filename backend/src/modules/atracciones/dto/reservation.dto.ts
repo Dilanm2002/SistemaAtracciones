@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLength, Max, IsEnum, MinLength, IsIn, IsUUID, ValidateIf, ValidateNested } from 'class-validator';
+import { IsBoolean, IsString, IsInt, Min, IsEmail, IsOptional, IsDateString, Matches, MaxLength, Max, IsEnum, MinLength, IsIn, IsUUID, ValidateIf, ValidateNested } from 'class-validator';
 import { Link } from '../../../common/utils/hateoas';
 import { PriceDto } from './nested-types.dto';
 import { lower, trim } from '../../../common/utils/transform';
@@ -172,7 +172,10 @@ export class ReservationResponseDto {
   @ApiPropertyOptional() cancellation_reason?: string;
   @ApiPropertyOptional() cancelled_at?: string;
   @ApiPropertyOptional() created_at?: string;
-  @ApiPropertyOptional({ description: 'Si todavía puede cancelarse sin costo' }) can_cancel?: boolean;
+  @ApiPropertyOptional({ description: 'Si el cliente todavía puede cancelarla (con o sin reembolso)' }) can_cancel?: boolean;
+  @ApiPropertyOptional({ enum: ['FULL_REFUND', 'NO_CHARGE', 'NO_REFUND', 'NOT_ALLOWED'], description: 'Qué pasa si el cliente cancela ahora' }) cancellation_policy?: string;
+  @ApiPropertyOptional({ description: 'Si cancelar ahora no tiene costo para el cliente' }) refundable?: boolean;
+  @ApiPropertyOptional({ description: 'Hasta cuándo es gratis cancelar (ISO 8601)' }) free_cancellation_until?: string;
   @ApiPropertyOptional() _links?: Record<string, Link>;
 }
 
@@ -184,6 +187,14 @@ export class CancelReservationRequestDto {
   @MaxLength(255)
   @ContieneLetras({ message: 'reason debe explicar el motivo con texto' })
   reason: string;
+
+  @ApiPropertyOptional({
+    description: 'Obligatorio (true) cuando ya pasó el plazo de cancelación gratuita: el cliente acepta cancelar sin reembolso',
+    default: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  accept_no_refund?: boolean;
 }
 
 export class ReservationsQueryDto {

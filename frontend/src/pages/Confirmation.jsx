@@ -4,7 +4,7 @@ import { CalendarPlus, CheckCircle2, Clock3, Compass, Copy, ListChecks, Printer 
 import { Reservas } from '../api/client';
 import { Alert, ErrorState, Spinner, StatusBadge, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
-import { fmtDateLong, fmtMoney, PAYMENT } from '../utils/format';
+import { fmtDateLong, fmtDateTime, fmtMoney, PAYMENT } from '../utils/format';
 
 /** Genera un archivo .ics para agregar la actividad al calendario del viajero. */
 export function downloadIcs(r) {
@@ -78,9 +78,15 @@ export default function Confirmation() {
           <dt>Método de pago</dt><dd>{PAYMENT[r.payment_method]}</dd>
           <dt>Total</dt><dd><strong>{fmtMoney(r.total_price.total)}</strong></dd>
         </dl>
-        {r.can_cancel && (
+        {r.status !== 'CANCELLED' && (
           <div style={{ marginTop: 16 }}>
-            <Alert tone="success">Puedes cancelar gratis hasta {r.attraction.cancellation_hours} h antes desde "Mis reservas".</Alert>
+            {r.cancellation_policy === 'NO_CHARGE' ? (
+              <Alert tone="info">Aún no has pagado: puedes cancelar sin costo desde "Mis reservas" hasta la hora de salida.</Alert>
+            ) : r.cancellation_policy === 'FULL_REFUND' ? (
+              <Alert tone="success">Puedes cancelar gratis desde "Mis reservas" hasta el {fmtDateTime(r.free_cancellation_until)}.</Alert>
+            ) : (
+              <Alert tone="warning">Esta reserva ya no tiene cancelación gratuita: si cancelas, se libera tu cupo pero sin reembolso.</Alert>
+            )}
           </div>
         )}
       </div>

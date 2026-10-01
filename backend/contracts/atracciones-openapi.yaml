@@ -993,7 +993,21 @@ components:
           enum: [TARJETA, TRANSFERENCIA, EN_SITIO]
         can_cancel:
           type: boolean
-          description: Si todavía puede cancelarse sin costo.
+          description: Si el cliente todavía puede cancelarla (con o sin reembolso; ver cancellation_policy).
+        cancellation_policy:
+          type: string
+          enum: [FULL_REFUND, NO_CHARGE, NO_REFUND, NOT_ALLOWED]
+          description: >-
+            Qué pasa si el cliente cancela ahora. FULL_REFUND reembolso total (dentro del plazo de la
+            experiencia o en la hora de arrepentimiento tras reservar); NO_CHARGE pendiente de pago, nada
+            que devolver; NO_REFUND puede cancelar pero sin reembolso; NOT_ALLOWED la experiencia ya empezó.
+        refundable:
+          type: boolean
+          description: Si cancelar ahora no tiene costo para el cliente.
+        free_cancellation_until:
+          type: string
+          format: date-time
+          description: Hasta cuándo es gratis cancelar (solo con FULL_REFUND o NO_CHARGE).
         _links:
           $ref: '#/components/schemas/Links'
     CancelReservationRequest:
@@ -1004,4 +1018,8 @@ components:
         reason:
           type: string
           description: Razón de la cancelación
+        accept_no_refund:
+          type: boolean
+          default: false
+          description: Obligatorio (true) cuando cancellation_policy = NO_REFUND; sin él la API responde 409 NO_REFUND_CONFIRMATION_REQUIRED.
 

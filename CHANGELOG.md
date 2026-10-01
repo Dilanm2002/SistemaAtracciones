@@ -7,6 +7,25 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.2.0] - 2026-10-01
+
+### Corregido
+- **Error de lógica en la cancelación.** Una reserva hecha a último momento, ya dentro del plazo de cancelación gratuita, quedaba sin ninguna forma de cancelarse, aunque estuviera pendiente de pago. La pantalla además decía que el plazo había terminado antes de reservar.
+
+### Cambiado
+- **Nueva política de cancelación del cliente.** La API la expone en `cancellation_policy`, `refundable` y `free_cancellation_until`:
+  - **Pendiente de pago:** se cancela sin costo hasta la salida.
+  - **Pagada, dentro del plazo de la experiencia:** reembolso total.
+  - **Pagada a último momento:** 1 hora de arrepentimiento con reembolso total.
+  - **Pagada, fuera de plazo:** se puede cancelar sin reembolso, confirmándolo con `accept_no_refund`; sin esa confirmación la API responde 409 `NO_REFUND_CONFIRMATION_REQUIRED`.
+  - **Ya empezada:** no se puede cancelar.
+  - **Cancela la empresa:** siempre con reembolso total.
+- `can_cancel` ahora significa "puede cancelar, con o sin reembolso".
+- **Interfaz:**
+  - **Mis reservas:** muestra la política de cada reserva. El botón dice "Cancelar sin reembolso" cuando corresponde, y el modal exige marcar que acepta perder el pago.
+  - **Checkout:** avisa antes de pagar si la reserva es de último momento o no tiene cancelación gratuita.
+  - **Confirmación:** muestra hasta cuándo es gratis cancelar.
+
 ## [2.1.0] - 2026-10-01
 
 ### Agregado

@@ -133,7 +133,12 @@ export async function emitirFactura(tx: Sql, cat: CatalogosService, ordId: strin
  * (orden REEMBOLSADA, factura ANULADA); si estaba pendiente, el pago se rechaza
  * (orden CANCELADA).
  */
-export async function cancelarCompra(tx: Sql, cat: CatalogosService, resId: string, motivo: string, fecha: Date = new Date()) {
+/**
+ * Cancela la reserva y libera sus cupos. Si el pago estaba aprobado se reembolsa (por defecto);
+ * con `reembolsar = false` (cancelación del cliente fuera de plazo) el cobro se conserva y la
+ * factura sigue vigente. Si el pago aún no se había aprobado, se anula.
+ */
+export async function cancelarCompra(tx: Sql, cat: CatalogosService, resId: string, motivo: string, fecha: Date = new Date(), reembolsar = true) {
   await tx.query('UPDATE reserva SET est_id = $2, res_motivo_cancelacion = $3, res_cancelado_en = $4 WHERE res_id = $1', [
     resId,
     await cat.estado('CANCELADA_RES'),
@@ -151,8 +156,9 @@ export async function cancelarCompra(tx: Sql, cat: CatalogosService, resId: stri
        JOIN estado e ON e.est_id = pg.est_id WHERE r.res_id = $1 ORDER BY pg.pag_id DESC LIMIT 1`,
     [resId],
   );
-  await emitirEventoReserva(tx, EVENTOS.RESERVA_CANCELADA, resId, { reason: motivo.slice(0, 255), refunded: pago?.estado === 'APROBADO' });
+  await emitirEventoReserva(tx, EVENTOS.RESERVA_CANCELADA, resId, { reason: motivo.slice(0, 255), refunded: pago?.estado === 'APROBADO' && reembolsar });
   if (!pago) return;
+  if (pago.estado === 'APROBADO' && !reembolsar) return; // fuera de plazo: el cobro se conserva
   if (pago.estado === 'APROBADO') {
     await emitirEventoReserva(tx, EVENTOS.PAGO_REEMBOLSADO, resId, { refund_amount: pago.monto });
     await tx.query(

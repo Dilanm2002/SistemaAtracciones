@@ -165,8 +165,9 @@ export const Reservas = {
     api(`/atracciones/${atraccionId}/reservations`, { method: 'POST', body, idempotencyKey }),
   list: (params = {}) => api(`/atracciones/reservations${qs(params)}`),
   get: (id) => api(`/atracciones/reservations/${id}`),
-  cancel: (id, reason, idempotencyKey) =>
-    api(`/atracciones/reservations/${id}/cancel`, { method: 'POST', body: { reason }, idempotencyKey }),
+  /** acceptNoRefund: el cliente confirma que cancela fuera de plazo, sin reembolso */
+  cancel: (id, reason, idempotencyKey, acceptNoRefund = false) =>
+    api(`/atracciones/reservations/${id}/cancel`, { method: 'POST', body: { reason, ...(acceptNoRefund ? { accept_no_refund: true } : {}) }, idempotencyKey }),
   confirm: (id, idempotencyKey) => api(`/atracciones/reservations/${id}/confirm`, { method: 'POST', idempotencyKey }),
 };
 

@@ -213,16 +213,25 @@ export class ReservasService {
         if (ESTADO_A_STATUS[r.estado] === ReservationStatus.CANCELLED) throw new ConflictException('Esta reserva ya estaba cancelada.');
         if (r.estado === 'COMPLETADA') throw new ConflictException('La experiencia ya se realizó; no puede cancelarse.');
         const gestor = this.puedeGestionar(user, r);
-        if (!gestor && !this.mapper.canCancel(r)) {
-          throw new ConflictException(
-            r.cancelacion_gratuita
-              ? `La cancelación gratuita solo está disponible hasta ${r.horas_cancelacion} horas antes. Escríbenos para revisar tu caso.`
-              : 'Esta actividad no admite cancelación gratuita. Escríbenos para revisar tu caso.',
-          );
+        const pol = this.mapper.politicaCancelacion(r);
+        // La empresa o el administrador cancelan siempre con reembolso total (p. ej. clima adverso)
+        let reembolsar = true;
+        if (!gestor) {
+          if (pol.policy === 'NOT_ALLOWED') throw new ConflictException(pol.motivo);
+          if (pol.policy === 'NO_REFUND') {
+            if (dto.accept_no_refund !== true) {
+              throw new ConflictException({
+                message: `${pol.motivo} Confirma que aceptas cancelar sin reembolso (accept_no_refund).`,
+                code: 'NO_REFUND_CONFIRMATION_REQUIRED',
+              });
+            }
+            reembolsar = false;
+          }
         }
-        const motivo = gestor && r.usu_id !== user.sub ? `[Operador] ${dto.reason}` : dto.reason;
-        // Estado, cupos devueltos al inventario y reembolso o rechazo del pago
-        await cancelarCompra(tx, this.catalogos, r.res_id, motivo);
+        const base = gestor && r.usu_id !== user.sub ? `[Operador] ${dto.reason}` : dto.reason;
+        const motivo = reembolsar ? base : `${base} (sin reembolso)`;
+        // Estado, cupos devueltos al inventario y reembolso, retención o anulación del pago
+        await cancelarCompra(tx, this.catalogos, r.res_id, motivo, new Date(), reembolsar);
       });
       await this.bitacora.registrar(user.sub, 'CANCELAR', 'reserva', uuid, { motivo: dto.reason });
       return this.mapper.toReservation((await this.fila(uuid))!);

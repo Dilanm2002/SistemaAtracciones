@@ -6,25 +6,48 @@ describe('AtraccionMapper: reservas', () => {
   const mapper = new AtraccionMapper(new ConfigService({ PUBLIC_URL: 'https://api.test/', FRONTEND_URL: 'https://web.test' }));
   afterEach(() => jest.useRealTimers());
 
-  const base = { estado: 'CONFIRMADA', fecha: '2026-10-10', hora: '08:00', cancelacion_gratuita: true, horas_cancelacion: 24 };
+  // Reservada con mucha anticipación (el periodo de arrepentimiento ya pasó)
+  const base = { estado: 'CONFIRMADA', fecha: '2026-10-10', hora: '08:00', cancelacion_gratuita: true, horas_cancelacion: 24, creado_en: new Date('2026-09-01T00:00:00Z') };
   // 2026-10-10 08:00 en Ecuador = 13:00 UTC
   const ahora = (iso: string) => jest.useFakeTimers().setSystemTime(new Date(iso));
+  const pol = (extra: Partial<typeof base> = {}) => mapper.politicaCancelacion({ ...base, ...extra }).policy;
 
-  it('canCancel: gratis hasta N horas antes (hora de Ecuador), no justo en el límite', () => {
+  it('pagada: reembolso total hasta N horas antes (hora de Ecuador); después, sin reembolso pero cancelable', () => {
     ahora('2026-10-09T12:59:00Z'); // 24 h 1 min antes
-    expect(mapper.canCancel(base)).toBe(true);
+    expect(pol()).toBe('FULL_REFUND');
     ahora('2026-10-09T13:00:00Z'); // exactamente 24 h antes
-    expect(mapper.canCancel(base)).toBe(false);
+    expect(pol()).toBe('NO_REFUND');
+    expect(mapper.canCancel(base)).toBe(true); // puede cancelar, sin reembolso
     ahora('2026-10-10T12:00:00Z');
-    expect(mapper.canCancel({ ...base, horas_cancelacion: 0 })).toBe(true); // margen 0: hasta la salida
+    expect(pol({ horas_cancelacion: 0 })).toBe('FULL_REFUND'); // margen 0: hasta la salida
   });
 
-  it('canCancel: nunca si está cancelada, completada o sin cancelación gratuita', () => {
-    ahora('2026-01-01T00:00:00Z');
-    expect(mapper.canCancel({ ...base, estado: 'CANCELADA_RES' })).toBe(false);
-    expect(mapper.canCancel({ ...base, estado: 'COMPLETADA' })).toBe(false);
-    expect(mapper.canCancel({ ...base, cancelacion_gratuita: false })).toBe(false);
-    expect(mapper.canCancel({ ...base, estado: 'PENDIENTE_PAGO' })).toBe(true);
+  it('reserva de último momento: 1 h de arrepentimiento con reembolso total, nunca después de la salida', () => {
+    const creado = new Date('2026-10-10T10:00:00Z'); // reservó 3 h antes de la salida (ya dentro del plazo de 24 h)
+    ahora('2026-10-10T10:30:00Z');
+    expect(mapper.politicaCancelacion({ ...base, creado_en: creado })).toMatchObject({ policy: 'FULL_REFUND', freeUntil: new Date('2026-10-10T11:00:00Z') });
+    ahora('2026-10-10T11:01:00Z');
+    expect(pol({ creado_en: creado })).toBe('NO_REFUND');
+    // Reservó 20 min antes de salir: el arrepentimiento termina a la hora de salida
+    const tarde = new Date('2026-10-10T12:40:00Z');
+    ahora('2026-10-10T12:50:00Z');
+    expect(mapper.politicaCancelacion({ ...base, creado_en: tarde })).toMatchObject({ policy: 'FULL_REFUND', freeUntil: new Date('2026-10-10T13:00:00Z') });
+  });
+
+  it('pendiente de pago: se cancela sin costo hasta la hora de salida', () => {
+    ahora('2026-10-10T12:59:00Z');
+    expect(pol({ estado: 'PENDIENTE_PAGO', cancelacion_gratuita: false })).toBe('NO_CHARGE');
+    ahora('2026-10-10T13:00:00Z');
+    expect(pol({ estado: 'PENDIENTE_PAGO' })).toBe('NOT_ALLOWED');
+  });
+
+  it('nunca si está cancelada, completada o la experiencia ya empezó; sin cancelación gratuita → sin reembolso', () => {
+    ahora('2026-09-15T00:00:00Z'); // dos semanas después de reservar
+    expect(pol({ estado: 'CANCELADA_RES' })).toBe('NOT_ALLOWED');
+    expect(pol({ estado: 'COMPLETADA' })).toBe('NOT_ALLOWED');
+    expect(pol({ cancelacion_gratuita: false })).toBe('NO_REFUND');
+    ahora('2026-10-10T13:00:00Z');
+    expect(pol()).toBe('NOT_ALLOWED');
   });
 
   const fila = (extra: Partial<FilaReserva> = {}): FilaReserva => ({

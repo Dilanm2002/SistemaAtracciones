@@ -11,6 +11,17 @@ import { fechaHoraEc, horasAIso } from './utils/fechas';
  * Traduce las filas del modelo relacional (en español) a los esquemas
  * del contrato OpenAPI (en inglés). Si el contrato cambia, solo se toca aquí.
  */
+/** Tras reservar, el cliente puede arrepentirse y cancelar con reembolso total durante 1 hora. */
+export const PERIODO_ARREPENTIMIENTO_MS = 60 * 60 * 1000;
+
+export interface PoliticaCancelacion {
+  /** FULL_REFUND: reembolso total · NO_CHARGE: nada cobrado · NO_REFUND: sin reembolso · NOT_ALLOWED */
+  policy: 'FULL_REFUND' | 'NO_CHARGE' | 'NO_REFUND' | 'NOT_ALLOWED';
+  /** Hasta cuándo es gratis cancelar (null si ya no lo es) */
+  freeUntil: Date | null;
+  motivo?: string;
+}
+
 @Injectable()
 export class AtraccionMapper {
   private readonly publicUrl: string;
@@ -99,10 +110,42 @@ export class AtraccionMapper {
   }
 
   /** Una reserva se puede cancelar sin costo si no está cancelada y falta más que el margen configurado. */
-  canCancel(r: Pick<FilaReserva, 'estado' | 'fecha' | 'hora' | 'cancelacion_gratuita' | 'horas_cancelacion'>): boolean {
-    if (ESTADO_A_STATUS[r.estado] === ReservationStatus.CANCELLED || r.estado === 'COMPLETADA') return false;
-    if (!r.cancelacion_gratuita) return false;
-    return fechaHoraEc(r.fecha, r.hora).getTime() - Date.now() > (r.horas_cancelacion ?? 24) * 3600_000;
+  /**
+   * Política de cancelación del CLIENTE (lógica de negocio):
+   * - Ya cancelada, completada o la experiencia ya empezó → no se puede (NOT_ALLOWED).
+   * - Pendiente de pago (transferencia / pago en sitio) → se cancela gratis hasta la hora de
+   *   salida: no hay cobro que devolver, se anula el pago y se libera el cupo (NO_CHARGE).
+   * - Pagada y antes del plazo de cancelación gratuita de la experiencia → reembolso total.
+   * - Pagada y reservada a último momento (dentro del plazo) → periodo de arrepentimiento:
+   *   reembolso total durante 1 h desde la reserva, sin pasar de la hora de salida.
+   * - Pagada y fuera de esos plazos → puede cancelar, pero SIN reembolso (libera el cupo).
+   * El personal de la empresa o el administrador puede cancelar siempre con reembolso total.
+   */
+  politicaCancelacion(
+    r: Pick<FilaReserva, 'estado' | 'fecha' | 'hora' | 'cancelacion_gratuita' | 'horas_cancelacion' | 'creado_en'>,
+    ahora = Date.now(),
+  ): PoliticaCancelacion {
+    if (ESTADO_A_STATUS[r.estado] === ReservationStatus.CANCELLED) return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'Esta reserva ya estaba cancelada.' };
+    if (r.estado === 'COMPLETADA') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya se realizó; no puede cancelarse.' };
+    const salida = fechaHoraEc(r.fecha, r.hora).getTime();
+    if (ahora >= salida) return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya comenzó; ya no puede cancelarse.' };
+    if (r.estado === 'PENDIENTE_PAGO') return { policy: 'NO_CHARGE', freeUntil: new Date(salida) };
+    const limite = r.cancelacion_gratuita ? salida - (r.horas_cancelacion ?? 24) * 3_600_000 : null;
+    const arrepentimiento = Math.min(new Date(r.creado_en).getTime() + PERIODO_ARREPENTIMIENTO_MS, salida);
+    const gratisHasta = Math.max(limite ?? 0, arrepentimiento);
+    if (ahora < gratisHasta) return { policy: 'FULL_REFUND', freeUntil: new Date(gratisHasta) };
+    return {
+      policy: 'NO_REFUND',
+      freeUntil: null,
+      motivo: r.cancelacion_gratuita
+        ? `Ya pasó el plazo de cancelación gratuita (${r.horas_cancelacion} h antes de la salida): puedes cancelar, pero sin reembolso.`
+        : 'Esta experiencia no admite cancelación gratuita: puedes cancelar, pero sin reembolso.',
+    };
+  }
+
+  /** Compatibilidad: true si el cliente aún puede cancelar (con o sin reembolso). */
+  canCancel(r: Pick<FilaReserva, 'estado' | 'fecha' | 'hora' | 'cancelacion_gratuita' | 'horas_cancelacion' | 'creado_en'>): boolean {
+    return this.politicaCancelacion(r).policy !== 'NOT_ALLOWED';
   }
 
   toReservation(r: FilaReserva): ReservationResponseDto {
@@ -139,7 +182,12 @@ export class AtraccionMapper {
       cancellation_reason: r.motivo_cancelacion ?? undefined,
       cancelled_at: r.cancelado_en ? new Date(r.cancelado_en).toISOString() : undefined,
       created_at: new Date(r.creado_en).toISOString(),
-      can_cancel: this.canCancel(r),
+      ...((pol) => ({
+        can_cancel: pol.policy !== 'NOT_ALLOWED',
+        cancellation_policy: pol.policy,
+        refundable: pol.policy === 'FULL_REFUND' || pol.policy === 'NO_CHARGE',
+        ...(pol.freeUntil ? { free_cancellation_until: pol.freeUntil.toISOString() } : {}),
+      }))(this.politicaCancelacion(r)),
       _links: {
         self: link(self),
         attraction: link(`/atracciones/${r.atr_uuid}`),

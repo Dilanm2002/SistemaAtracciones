@@ -284,24 +284,75 @@ describeDb('Reservas (E2E)', () => {
       expect(fila).toEqual({ orden: 'CANCELADA', pago: 'RECHAZADO' });
     });
 
-    it('fuera del plazo de cancelación gratuita: el cliente recibe 409, el operador sí puede', async () => {
+    /** Simula que la reserva se hizo hace `horas` horas (el periodo de arrepentimiento ya pasó). */
+    const envejecer = (id: string, horas = 2) =>
+      db(app).query(`UPDATE reserva SET res_creado_en = now() - make_interval(hours => $2) WHERE res_uuid = $1`, [id, horas]);
+    const pagos = async (id: string) =>
+      (await db(app).query(
+        `SELECT ep.est_codigo AS pago, eo.est_codigo AS orden, (SELECT COUNT(*)::int FROM reembolso rm WHERE rm.pag_id = pg.pag_id) AS reembolsos
+           FROM reserva r JOIN orden_detalle dt ON dt.det_id = r.det_id JOIN orden o ON o.ord_id = dt.ord_id
+           JOIN estado eo ON eo.est_id = o.est_id JOIN pago pg ON pg.ord_id = o.ord_id JOIN estado ep ON ep.est_id = pg.est_id
+          WHERE r.res_uuid = $1`,
+        [id],
+      ))[0];
+
+    it('reserva de último momento (ya dentro del plazo): 1 h de arrepentimiento con reembolso total', async () => {
       const atr = await crearAtraccion({ cancellation_hours: 720 });
       const r = await reservar(atr, cliente, reserva(fechaEc(5)));
-      expect(r.body.can_cancel).toBe(false);
-      const url = `/atracciones/reservations/${r.body.reservation_id}/cancel`;
-      const c1 = await http(app).post(url).set(bearer(cliente)).set(idem()).send({ reason: 'Cambio de planes de viaje' });
-      expect(c1.status).toBe(409);
-      const c2 = await http(app).post(url).set(bearer(operador)).set(idem()).send({ reason: 'Clima adverso en la zona' });
-      expect(c2.status).toBe(200);
-      expect(c2.body.cancellation_reason).toBe('[Operador] Clima adverso en la zona');
+      expect(r.body).toMatchObject({ can_cancel: true, refundable: true, cancellation_policy: 'FULL_REFUND' });
+      expect(new Date(r.body.free_cancellation_until).getTime() - Date.now()).toBeLessThanOrEqual(3_600_000);
+      const c = await http(app).post(`/atracciones/reservations/${r.body.reservation_id}/cancel`).set(bearer(cliente)).set(idem()).send({ reason: 'Me equivoqué de fecha' });
+      expect(c.status).toBe(200);
+      expect(await pagos(r.body.reservation_id)).toMatchObject({ pago: 'APROBADO', orden: 'REEMBOLSADA', reembolsos: 1 });
     });
 
-    it('sin cancelación gratuita: el cliente no puede cancelar', async () => {
+    it('fuera de plazo: el cliente puede cancelar SIN reembolso (debe confirmarlo) y se libera el cupo', async () => {
+      const atr = await crearAtraccion({ cancellation_hours: 720, capacity_per_slot: 1 });
+      const r = await reservar(atr, cliente, reserva(fechaEc(5)));
+      await envejecer(r.body.reservation_id);
+      const url = `/atracciones/reservations/${r.body.reservation_id}/cancel`;
+      const ver = await http(app).get(`/atracciones/reservations/${r.body.reservation_id}`).set(bearer(cliente));
+      expect(ver.body).toMatchObject({ can_cancel: true, refundable: false, cancellation_policy: 'NO_REFUND' });
+      // Sin confirmar que acepta perder el pago → 409 con código propio
+      const c1 = await http(app).post(url).set(bearer(cliente)).set(idem()).send({ reason: 'Ya no puedo asistir' });
+      expect(c1.status).toBe(409);
+      expect(c1.body.code).toBe('NO_REFUND_CONFIRMATION_REQUIRED');
+      const c2 = await http(app).post(url).set(bearer(cliente)).set(idem()).send({ reason: 'Ya no puedo asistir', accept_no_refund: true });
+      expect(c2.status).toBe(200);
+      expect(c2.body).toMatchObject({ status: 'CANCELLED', cancellation_reason: 'Ya no puedo asistir (sin reembolso)' });
+      // El cobro se conserva (sin reembolso) y el cupo vuelve a estar disponible para otro viajero
+      expect(await pagos(r.body.reservation_id)).toMatchObject({ pago: 'APROBADO', reembolsos: 0 });
+      const otra = await reservar(atr, ana, reserva(fechaEc(5)));
+      expect(otra.status).toBe(201);
+    });
+
+    it('fuera de plazo, la empresa cancela con reembolso total (p. ej. clima)', async () => {
+      const atr = await crearAtraccion({ cancellation_hours: 720 });
+      const r = await reservar(atr, cliente, reserva(fechaEc(5)));
+      await envejecer(r.body.reservation_id);
+      const c = await http(app).post(`/atracciones/reservations/${r.body.reservation_id}/cancel`).set(bearer(operador)).set(idem()).send({ reason: 'Clima adverso en la zona' });
+      expect(c.status).toBe(200);
+      expect(c.body.cancellation_reason).toBe('[Operador] Clima adverso en la zona');
+      expect(await pagos(r.body.reservation_id)).toMatchObject({ orden: 'REEMBOLSADA', reembolsos: 1 });
+    });
+
+    it('sin cancelación gratuita: pasada la hora de arrepentimiento, solo sin reembolso', async () => {
       const atr = await crearAtraccion({ free_cancellation: false });
       const r = await reservar(atr, cliente, reserva(fechaEc(60)));
+      await envejecer(r.body.reservation_id);
       const c = await http(app).post(`/atracciones/reservations/${r.body.reservation_id}/cancel`).set(bearer(cliente)).set(idem()).send({ reason: 'Cambio de planes de viaje' });
       expect(c.status).toBe(409);
-      expect(c.body.detail).toMatch(/no admite cancelación gratuita/);
+      expect(c.body.detail).toMatch(/no admite cancelación gratuita.*sin reembolso/);
+    });
+
+    it('pendiente de pago (transferencia): se cancela sin costo aunque sea fuera del plazo', async () => {
+      const atr = await crearAtraccion({ cancellation_hours: 720 });
+      const r = await reservar(atr, cliente, reserva(fechaEc(5), { payment_method: 'TRANSFERENCIA' }));
+      await envejecer(r.body.reservation_id);
+      expect((await http(app).get(`/atracciones/reservations/${r.body.reservation_id}`).set(bearer(cliente))).body).toMatchObject({ cancellation_policy: 'NO_CHARGE', refundable: true });
+      const c = await http(app).post(`/atracciones/reservations/${r.body.reservation_id}/cancel`).set(bearer(cliente)).set(idem()).send({ reason: 'Ya no puedo asistir' });
+      expect(c.status).toBe(200);
+      expect(await pagos(r.body.reservation_id)).toMatchObject({ pago: 'RECHAZADO', orden: 'CANCELADA' });
     });
 
     it('otro cliente no puede cancelar (404, no revela que existe)', async () => {

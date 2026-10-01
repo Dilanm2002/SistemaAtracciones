@@ -11,12 +11,27 @@ import { downloadIcs } from './Confirmation';
 
 const MOTIVOS = ['Cambio de planes', 'Problemas con mi vuelo o transporte', 'Motivos de salud', 'Clima o seguridad', 'Encontré otra opción', 'Otro'];
 
-/** Por qué ya no se puede cancelar en línea: sin cancelación gratuita, o pasado el plazo (hora de Ecuador). */
-export function motivoNoCancelable(r) {
-  if (!r.attraction?.free_cancellation) return 'Esta experiencia no admite cancelación gratuita.';
-  const salida = new Date(`${r.date}T${r.time}:00-05:00`);
-  const limite = new Date(salida.getTime() - (r.attraction.cancellation_hours ?? 24) * 3600000);
-  return `La cancelación gratuita terminó el ${fmtDateTime(limite)} (${r.attraction.cancellation_hours ?? 24} h antes de la salida).`;
+/**
+ * Qué pasa si el cliente cancela ahora (lo decide la API en `cancellation_policy`):
+ * FULL_REFUND reembolso total · NO_CHARGE no se cobró nada · NO_REFUND sin reembolso · NOT_ALLOWED ya no se puede.
+ */
+export function politicaTexto(r) {
+  const hasta = r.free_cancellation_until ? fmtDateTime(r.free_cancellation_until) : null;
+  switch (r.cancellation_policy) {
+    case 'FULL_REFUND':
+      return { tone: 'ok', texto: `Cancelación gratuita hasta el ${hasta}.` };
+    case 'NO_CHARGE':
+      return { tone: 'ok', texto: 'Aún no has pagado: puedes cancelar sin costo hasta la hora de salida.' };
+    case 'NO_REFUND':
+      return {
+        tone: 'warn',
+        texto: r.attraction?.free_cancellation
+          ? `Ya pasó el plazo de cancelación gratuita (${r.attraction.cancellation_hours} h antes). Puedes cancelar para liberar tu cupo, pero sin reembolso.`
+          : 'Esta experiencia no tiene cancelación gratuita. Puedes cancelar para liberar tu cupo, pero sin reembolso.',
+      };
+    default:
+      return { tone: 'warn', texto: 'La experiencia ya comenzó; ya no puede cancelarse en línea.' };
+  }
 }
 
 export function CancelModal({ reservation, onClose, onDone, staff = false }) {
@@ -26,17 +41,21 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
   const [key] = useState(newIdempotencyKey);
+  const [acepto, setAcepto] = useState(false);
   const r = reservation;
+  // Fuera de plazo el cliente puede cancelar, pero debe aceptar que no hay reembolso (la empresa siempre reembolsa)
+  const sinReembolso = !staff && r.cancellation_policy === 'NO_REFUND';
 
   const submit = async () => {
     if (!motivo) { setError('Selecciona un motivo'); return; }
     const t = detalle.trim();
     if (motivo === 'Otro' && (t.length < 5 || !/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(t))) { setError('Cuéntanos brevemente el motivo (mínimo 5 caracteres, con texto)'); return; }
     if (t && !/[A-Za-zÁÉÍÓÚÑáéíóúñ]/.test(t)) { setError('El comentario debe contener texto'); return; }
+    if (sinReembolso && !acepto) { setError('Marca la casilla para confirmar que cancelas sin reembolso'); return; }
     setSending(true);
     try {
       const reason = motivo === 'Otro' ? detalle.trim() : `${motivo}${detalle.trim() ? `: ${detalle.trim()}` : ''}`;
-      const updated = await Reservas.cancel(r.reservation_id, reason, key);
+      const updated = await Reservas.cancel(r.reservation_id, reason, key, sinReembolso);
       toast(`Reserva ${r.code} cancelada`, 'success');
       onDone(updated);
     } catch (err) {
@@ -60,11 +79,15 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
       }
     >
       <div className="stack">
-        {r.can_cancel ? (
+        {staff ? (
+          <Alert tone="info" title="Cancelación por la empresa">Al cancelar desde la empresa se reembolsa el total de {fmtMoney(r.total_price.total)} al cliente.</Alert>
+        ) : r.cancellation_policy === 'NO_CHARGE' ? (
+          <Alert tone="success" title="Sin costo">Aún no se te cobró nada: se anula el pago pendiente y se libera tu cupo.</Alert>
+        ) : r.cancellation_policy === 'FULL_REFUND' ? (
           <Alert tone="success" title="Cancelación gratuita">Se reembolsará el total de {fmtMoney(r.total_price.total)} a tu método de pago en 5 a 10 días hábiles.</Alert>
-        ) : staff ? (
-          <Alert tone="warning" title="Fuera del plazo de cancelación gratuita">Como operador puedes cancelarla igualmente. Coordina el reembolso con el cliente.</Alert>
-        ) : null}
+        ) : (
+          <Alert tone="warning" title="Cancelación sin reembolso">{politicaTexto(r).texto} No se devolverán los {fmtMoney(r.total_price.total)} pagados.</Alert>
+        )}
         <Field label="Motivo" required error={error && !motivo ? error : null}>
           {(p) => (
             <select {...p} className="select" value={motivo} onChange={(e) => { setMotivo(e.target.value); setError(null); }}>
@@ -76,6 +99,13 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
         <Field label={motivo === 'Otro' ? 'Describe el motivo' : 'Comentario (opcional)'} required={motivo === 'Otro'} error={error && motivo ? error : null}>
           {(p) => <textarea {...p} className="textarea" style={{ minHeight: 80 }} value={detalle} onChange={(e) => setDetalle(e.target.value)} maxLength={200} />}
         </Field>
+        {error && sinReembolso && !acepto && motivo && <span className="error-text" role="alert">{error}</span>}
+        {sinReembolso && (
+          <label className="check-row">
+            <input type="checkbox" checked={acepto} onChange={(e) => { setAcepto(e.target.checked); setError(null); }} />
+            <span>Entiendo que cancelo <strong>sin reembolso</strong> de {fmtMoney(r.total_price.total)}.</span>
+          </label>
+        )}
         <p className="small muted" style={{ margin: 0 }}>Esta acción no se puede deshacer. Si cambias de opinión, deberás hacer una nueva reserva (sujeta a disponibilidad).</p>
       </div>
     </Modal>
@@ -166,9 +196,9 @@ export default function MyReservations() {
                   <span><MapPin size={15} aria-hidden="true" /> {r.attraction.city}</span>
                   <strong>{fmtMoney(r.total_price.total)}</strong>
                 </div>
-                {tab === 'upcoming' && r.status !== 'CANCELLED' && !r.can_cancel && (
-                  <p id={`nocancel-${r.reservation_id}`} className="res-nocancel">
-                    <Info size={15} aria-hidden="true" /> {motivoNoCancelable(r)} Si tienes un imprevisto, pide ayuda y lo revisamos con la empresa.
+                {tab === 'upcoming' && r.status !== 'CANCELLED' && (
+                  <p id={`politica-${r.reservation_id}`} className={politicaTexto(r).tone === 'warn' ? 'res-nocancel' : 'res-policy'}>
+                    <Info size={15} aria-hidden="true" /> {politicaTexto(r).texto}
                   </p>
                 )}
               </div>
@@ -178,12 +208,11 @@ export default function MyReservations() {
                   <>
                     <button className="btn btn-sm" onClick={() => downloadIcs(r)}><CalendarPlus size={16} /> Calendario</button>
                     {r.can_cancel ? (
-                      <button className="btn btn-sm btn-outline-danger" onClick={() => setCancel(r)}><XCircle size={16} /> Cancelar</button>
+                      <button className="btn btn-sm btn-outline-danger" onClick={() => setCancel(r)} aria-describedby={`politica-${r.reservation_id}`}>
+                        <XCircle size={16} /> {r.refundable ? 'Cancelar' : 'Cancelar sin reembolso'}
+                      </button>
                     ) : (
-                      <>
-                        <button className="btn btn-sm btn-outline-danger" disabled aria-describedby={`nocancel-${r.reservation_id}`} title={motivoNoCancelable(r)}><XCircle size={16} /> Cancelar</button>
-                        <Link to={`/contacto?asunto=CANCELACION&codigo=${r.code}`} className="btn btn-sm btn-primary">Solicitar ayuda</Link>
-                      </>
+                      <Link to={`/contacto?asunto=CANCELACION&codigo=${r.code}`} className="btn btn-sm btn-primary">Solicitar ayuda</Link>
                     )}
                   </>
                 )}

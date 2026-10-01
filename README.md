@@ -88,7 +88,7 @@ Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha 
 
 ## Control de versiones
 
-Versión actual: **2.1.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+Versión actual: **2.2.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
 
 Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
 
@@ -115,6 +115,19 @@ Para volver a una versión anterior: `git checkout v1.0.0` (solo lectura) o crea
 ## Reglas de negocio: reservas y empresas proveedoras
 
 **Reservar exige cuenta.** Cualquiera puede explorar y elegir fecha y entradas, pero para pagar hay que iniciar sesión o registrarse. El checkout lo pide sin perder la selección, y la API rechaza con 401 una reserva sin token.
+
+**Cancelación por parte del cliente.** La API la decide y la devuelve en `cancellation_policy`:
+
+| Situación | ¿Puede cancelar? | Reembolso |
+|---|---|---|
+| Pendiente de pago (transferencia o en sitio) | Sí, hasta la hora de salida | No hay cobro: se anula el pago y se libera el cupo |
+| Pagada, antes del plazo gratuito de la experiencia | Sí | 100 % |
+| Pagada a último momento (ya dentro del plazo) | Sí, con **1 hora de arrepentimiento** tras reservar | 100 % |
+| Pagada, fuera de esos plazos | Sí, confirmando `accept_no_refund` | 0 %; se libera el cupo |
+| La experiencia ya empezó o terminó | No | — |
+| Cancela la empresa o el administrador | Siempre | 100 % al cliente |
+
+El checkout avisa antes de pagar si la reserva es de último momento o no tiene cancelación gratuita.
 
 **Una empresa que quiere vender sus tours o paquetes** (página *Para empresas*, `/empresas`):
 

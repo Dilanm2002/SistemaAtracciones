@@ -174,6 +174,14 @@ export default function Checkout() {
     }
   };
 
+  // Política de cancelación que tendrá ESTA reserva (misma lógica que la API: plazo + 1 h de arrepentimiento)
+  const ultimoMomento = a.free_cancellation && Date.now() > new Date(`${fecha}T${hora}:00-05:00`).getTime() - a.cancellation_hours * 3600000;
+  const politica = !a.free_cancellation
+    ? 'Sin cancelación gratuita: tendrás 1 hora después de reservar para arrepentirte con reembolso total; luego puedes cancelar, pero sin reembolso.'
+    : ultimoMomento
+      ? `Reserva de último momento: el plazo de cancelación gratuita (${a.cancellation_hours} h antes) ya pasó. Tendrás 1 hora después de reservar para cancelar con reembolso total; luego, solo sin reembolso.`
+      : `Cancelación gratis hasta ${a.cancellation_hours} h antes de la salida; después, sin reembolso.`;
+
   const Summary = (
     <aside className="order-summary card" aria-label="Resumen de tu reserva">
       <div className="os-img"><img src={a.photos?.[0]?.url} alt="" loading="lazy" decoding="async" onError={onImgError} /></div>
@@ -189,11 +197,9 @@ export default function Checkout() {
           {ninos > 0 && <div><span>{ninos} × Niño</span><span>{fmtMoney(ninos * childPrice)}</span></div>}
         </div>
         <div className="summary-total"><span>Total a pagar</span><span className="price">{fmtMoney(total)}</span></div>
-        {a.free_cancellation ? (
-          <p className="small" style={{ color: 'var(--success)', margin: 0, display: 'flex', gap: 6 }}><ShieldCheck size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} /> Cancelación gratis hasta {a.cancellation_hours} h antes de la salida.</p>
-        ) : (
-          <p className="small muted" style={{ margin: 0 }}>Esta experiencia no admite cancelación gratuita.</p>
-        )}
+        <p className="small" style={{ color: a.free_cancellation && !ultimoMomento ? 'var(--success)' : 'var(--warning)', margin: 0, display: 'flex', gap: 6 }}>
+          <ShieldCheck size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} /> {politica} Si pagas por transferencia o en sitio, puedes cancelar sin costo hasta la salida.
+        </p>
       </div>
     </aside>
   );
@@ -311,8 +317,7 @@ export default function Checkout() {
                 <label className="check">
                   <input type="checkbox" checked={pay.terms} onChange={setP('terms')} aria-invalid={!!errors.terms} />
                   <span>
-                    Acepto la política de cancelación
-                    {a.free_cancellation ? ` (gratis hasta ${a.cancellation_hours} h antes)` : ' (sin reembolso)'} y los términos del servicio.
+                    Acepto la política de cancelación ({politica.charAt(0).toLowerCase() + politica.slice(1, -1)}) y los términos del servicio.
                   </span>
                 </label>
                 {errors.terms && <span className="error-text" role="alert">{errors.terms}</span>}
