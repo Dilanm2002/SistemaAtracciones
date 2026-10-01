@@ -16,7 +16,7 @@ try {
 }
 const destino = join(__dirname, '..', 'public', 'vendor', 'swagger-ui');
 mkdirSync(destino, { recursive: true });
-for (const f of ['swagger-ui.css', 'swagger-ui-bundle.js', 'swagger-ui-standalone-preset.js', 'LICENSE']) {
+for (const f of ['swagger-ui.css', 'swagger-ui-bundle.js', 'swagger-ui-standalone-preset.js', 'favicon-32x32.png', 'favicon-16x16.png', 'LICENSE']) {
   const src = join(origen, f);
   if (existsSync(src)) copyFileSync(src, join(destino, f));
 }

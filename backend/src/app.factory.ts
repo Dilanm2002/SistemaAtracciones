@@ -118,11 +118,9 @@ export async function createApp(): Promise<NestExpressApplication> {
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
-    // Swagger UI desde /vendor (copiado de node_modules por scripts/vendor-docs.js en postinstall)
-    SwaggerModule.setup('api/docs', app, document, {
-      customCssUrl: '/vendor/swagger-ui/swagger-ui.css',
-      customJs: ['/vendor/swagger-ui/swagger-ui-bundle.js', '/vendor/swagger-ui/swagger-ui-standalone-preset.js'],
-    });
+    // Los recursos de Swagger UI (/api/docs/*.js|css) los sirve Nest en local; en Vercel, una
+    // reescritura los toma de /vendor/swagger-ui (copiado de node_modules en postinstall). Sin CDN.
+    SwaggerModule.setup('api/docs', app, document);
 
     // Redoc del CONTRATO oficial (API-First): contracts/atracciones-openapi.yaml.
     // Swagger (/api/docs) muestra la implementación; Redoc, el contrato que se acordó.

@@ -11,6 +11,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/docs/:archivo(swagger-ui\\.css|swagger-ui-bundle\\.js|swagger-ui-standalone-preset\\.js|favicon-32x32\\.png|favicon-16x16\\.png)",
+      "destination": "/vendor/swagger-ui/:archivo"
+    },
+    {
       "source": "/((?!img/|uploads/|vendor/).*)",
       "destination": "/api"
     }
