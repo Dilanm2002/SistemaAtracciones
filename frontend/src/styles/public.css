@@ -432,3 +432,34 @@
 .res-policy svg { flex-shrink: 0; margin-top: 2px; }
 .check-row { display: flex; gap: 10px; align-items: flex-start; font-size: 0.92rem; cursor: pointer; }
 .check-row input { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--danger); flex-shrink: 0; }
+
+/* Galería del detalle: una foto a la vez con flechas fuera de la imagen */
+.carrusel { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; grid-template-rows: auto auto; align-items: center; gap: 10px 12px; }
+.carrusel.unica { grid-template-columns: minmax(0, 1fr); }
+.car-flecha { width: 48px; height: 48px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface, #fff); color: var(--text); display: grid; place-items: center; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.12)); transition: background .15s, color .15s, transform .15s; }
+.car-flecha:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+.car-flecha:active { transform: scale(0.95); }
+.car-escenario { position: relative; height: 460px; border-radius: var(--r-lg); overflow: hidden; background: var(--surface-2); }
+.car-foto { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.car-foto img { width: 100%; height: 100%; object-fit: cover; display: block; animation: car-in .25s ease; }
+@keyframes car-in { from { opacity: .35; } to { opacity: 1; } }
+.car-contador { position: absolute; right: 12px; bottom: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; font-size: .82rem; font-weight: 700; }
+.car-miniaturas { grid-column: 2; display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.car-miniaturas button { flex: 0 0 84px; height: 58px; padding: 0; border: 2px solid transparent; border-radius: 8px; overflow: hidden; background: var(--surface-2); opacity: .7; }
+.car-miniaturas button[aria-current='true'] { border-color: var(--primary); opacity: 1; }
+.car-miniaturas button:hover { opacity: 1; }
+.car-miniaturas img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 760px) {
+  .carrusel { grid-template-columns: 36px minmax(0, 1fr) 36px; gap: 8px 6px; }
+  .car-flecha { width: 36px; height: 36px; }
+  .car-escenario { height: 260px; }
+  .car-miniaturas button { flex-basis: 64px; height: 46px; }
+}
+@media (prefers-reduced-motion: reduce) { .car-foto img { animation: none; } }
+
+/* Selector de ubicación en el formulario de atracciones */
+.mapa-buscar { display: flex; gap: 8px; margin-bottom: 8px; }
+.mapa-lienzo { height: 340px; border-radius: 12px; border: 1px solid var(--border-strong); overflow: hidden; z-index: 0; }
+.mapa-lienzo.is-invalid { border-color: var(--danger); }
+.coords-manual { margin-top: 10px; }
+.coords-manual summary { cursor: pointer; font-size: .85rem; color: var(--primary); font-weight: 600; }

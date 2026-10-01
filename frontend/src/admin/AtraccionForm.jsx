@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Star, Tag, Trash2, UploadCloud, X } from 'lucide-react';
 import { Atracciones, Uploads } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
@@ -8,6 +8,9 @@ import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
 import { comprimirImagen } from '../utils/imagen';
 import { ECUADOR, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
+
+// El mapa (Leaflet) solo se descarga al abrir el formulario
+const MapaUbicacion = lazy(() => import('./MapaUbicacion'));
 
 const MAX_HORAS = 720; // 30 días: mismo límite que la base (atraccion_duracion_valida)
 const MAX_FOTOS = 12;
@@ -154,6 +157,8 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
   const fileRef = useRef(null);
   const uploading = pendientes.length > 0;
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
+  const destinoElegido = destinos.find((d) => String(d.codigo) === String(f.city));
+  const ciudadElegida = destinoElegido ? `${destinoElegido.nombre}, ${destinoElegido.provincia ?? ''}`.replace(/,\s*$/, '') : '';
   const tocar = (k) => setTocados((prev) => (prev.has(k) ? prev : new Set(prev).add(k)));
   const set = (k) => (v) => {
     tocar(k);
@@ -404,8 +409,30 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             </Field>
             <Field label="Dirección de la actividad" required error={errors.address} hint="Ej. Parque Nacional Cotopaxi, control Caspi">{(p) => <input {...p} className="input" value={f.address} onChange={set('address')} maxLength={LIMITES.direccion} />}</Field>
             <Field label="Punto de encuentro" className="span-2" error={errors.meeting_point} hint="Dónde se reúne el grupo (si es distinto de la actividad)">{(p) => <input {...p} className="input" value={f.meeting_point} onChange={set('meeting_point')} maxLength={LIMITES.direccion} />}</Field>
-            <Field label="Latitud" required error={errors.latitude} hint={`Dentro del Ecuador: entre ${ECUADOR.latMin} y ${ECUADOR.latMax}, hasta 6 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. -0.683" value={f.latitude} onChange={setNum('latitude')} />}</Field>
-            <Field label="Longitud" required error={errors.longitude} hint={`Dentro del Ecuador: entre ${ECUADOR.lngMin} y ${ECUADOR.lngMax}, hasta 6 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. -78.437" value={f.longitude} onChange={setNum('longitude')} />}</Field>
+            <div className="field span-2">
+              <span className="label">Ubicación en el mapa <span className="req">*</span></span>
+              <Suspense fallback={<div className="mapa-lienzo skeleton" />}>
+                <MapaUbicacion
+                  lat={f.latitude}
+                  lng={f.longitude}
+                  ciudad={ciudadElegida}
+                  error={errors.latitude || errors.longitude ? 'Marca en el mapa dónde se realiza la actividad (dentro del Ecuador).' : null}
+                  onChange={(la, ln) => {
+                    tocar('latitude');
+                    tocar('longitude');
+                    setF((p) => ({ ...p, latitude: String(la), longitude: String(ln) }));
+                  }}
+                  onDireccion={(d) => setF((p) => (p.address.trim() ? p : { ...p, address: d.replace(/\d{6,}/g, '').replace(/,\s*,/g, ',').trim().slice(0, LIMITES.direccion) }))}
+                />
+              </Suspense>
+              <details className="coords-manual">
+                <summary>Ingresar coordenadas manualmente</summary>
+                <div className="form-grid" style={{ marginTop: 10 }}>
+                <Field label="Latitud" required error={errors.latitude} hint={`Dentro del Ecuador: entre ${ECUADOR.latMin} y ${ECUADOR.latMax}, hasta 6 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. -0.683" value={f.latitude} onChange={setNum('latitude')} />}</Field>
+                <Field label="Longitud" required error={errors.longitude} hint={`Dentro del Ecuador: entre ${ECUADOR.lngMin} y ${ECUADOR.lngMax}, hasta 6 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. -78.437" value={f.longitude} onChange={setNum('longitude')} />}</Field>
+                </div>
+              </details>
+            </div>
           </div>
         </div>
 

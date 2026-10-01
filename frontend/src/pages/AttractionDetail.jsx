@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Building, CalendarX2, Check, ChevronLeft, ChevronRight, Clock, Heart, Images, Languages, Lightbulb, MapPin, Share2, Ticket, X,
+  Building, CalendarX2, Check, ChevronLeft, ChevronRight, Clock, Heart, Languages, Lightbulb, MapPin, Share2, Ticket, X,
 } from 'lucide-react';
 import { Atracciones } from '../api/client';
 import AttractionCard, { FALLBACK_IMG, onImgError } from '../components/AttractionCard';
@@ -36,6 +36,69 @@ function Lightbox({ photos, index, onClose, onIndex }) {
       )}
       <span className="lb-count">{index + 1} / {photos.length}</span>
     </div>
+  );
+}
+
+/**
+ * Galería del detalle: una foto grande a la vez, con flechas FUERA de la foto para pasar a la
+ * anterior/siguiente, contador y miniaturas. También con teclado (← →) y deslizando en el celular.
+ * Clic en la foto la abre a pantalla completa.
+ */
+function Carrusel({ photos, nombre, onAbrir }) {
+  const [i, setI] = useState(0);
+  const toque = useRef(null);
+  const n = photos.length;
+  const ir = (k) => setI(((k % n) + n) % n);
+  // Precarga la siguiente para que el cambio sea inmediato
+  useEffect(() => {
+    if (n > 1) new Image().src = photos[(i + 1) % n].url;
+  }, [i, n, photos]);
+
+  return (
+    <section
+      className={`carrusel${n > 1 ? '' : ' unica'}`}
+      aria-roledescription="carrusel"
+      aria-label={`Fotos de ${nombre}`}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowRight') { e.preventDefault(); ir(i + 1); }
+        if (e.key === 'ArrowLeft') { e.preventDefault(); ir(i - 1); }
+      }}
+    >
+      {n > 1 && (
+        <button type="button" className="car-flecha" onClick={() => ir(i - 1)} aria-label="Foto anterior">
+          <ChevronLeft size={26} aria-hidden="true" />
+        </button>
+      )}
+      <div
+        className="car-escenario"
+        onTouchStart={(e) => { toque.current = e.touches[0].clientX; }}
+        onTouchEnd={(e) => {
+          if (toque.current == null) return;
+          const dx = e.changedTouches[0].clientX - toque.current;
+          if (Math.abs(dx) > 40) ir(dx < 0 ? i + 1 : i - 1);
+          toque.current = null;
+        }}
+      >
+        <button type="button" className="car-foto" onClick={() => onAbrir(i)} aria-label={`Ver la foto ${i + 1} de ${n} a pantalla completa`}>
+          <img key={photos[i].url} src={photos[i].url} alt={i === 0 ? nombre : `${nombre}, foto ${i + 1}`} loading="eager" decoding="async" {...(i === 0 ? { fetchpriority: 'high' } : {})} onError={onImgError} />
+        </button>
+        {n > 1 && <span className="car-contador" aria-live="polite">{i + 1} / {n}</span>}
+      </div>
+      {n > 1 && (
+        <button type="button" className="car-flecha" onClick={() => ir(i + 1)} aria-label="Foto siguiente">
+          <ChevronRight size={26} aria-hidden="true" />
+        </button>
+      )}
+      {n > 1 && (
+        <div className="car-miniaturas" role="group" aria-label="Elegir foto">
+          {photos.map((p, k) => (
+            <button key={p.url} type="button" aria-current={k === i ? 'true' : undefined} aria-label={`Foto ${k + 1}`} onClick={() => setI(k)}>
+              <img src={p.url} alt="" loading="lazy" decoding="async" onError={onImgError} />
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -135,14 +198,7 @@ export default function AttractionDetail() {
           </div>
         </div>
 
-        <div className={`gallery ${photos.length === 1 ? 'single' : photos.length === 2 ? 'double' : ''}`}>
-          {photos.slice(0, 3).map((p, i) => (
-            <button key={p.url} onClick={() => setLightbox(i)} aria-label={`Ver foto ${i + 1} de ${photos.length} en grande`}>
-              <img src={p.url} alt={i === 0 ? a.name : ''} loading={i === 0 ? 'eager' : 'lazy'} decoding="async" {...(i === 0 ? { fetchpriority: 'high' } : {})} onError={onImgError} />
-              {i === 0 && photos.length > 1 && <span className="btn btn-sm more"><Images size={16} /> Ver {photos.length} fotos</span>}
-            </button>
-          ))}
-        </div>
+        <Carrusel photos={photos} nombre={a.name} onAbrir={setLightbox} />
 
         <div className="detail-layout">
           <div>
