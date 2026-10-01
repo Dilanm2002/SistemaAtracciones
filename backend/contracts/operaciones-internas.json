@@ -64,7 +64,9 @@
       "GET /contracts",
       "GET /contracts/{nombre}",
       "GET /errores",
-      "GET /errores/{tipo}"
+      "GET /errores/{tipo}",
+      "GET /media/{archivo}",
+      "GET /media/{carpeta}/{archivo}"
     ],
     "empresas_proveedoras": [
       "POST /proveedores/solicitudes",

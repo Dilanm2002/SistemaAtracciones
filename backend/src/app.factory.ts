@@ -79,7 +79,7 @@ export async function createApp(): Promise<NestExpressApplication> {
   app.enableCors({
     origin: origins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'DPoP', 'Idempotency-Key', 'X-Request-Id'],
     exposedHeaders: ['Location', 'X-API-Deprecation-Date', 'X-Total-Count', 'X-Request-Id', 'Retry-After'],
     maxAge: 86400,
   });

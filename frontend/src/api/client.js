@@ -1,3 +1,4 @@
+import { pruebaDpop } from './dpop';
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
 const TOKEN_KEY = 'dec_token';
 
@@ -58,7 +59,10 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   const token = tokenStore.get();
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers.Authorization = `Bearer ${token}`;
+  // WEB-008: si el token está ligado a la llave del navegador (cnf), va con esquema DPoP + prueba firmada
+  const ligado = !!token && !!datosToken(token)?.cnf;
+  if (token) headers.Authorization = `${ligado ? 'DPoP' : 'Bearer'} ${token}`;
+  const conPrueba = ligado || (!token && (path === '/auth/login' || path === '/auth/register'));
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
   const retries = method === 'GET' ? MAX_RETRIES : 0;
   // Si la petición ni siquiera llegó (fallo de red / arranque en frío), también se reintentan
@@ -68,6 +72,11 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   let res;
   for (let attempt = 0; ; attempt++) {
     try {
+      // Una prueba nueva en cada intento (id único, anti-repetición)
+      if (conPrueba) {
+        const prueba = await pruebaDpop(method, `${API_URL}${path}`, ligado ? token : undefined).catch(() => null);
+        if (prueba) headers.DPoP = prueba;
+      }
       res = await fetch(`${API_URL}${path}`, {
         method,
         headers,
@@ -224,6 +233,17 @@ export const Uploads = {
   },
 };
 
+/** Payload del JWT (sin verificar la firma: solo para decisiones de la interfaz). */
+function datosToken(token) {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Datos de la sesión que ya trae el token (nombre, rol, permisos). Se usan SOLO para pintar la
  * interfaz al instante mientras llega /auth/me; la firma la verifica el servidor en cada petición,
@@ -231,10 +251,8 @@ export const Uploads = {
  */
 export function usuarioDelToken(token) {
   try {
-    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
-    const p = JSON.parse(new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0))));
-    if (!p.sub || (p.exp && p.exp * 1000 < Date.now())) return null;
+    const p = datosToken(token);
+    if (!p?.sub || (p.exp && p.exp * 1000 < Date.now())) return null;
     return { id: p.sub, email: p.email, nombre: p.nombre, rol: p.rol, scope: p.scope ?? [], operadorCodigo: p.operador ?? null, _provisional: true };
   } catch {
     return null;

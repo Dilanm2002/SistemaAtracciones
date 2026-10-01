@@ -55,7 +55,7 @@ export async function moverImagenesAStorage(query: Consulta, opciones: OpcionesS
       body: new Uint8Array(readFileSync(archivo)),
     });
     if (!res.ok) throw new Error(`Supabase Storage ${res.status} al subir ${objeto}: ${await res.text()}`);
-    const publica = `${url}/storage/v1/object/public/${bucket}/${objeto}`;
+    const publica = `/api/v1/media/${objeto}`; // bucket privado: la API sirve la foto (SEG-008)
     for (const c of COLUMNAS) await query(`UPDATE ${c.tabla} SET ${c.columna} = $1 WHERE ${c.columna} = $2`, [publica, ruta]);
     movidas++;
   }
@@ -64,9 +64,9 @@ export async function moverImagenesAStorage(query: Consulta, opciones: OpcionesS
 }
 
 /**
- * Endurece el bucket (SEG-008): lectura pública solo porque son fotos del catálogo que cualquier
- * visitante debe ver (igual que Sal y Canela), pero Supabase rechaza en el propio bucket todo lo
- * que no sea JPG/PNG/WebP de hasta 4 MB. Escribir sigue siendo posible únicamente desde la API.
+ * Endurece el bucket (SEG-008): PRIVADO (nadie lo lee sin la clave de servidor, que solo tiene la
+ * API) y Supabase rechaza en el propio bucket todo lo que no sea JPG/PNG/WebP de hasta 4 MB.
+ * Las fotos en uso las entrega la API en /api/v1/media/… con caché en el CDN.
  */
 export async function configurarBucket(opciones: OpcionesStorage = {}): Promise<boolean> {
   const url = (opciones.url ?? process.env.SUPABASE_URL)?.replace(/\/$/, '');
@@ -76,9 +76,30 @@ export async function configurarBucket(opciones: OpcionesStorage = {}): Promise<
   const res = await fetch(`${url}/storage/v1/bucket/${bucket}`, {
     method: 'PUT',
     headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ public: true, file_size_limit: 4 * 1024 * 1024, allowed_mime_types: Object.values(MIME).filter((m, i, a) => a.indexOf(m) === i) }),
+    body: JSON.stringify({ public: false, file_size_limit: 4 * 1024 * 1024, allowed_mime_types: Object.values(MIME).filter((m, i, a) => a.indexOf(m) === i) }),
   });
   if (!res.ok) throw new Error(`Supabase Storage ${res.status} al configurar el bucket ${bucket}: ${await res.text()}`);
   opciones.log?.(`Imágenes: bucket ${bucket} limitado a JPG/PNG/WebP de hasta 4 MB.`);
   return true;
+}
+
+/**
+ * Pasa las URLs públicas antiguas del bucket (…/storage/v1/object/public/<bucket>/x.jpg) a rutas
+ * servidas por la API (/api/v1/media/x.jpg). Idempotente.
+ */
+export async function privatizarUrls(query: Consulta, opciones: OpcionesStorage = {}): Promise<number> {
+  const url = (opciones.url ?? process.env.SUPABASE_URL)?.replace(/\/$/, '');
+  const bucket = opciones.bucket ?? process.env.SUPABASE_BUCKET ?? 'uploads';
+  if (!url) return 0;
+  const prefijo = `${url}/storage/v1/object/public/${bucket}/`;
+  let n = 0;
+  for (const c of COLUMNAS) {
+    const r = (await query(
+      `UPDATE ${c.tabla} SET ${c.columna} = '/api/v1/media/' || substr(${c.columna}, length($1) + 1) WHERE ${c.columna} LIKE $1 || '%' RETURNING 1`,
+      [prefijo],
+    )) as unknown[];
+    n += r.length;
+  }
+  opciones.log?.(n ? `Imágenes: ${n} URL(s) pasadas a /api/v1/media (bucket privado).` : 'Imágenes: las URLs ya apuntan a /api/v1/media.');
+  return n;
 }

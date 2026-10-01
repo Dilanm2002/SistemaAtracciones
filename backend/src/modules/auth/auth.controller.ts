@@ -1,3 +1,4 @@
+import { verificarPruebaDpop } from '../../common/auth/dpop';
 import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
@@ -9,7 +10,12 @@ import { AuthUser, SCOPES } from '../../common/auth/scopes';
 import { AuthService } from './auth.service';
 import { CambiarPasswordDto, CreateUsuarioDto, LoginDto, RegisterDto, UpdatePerfilDto, UpdateUsuarioDto, UsuariosQueryDto } from './dto/auth.dto';
 
-const contexto = (req: Request) => ({ ip: req.ip, userAgent: req.header('user-agent') });
+/** Datos de la petición para la sesión; con cabecera DPoP, el token se liga a esa llave (WEB-008). */
+const contexto = (req: Request) => {
+  const prueba = req.header('dpop');
+  const jkt = prueba ? verificarPruebaDpop(prueba, req.method, req.originalUrl.split('?')[0]).jkt : undefined;
+  return { ip: req.ip, userAgent: req.header('user-agent'), jkt };
+};
 
 @ApiTags('Identidad - Autenticación')
 @Controller('auth')

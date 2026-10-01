@@ -44,6 +44,8 @@ export const scopesDe = (roles: string[]): Scope[] =>
 export interface AuthUser {
   /** usu_id (BIGINT como texto) */
   sub: string;
+  /** Token ligado a la llave del navegador (DPoP, RFC 9449): huella de la llave pública */
+  cnf?: { jkt: string };
   email: string;
   nombre: string;
   rol: Rol;

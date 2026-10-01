@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
+import { MEDIA_PREFIJO } from './media';
 
 /** Tipos permitidos: la extensión sale del tipo detectado en los bytes, nunca del nombre del archivo. */
 const TIPOS: { mime: string; ext: string; firma: (b: Buffer) => boolean }[] = [
@@ -54,7 +55,18 @@ export class StorageService {
     }
   }
 
-  /** Devuelve una ruta relativa (/uploads/x.jpg) o una URL absoluta pública. */
+  /** Descarga un objeto del bucket privado (solo la API tiene la clave de servidor). */
+  async leer(objeto: string): Promise<{ cuerpo: Buffer; tipo: string } | null> {
+    if (!this.url || !this.key) return null;
+    const res = await fetch(`${this.url}/storage/v1/object/${this.bucket}/${objeto}`, {
+      headers: { Authorization: `Bearer ${this.key}`, apikey: this.key },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    return { cuerpo: Buffer.from(await res.arrayBuffer()), tipo: res.headers.get('content-type') ?? 'image/jpeg' };
+  }
+
+  /** Devuelve una ruta relativa: /uploads/x.jpg (local) o /api/v1/media/x.jpg (Supabase, bucket privado). */
   async save(file: { buffer: Buffer; mimetype: string; originalname: string }): Promise<string> {
     const tipo = detectarImagen(file.buffer);
     if (!tipo) throw new BadRequestException('El archivo no es una imagen JPG, PNG o WebP válida.');
@@ -70,7 +82,8 @@ export class StorageService {
         this.logger.error(`Supabase Storage ${res.status}: ${await res.text()}`);
         throw new InternalServerErrorException('No se pudo guardar la imagen. Intenta de nuevo.');
       }
-      return `${this.url}/storage/v1/object/public/${this.bucket}/${name}`;
+      // Bucket privado (SEG-008): la foto se sirve a través de la API (MediaController)
+      return `${MEDIA_PREFIJO}${name}`;
     }
 
     const dir = join(process.cwd(), 'public', 'uploads');

@@ -20,7 +20,9 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
 import { CurrentUser, Scopes } from '../../common/auth/auth.decorators';
+import { firmarMedia, MEDIA_PREFIJO } from '../../common/storage/media';
 import { StorageService } from '../../common/storage/storage.service';
+import { ConfigService } from '@nestjs/config';
 import { ParseIdPipe } from '../../common/pipes/parse-id.pipe';
 import { JwtAuthGuard, OptionalJwtGuard } from '../../common/auth/jwt-auth.guard';
 import { AuthUser, SCOPES } from '../../common/auth/scopes';
@@ -175,6 +177,7 @@ export class AdminAtraccionesController {
     private readonly reportes: ReportesService,
     private readonly mapper: AtraccionMapper,
     private readonly storage: StorageService,
+    private readonly config: ConfigService,
   ) {}
 
   // ── Moderación de reseñas ─────────────────────────────────────────────
@@ -250,6 +253,8 @@ export class AdminAtraccionesController {
   async upload(@UploadedFile() file: Express.Multer.File | undefined) {
     if (!file) throw new BadRequestException('Adjunta una imagen en el campo "file".');
     const path = await this.storage.save(file);
-    return { path, url: this.mapper.absUrl(path) };
+    // Bucket privado: hasta que se guarde la atracción, la foto se ve con un enlace firmado de 2 h
+    const firma = path.startsWith(MEDIA_PREFIJO) ? `?t=${firmarMedia(path.slice(MEDIA_PREFIJO.length), this.config.getOrThrow<string>('JWT_SECRET'))}` : '';
+    return { path, url: `${this.mapper.absUrl(path)}${firma}` };
   }
 }

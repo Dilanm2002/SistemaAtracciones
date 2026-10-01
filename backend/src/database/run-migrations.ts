@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { DataSource } from 'typeorm';
-import { configurarBucket, moverImagenesAStorage } from './imagenes-storage';
+import { configurarBucket, moverImagenesAStorage, privatizarUrls } from './imagenes-storage';
 import { migrar } from './migrator';
 
 /**
@@ -33,6 +33,7 @@ async function main() {
     const log = (m: string) => console.log(m);
     await configurarBucket({ log });
     await moverImagenesAStorage((sql, params) => ds.query(sql, params), { log });
+    await privatizarUrls((sql, params) => ds.query(sql, params), { log });
   } finally {
     await ds.destroy();
   }

@@ -88,14 +88,24 @@ export class AuthService {
     return sql.one<FilaUsuario>(`${SELECT_USUARIO} WHERE u.usu_id = $1`, [id]);
   }
 
-  private async emitirToken(u: FilaUsuario, ctx: { ip?: string; userAgent?: string }) {
+  private async emitirToken(u: FilaUsuario, ctx: { ip?: string; userAgent?: string; jkt?: string }) {
     const pub = this.toPublic(u);
     const jti = randomUUID();
-    const payload: AuthUser = { sub: u.id, email: u.email, nombre: pub.nombre, rol: pub.rol, scope: scopesDe(pub.roles), operador: u.operadorCodigo, jti };
+    const payload: AuthUser = {
+      sub: u.id,
+      email: u.email,
+      nombre: pub.nombre,
+      rol: pub.rol,
+      scope: scopesDe(pub.roles),
+      operador: u.operadorCodigo,
+      jti,
+      // WEB-008: ligado a la llave del navegador si el login trajo prueba DPoP
+      ...(ctx.jkt ? { cnf: { jkt: ctx.jkt } } : {}),
+    };
     const token = await this.jwt.signAsync(payload);
     const { exp } = this.jwt.decode(token) as { exp: number };
     await this.sessions.crear(jti, u.id, token, new Date(exp * 1000), ctx.ip, ctx.userAgent);
-    return { access_token: token, token_type: 'Bearer', expires_at: new Date(exp * 1000).toISOString(), scope: payload.scope.join(' '), user: pub };
+    return { access_token: token, token_type: ctx.jkt ? 'DPoP' : 'Bearer', expires_at: new Date(exp * 1000).toISOString(), scope: payload.scope.join(' '), user: pub };
   }
 
   private async correoLibre(email: string, excepto?: string, sql: Sql = this.db) {
@@ -123,7 +133,7 @@ export class AuthService {
   }
 
   // ── Cuenta propia ─────────────────────────────────────────────────────
-  async register(dto: RegisterDto, ctx: { ip?: string; userAgent?: string }) {
+  async register(dto: RegisterDto, ctx: { ip?: string; userAgent?: string; jkt?: string }) {
     await this.catalogos.precargar();
     const id = await this.db.tx(async (tx) => {
       if (!(await this.correoLibre(dto.email, undefined, tx))) {
@@ -141,7 +151,7 @@ export class AuthService {
     return this.emitirToken((await this.fila(id))!, ctx);
   }
 
-  async login(dto: LoginDto, ctx: { ip?: string; userAgent?: string }) {
+  async login(dto: LoginDto, ctx: { ip?: string; userAgent?: string; jkt?: string }) {
     const cred = await this.db.one<{ id: string; hash: string; activo: boolean }>(
       'SELECT usu_id::text AS id, usu_password AS hash, usu_activo AS activo FROM usuario WHERE lower(usu_correo) = lower($1)',
       [dto.email],

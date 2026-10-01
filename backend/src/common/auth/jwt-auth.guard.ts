@@ -4,13 +4,28 @@ import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
 import { SCOPES_KEY } from './auth.decorators';
 import { AuthUser, Scope } from './scopes';
+import { verificarPruebaDpop } from './dpop';
 import { SessionService } from './session.service';
 
 type AuthRequest = Request & { user?: AuthUser };
 
 function extractToken(req: Request): string | undefined {
   const [type, token] = req.headers.authorization?.split(' ') ?? [];
-  return type === 'Bearer' ? token : undefined;
+  return type === 'Bearer' || type === 'DPoP' ? token : undefined;
+}
+
+/**
+ * WEB-008: si el token está ligado a una llave (cnf.jkt), la petición debe traer el esquema DPoP
+ * y una prueba firmada con ESA llave para este método y ruta. Un token robado no sirve sin ella.
+ */
+function exigirPosesion(req: Request, token: string, payload: AuthUser) {
+  if (!payload.cnf?.jkt) return;
+  const prueba = req.header('dpop');
+  if (!req.headers.authorization?.startsWith('DPoP ') || !prueba) {
+    throw new UnauthorizedException('Esta sesión está ligada a tu navegador: falta la prueba DPoP.');
+  }
+  const { jkt } = verificarPruebaDpop(prueba, req.method, req.originalUrl.split('?')[0], { token });
+  if (jkt !== payload.cnf.jkt) throw new UnauthorizedException('La sesión pertenece a otro navegador.');
 }
 
 /**
@@ -37,6 +52,7 @@ export class JwtAuthGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('Tu sesión expiró. Vuelve a iniciar sesión.');
     }
+    exigirPosesion(req, token, payload);
     const user = await this.sessions.resolver(payload);
     if (!user) throw new UnauthorizedException('Tu cuenta ya no está activa. Contacta al administrador.');
     req.user = user;
@@ -63,7 +79,9 @@ export class OptionalJwtGuard implements CanActivate {
     const token = extractToken(req);
     if (token) {
       try {
-        req.user = (await this.sessions.resolver(await this.jwt.verifyAsync<AuthUser>(token))) ?? undefined;
+        const payload = await this.jwt.verifyAsync<AuthUser>(token);
+        exigirPosesion(req, token, payload);
+        req.user = (await this.sessions.resolver(payload)) ?? undefined;
       } catch {
         req.user = undefined;
       }

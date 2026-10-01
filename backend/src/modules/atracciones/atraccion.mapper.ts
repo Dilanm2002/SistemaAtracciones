@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { MEDIA_PREFIJO } from '../../common/storage/media';
 import { ConfigService } from '@nestjs/config';
 import { link } from '../../common/utils/hateoas';
 import { AtraccionResponseDto } from './dto/atraccion-response.dto';
@@ -41,7 +42,9 @@ export class AtraccionMapper {
 
   /** Convierte una URL absoluta propia de vuelta a ruta relativa para guardarla. */
   relUrl(url: string): string {
-    return url.startsWith(this.publicUrl) ? url.slice(this.publicUrl.length) : url;
+    const rel = url.startsWith(this.publicUrl) ? url.slice(this.publicUrl.length) : url;
+    // Las fotos propias se guardan sin el token firmado de vista previa (?t=…)
+    return rel.startsWith(MEDIA_PREFIJO) ? rel.split('?')[0] : rel;
   }
 
   /**

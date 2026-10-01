@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { moverImagenesAStorage } from './imagenes-storage';
+import { moverImagenesAStorage, privatizarUrls } from './imagenes-storage';
 
 describe('Fotos del catálogo en Supabase Storage', () => {
   const dir = mkdtempSync(join(tmpdir(), 'img-'));
@@ -23,7 +23,7 @@ describe('Fotos del catálogo en Supabase Storage', () => {
     const [destino, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(destino).toBe('https://proy.supabase.co/storage/v1/object/fotos/catalogo/cotopaxi.jpg');
     expect((init.headers as Record<string, string>)['Content-Type']).toBe('image/jpeg');
-    const publica = 'https://proy.supabase.co/storage/v1/object/public/fotos/catalogo/cotopaxi.jpg';
+    const publica = '/api/v1/media/catalogo/cotopaxi.jpg'; // bucket privado: la sirve la API (SEG-008)
     expect(sql.filter((x) => x.sql.startsWith('UPDATE')).map((x) => x.params)).toEqual([
       [publica, '/img/cotopaxi.jpg'],
       [publica, '/img/cotopaxi.jpg'],
@@ -34,5 +34,11 @@ describe('Fotos del catálogo en Supabase Storage', () => {
     const query = jest.fn();
     expect(await moverImagenesAStorage(query, { url: '', key: '', dir })).toBe(0);
     expect(query).not.toHaveBeenCalled();
+  });
+
+  it('pasa las URLs públicas antiguas del bucket a /api/v1/media (SEG-008)', async () => {
+    const query = jest.fn(async () => [{}]);
+    expect(await privatizarUrls(query, opciones)).toBe(2);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("'/api/v1/media/' || substr"), ['https://proy.supabase.co/storage/v1/object/public/fotos/']);
   });
 });

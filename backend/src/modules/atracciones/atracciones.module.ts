@@ -1,3 +1,4 @@
+import { MediaController } from './media.controller';
 import { Module } from '@nestjs/common';
 import { CommonModule } from '../../common/common.module';
 import { AtraccionMapper } from './atraccion.mapper';
@@ -17,7 +18,7 @@ import { ReservasService } from './reservas.service';
  */
 @Module({
   imports: [CommonModule],
-  controllers: [AtraccionesController, CatalogoController, AdminAtraccionesController, FavoritosController],
+  controllers: [AtraccionesController, CatalogoController, AdminAtraccionesController, FavoritosController, MediaController],
   providers: [AtraccionesService, ReservasService, ResenasService, CatalogoService, ReportesService, AtraccionMapper],
   exports: [AtraccionesService, AtraccionMapper],
 })
