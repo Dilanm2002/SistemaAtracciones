@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuthUser, esAdmin, SCOPES } from '../../common/auth/scopes';
+import { AuthUser, esAdmin, Rol, SCOPES } from '../../common/auth/scopes';
 import { BitacoraService } from '../../common/db/bitacora.service';
 import { CatalogosService } from '../../common/db/catalogos.service';
 import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
@@ -60,6 +60,24 @@ export class ReservasService {
       return this.mapper.toReservation(f);
     },
   };
+
+  /**
+   * Teléfono de contacto de la reserva. Un CLIENTE reserva siempre con el teléfono de SU cuenta
+   * (no con uno escrito a mano o autocompletado por el navegador, que puede ser de otra persona).
+   * Si su cuenta aún no tiene teléfono, el que indique se guarda en la cuenta, siempre que no
+   * pertenezca a otro usuario. El personal (operador/admin) puede indicar el de su cliente.
+   */
+  private async telefonoDeContacto(tx: Sql, user: AuthUser, enviado?: string): Promise<string | null> {
+    if (user.rol !== Rol.CLIENTE) return enviado ?? null;
+    const cuenta = await tx.one<{ telefono: string | null }>('SELECT usu_telefono AS telefono FROM usuario WHERE usu_id = $1', [user.sub]);
+    if (cuenta?.telefono) return cuenta.telefono;
+    if (!enviado) return null;
+    if (await tx.one('SELECT 1 FROM usuario WHERE usu_telefono = $1 AND usu_id <> $2', [enviado, user.sub])) {
+      throw new ConflictException('Ese número de teléfono está registrado en otra cuenta. Usa tu propio número.');
+    }
+    await tx.query('UPDATE usuario SET usu_telefono = $2 WHERE usu_id = $1', [user.sub, enviado]);
+    return enviado;
+  }
 
   // ── Crear reserva ─────────────────────────────────────────────────────
   reserve(atrUuid: string, dto: ReservationRequestDto, key: string, user: AuthUser): Promise<ReservationResponseDto> {
@@ -135,6 +153,7 @@ export class ReservasService {
           }
           if (dto.card.exp_year > anio + 20) throw new BadRequestException('La fecha de vencimiento de la tarjeta no es válida.');
         }
+        const paxTelefono = await this.telefonoDeContacto(tx, user, dto.customer_phone);
         const compra = await registrarCompra(tx, this.catalogos, {
           usuId: user.sub,
           atrId: a.atr_id,
@@ -151,7 +170,7 @@ export class ReservasService {
           paxNombre: dto.customer_name,
           paxDocumento: dto.customer_document ?? null,
           paxCorreo: dto.customer_email ?? null,
-          paxTelefono: dto.customer_phone ?? null,
+          paxTelefono,
           notas: dto.notes ?? null,
           tarjeta: dto.card,
         });

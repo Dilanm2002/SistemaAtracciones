@@ -124,6 +124,13 @@ export class AuthService {
     return !r;
   }
 
+  /** Un número de teléfono pertenece a una sola cuenta (lanza 409 si ya lo usa otra). */
+  private async exigirTelefonoLibre(telefono: string | null | undefined, excepto?: string, sql: Sql = this.db) {
+    if (!telefono) return;
+    const r = await sql.one('SELECT 1 FROM usuario WHERE usu_telefono = $1 AND usu_id IS DISTINCT FROM $2', [telefono, excepto ?? null]);
+    if (r) throw new ConflictException('Ese número de teléfono ya está registrado en otra cuenta.');
+  }
+
   /** Reemplaza los roles del usuario por uno solo y ajusta su empresa operadora. */
   private async asignarRol(sql: Sql, usuId: string, rol: Rol, operadorCodigo: number | null | undefined, actorId: string | null) {
     await sql.query('DELETE FROM usuario_rol WHERE usu_id = $1', [usuId]);
@@ -150,6 +157,7 @@ export class AuthService {
       if (!(await this.correoLibre(dto.email, undefined, tx))) {
         throw new ConflictException('Ya existe una cuenta con ese correo. ¿Quieres iniciar sesión?');
       }
+      await this.exigirTelefonoLibre(dto.telefono, undefined, tx);
       const u = await tx.one<{ id: string }>(
         `INSERT INTO usuario (usu_correo, usu_password, usu_nombre, usu_apellido, usu_telefono)
          VALUES ($1, $2, $3, $4, $5) RETURNING usu_id::text AS id`,
@@ -255,7 +263,10 @@ export class AuthService {
     const sets: string[] = [];
     if (dto.nombre !== undefined) sets.push(`usu_nombre = ${p.add(dto.nombre)}`);
     if (dto.apellido !== undefined) sets.push(`usu_apellido = ${p.add(dto.apellido)}`);
-    if (dto.telefono !== undefined) sets.push(`usu_telefono = ${p.add(dto.telefono || null)}`);
+    if (dto.telefono !== undefined) {
+      await this.exigirTelefonoLibre(dto.telefono, id);
+      sets.push(`usu_telefono = ${p.add(dto.telefono || null)}`);
+    }
     if (dto.documento !== undefined) {
       if (dto.documento && (await this.db.one('SELECT 1 FROM usuario WHERE usu_documento = $1 AND usu_id <> $2', [dto.documento, id]))) {
         throw new ConflictException('Ese documento ya está registrado en otra cuenta.');
@@ -301,6 +312,7 @@ export class AuthService {
     await this.catalogos.precargar();
     const id = await this.db.tx(async (tx) => {
       if (!(await this.correoLibre(dto.email, undefined, tx))) throw new ConflictException('Ya existe un usuario con ese correo.');
+      await this.exigirTelefonoLibre(dto.telefono, undefined, tx);
       const u = await tx.one<{ id: string }>(
         `INSERT INTO usuario (usu_correo, usu_password, usu_nombre, usu_apellido, usu_telefono, usu_verificado)
          VALUES ($1, $2, $3, $4, $5, TRUE) RETURNING usu_id::text AS id`,
@@ -346,7 +358,10 @@ export class AuthService {
       }
       if (dto.nombre !== undefined) sets.push(`usu_nombre = ${p.add(dto.nombre)}`);
       if (dto.apellido !== undefined) sets.push(`usu_apellido = ${p.add(dto.apellido)}`);
-      if (dto.telefono !== undefined) sets.push(`usu_telefono = ${p.add(dto.telefono || null)}`);
+      if (dto.telefono !== undefined) {
+        await this.exigirTelefonoLibre(dto.telefono, id, tx);
+        sets.push(`usu_telefono = ${p.add(dto.telefono || null)}`);
+      }
       if (dto.activo !== undefined) sets.push(`usu_activo = ${p.add(dto.activo)}`);
       if (dto.password) sets.push(`usu_password = ${p.add(await bcrypt.hash(dto.password, BCRYPT_ROUNDS))}`);
       if (sets.length) await tx.query(`UPDATE usuario SET ${sets.join(', ')} WHERE usu_id = ${p.add(id)}`, p.values);

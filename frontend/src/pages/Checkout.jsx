@@ -39,7 +39,9 @@ export default function Checkout() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { user, isAuth } = useAuth();
+  const { user, isAuth, refresh } = useAuth();
+  // Un cliente reserva SIEMPRE con el teléfono de su cuenta (no uno autocompletado o de otra persona)
+  const telefonoCuenta = user?.rol === 'CLIENTE' && user.telefono ? user.telefono : null;
   const toast = useToast();
 
   const fecha = params.get('fecha');
@@ -68,7 +70,7 @@ export default function Checkout() {
   }, [id, fecha, hora]);
 
   useEffect(() => {
-    if (user) setForm((f) => ({ ...f, nombre: f.nombre || user.nombre, email: f.email || user.email, telefono: f.telefono || user.telefono || '', documento: f.documento || user.documento || '' }));
+    if (user) setForm((f) => ({ ...f, nombre: f.nombre || user.nombre, email: f.email || user.email, telefono: user.rol === 'CLIENTE' && user.telefono ? user.telefono : f.telefono || user.telefono || '' }));
   }, [user]);
 
   // Fecha y hora también vienen de la URL: deben tener formato válido y la fecha no puede ser pasada
@@ -100,7 +102,7 @@ export default function Checkout() {
       nombre: nombrePersona(form.nombre, { que: 'El nombre del titular' }) ?? (form.nombre.trim().split(/\s+/).length < 2 ? 'Escribe nombre y apellido del titular' : null),
       email: correo(form.email),
       telefono: telefono(form.telefono, { requerido: true }),
-      documento: validarDocumento(form.documento),
+      documento: validarDocumento(form.documento, { requerido: true }),
       notas: texto(form.notas, { max: LIMITES.notas, requerido: false, que: 'Las notas' }),
     }));
     setErrors(errs);
@@ -164,6 +166,7 @@ export default function Checkout() {
         idemKey.current,
       );
       toast('¡Reserva creada con éxito!', 'success');
+      if (!telefonoCuenta) refresh().catch(() => {}); // el teléfono indicado quedó guardado en la cuenta
       navigate(`/reserva/${r.reservation_id}/confirmada`, { replace: true, state: { reservation: r } });
     } catch (err) {
       setSubmitError(err);
@@ -248,11 +251,17 @@ export default function Checkout() {
                 <Field label="Correo electrónico" required error={errors.email} hint="Te enviaremos aquí el código de reserva">
                   {(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} />}
                 </Field>
-                <Field label="Teléfono / WhatsApp" required error={errors.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">
-                  {(p) => <input {...p} className="input" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="0991234567" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })} />}
-                </Field>
-                <Field label="Cédula" hint="Opcional. Cédula ecuatoriana de 10 dígitos, ej. 1710034065; agiliza el ingreso a parques nacionales" error={errors.documento}>
-                  {(p) => <input {...p} className="input" inputMode="numeric" placeholder="1710034065" value={form.documento} onChange={(e) => setForm({ ...form, documento: soloDigitos(e.target.value) })} maxLength={LIMITES.documento} />}
+                {telefonoCuenta ? (
+                  <Field label="Teléfono / WhatsApp" hint={<>Es el teléfono de tu cuenta. Para cambiarlo, ve a <Link to="/perfil">Mi perfil</Link>.</>}>
+                    {(p) => <input {...p} className="input" type="tel" value={telefonoCuenta} readOnly aria-readonly="true" />}
+                  </Field>
+                ) : (
+                  <Field label="Teléfono / WhatsApp" required error={errors.telefono} hint="Tu propio número: se guardará en tu cuenta. Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">
+                    {(p) => <input {...p} className="input" type="tel" inputMode="numeric" autoComplete="off" placeholder="0991234567" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })} />}
+                  </Field>
+                )}
+                <Field label="Cédula" required hint="Cédula ecuatoriana de 10 dígitos del titular; agiliza el ingreso a parques nacionales" error={errors.documento}>
+                  {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" value={form.documento} onChange={(e) => setForm({ ...form, documento: soloDigitos(e.target.value) })} maxLength={LIMITES.documento} />}
                 </Field>
                 <Field label="Notas para el operador" hint="Alergias, movilidad reducida, hotel de recogida…" className="span-2">
                   {(p) => <textarea {...p} className="textarea" value={form.notas} onChange={set('notas')} maxLength={LIMITES.notas} style={{ minHeight: 80 }} />}

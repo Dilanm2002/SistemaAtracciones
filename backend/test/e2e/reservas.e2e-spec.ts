@@ -90,16 +90,17 @@ describeDb('Reservas (E2E)', () => {
       expect(n).toBe(0);
     });
 
-    it('guarda el correo y el teléfono de contacto de la reserva (y usa los de la cuenta si no se envían)', async () => {
+    it('guarda el correo de contacto; el teléfono de un cliente es SIEMPRE el de su cuenta', async () => {
       const atr = await crearAtraccion();
       const con = await reservar(atr, cliente, reserva(fechaEc(22), { customer_email: '  Familiar@Correo.EC ', customer_phone: '0987654321' }));
       expect(con.status).toBe(201);
-      expect(con.body.customer).toMatchObject({ email: 'familiar@correo.ec', phone: '0987654321' });
+      // El teléfono enviado se ignora: el cliente ya tiene uno en su cuenta (seed)
+      expect(con.body.customer).toMatchObject({ email: 'familiar@correo.ec', phone: '0991234567' });
       const [pax] = await db(app).query(
         'SELECT x.pax_correo, x.pax_telefono FROM reserva_pasajero x JOIN reserva r ON r.res_id = x.res_id WHERE r.res_uuid = $1',
         [con.body.reservation_id],
       );
-      expect(pax).toEqual({ pax_correo: 'familiar@correo.ec', pax_telefono: '0987654321' });
+      expect(pax).toEqual({ pax_correo: 'familiar@correo.ec', pax_telefono: '0991234567' });
       // Se puede buscar por ese correo
       const q = await http(app).get('/atracciones/reservations?q=familiar%40correo').set(bearer(cliente));
       expect(q.body.map((r: { reservation_id: string }) => r.reservation_id)).toContain(con.body.reservation_id);

@@ -11,8 +11,12 @@ describeDb('Autenticación y seguridad (E2E)', () => {
   let cliente: string;
 
   const correo = () => `${nombreUnico('qa').replace(/\s+/g, '.')}@prueba.ec`;
+  // Cada cuenta necesita su propio teléfono (un número pertenece a una sola cuenta)
+  const digitos = (n: number) => Array.from(randomBytes(n), (b) => b % 10).join('');
+  const celular = () => `09${digitos(8)}`;
+  const fijo = () => `02${digitos(7)}`;
   const registrar = (extra: Record<string, unknown> = {}) =>
-    http(app).post('/auth/register').send({ nombre: 'Lucía', apellido: 'Paredes', email: correo(), password: 'Clave1234', telefono: '0991112233', ...extra });
+    http(app).post('/auth/register').send({ nombre: 'Lucía', apellido: 'Paredes', email: correo(), password: 'Clave1234', telefono: celular(), ...extra });
 
   beforeAll(async () => {
     app = await createTestApp();
@@ -95,9 +99,10 @@ describeDb('Autenticación y seguridad (E2E)', () => {
 
     it('PATCH /auth/me: actualiza perfil; cédula duplicada → 409; no permite escalar rol', async () => {
       const t = (await registrar()).body.access_token;
-      const ok = await http(app).patch('/auth/me').set(bearer(t)).send({ nombre: 'Lucía Elena', telefono: '022345678' });
+      const tel = fijo();
+      const ok = await http(app).patch('/auth/me').set(bearer(t)).send({ nombre: 'Lucía Elena', telefono: tel });
       expect(ok.status).toBe(200);
-      expect(ok.body).toMatchObject({ nombres: 'Lucía Elena', telefono: '022345678' });
+      expect(ok.body).toMatchObject({ nombres: 'Lucía Elena', telefono: tel });
       expect((await http(app).patch('/auth/me').set(bearer(t)).send({ documento: '1710034065' })).status).toBe(409); // cédula de cliente@
       expect((await http(app).patch('/auth/me').set(bearer(t)).send({ rol: 'ADMIN' })).status).toBe(400);
     });
@@ -194,13 +199,20 @@ describeDb('Autenticación y seguridad (E2E)', () => {
       expect((await http(app).patch('/usuarios/abc').set(bearer(admin)).send({ nombre: 'Nadie' })).status).toBe(400);
     });
 
+    it('un teléfono pertenece a una sola cuenta: registrar o cambiar a uno ajeno → 409', async () => {
+      expect((await registrar({ telefono: '0991234567' })).status).toBe(409); // teléfono de cliente@ (seed)
+      const t = (await registrar()).body.access_token;
+      expect((await http(app).patch('/auth/me').set(bearer(t)).send({ telefono: '0991234567' })).status).toBe(409);
+    });
+
     it('el admin puede quitar el teléfono de un usuario enviándolo vacío', async () => {
-      const r = await registrar({ telefono: '0991112233' });
+      const r = await registrar();
       const id = r.body.user.id;
       const sinTel = await http(app).patch(`/usuarios/${id}`).set(bearer(admin)).send({ telefono: '' });
       expect(sinTel.status).toBe(200);
       expect(sinTel.body.telefono).toBeNull();
-      expect((await http(app).patch(`/usuarios/${id}`).set(bearer(admin)).send({ telefono: '022345678' })).body.telefono).toBe('022345678');
+      const tel = fijo();
+      expect((await http(app).patch(`/usuarios/${id}`).set(bearer(admin)).send({ telefono: tel })).body.telefono).toBe(tel);
       expect((await http(app).patch(`/usuarios/${id}`).set(bearer(admin)).send({ telefono: '12345' })).status).toBe(400);
     });
 

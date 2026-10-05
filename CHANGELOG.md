@@ -7,6 +7,15 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.4.2] - 2026-10-05
+
+### Corregido
+- **Teléfono de la reserva:** un cliente reserva siempre con el **teléfono de su cuenta**. En el checkout aparece fijo, con un enlace a «Mi perfil» para cambiarlo. Antes podía quedar un número autocompletado por el navegador o de otra persona.
+  - Si la cuenta aún no tiene teléfono, el que escriba se guarda en ella.
+  - El backend aplica la misma regla aunque se envíe otro número.
+- **Un teléfono pertenece a una sola cuenta:** registrarse, editar el perfil o crear o editar usuarios con un número que ya usa otra cuenta → 409.
+- **Cédula del titular en el checkout:** ahora es **obligatoria** y empieza vacía. Ya no se autocompleta ni muestra una cédula de ejemplo. Todos los datos del titular son obligatorios menos «Notas para el operador».
+
 ## [2.4.1] - 2026-10-01
 
 ### Corregido
