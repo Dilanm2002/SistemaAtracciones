@@ -135,6 +135,15 @@ export function documento(v, { requerido = false } = {}) {
 }
 
 /** Deja solo dígitos (para campos de cédula, teléfono, RUC). */
+/** Máscara de nombres de persona: al escribir solo deja letras (con tildes y ñ), espacios, apóstrofes y guiones. */
+export const soloNombre = (v) => String(v ?? '').replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ' .-]/g, '').replace(/\s{2,}/g, ' ');
+
+/** Máscara de correo: sin espacios. */
+export const sinEspacios = (v) => String(v ?? '').replace(/\s/g, '');
+
+/** Máscara de texto libre: corta las secuencias de más de `n` dígitos seguidos mientras se escribe. */
+export const limitarDigitos = (v, n = 4) => String(v ?? '').replace(new RegExp(`([0-9]{${n}})[0-9]+`, 'g'), '$1');
+
 export const soloDigitos = (v) => String(v ?? '').replace(/\D/g, '');
 
 export function ruc(v, { requerido = false } = {}) {

@@ -10,7 +10,7 @@ import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
 import { respuestaGoogle, rutaDespuesDeGoogle } from '../utils/google';
-import { correo, documento, LIMITES, limpiar, nombrePersona, password, soloDigitos, telefono, texto } from '../utils/validation';
+import { correo, documento, LIMITES, limpiar, nombrePersona, password, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
 
 // ── Favoritos ────────────────────────────────────────────────────────────
 export function Favorites() {
@@ -204,7 +204,7 @@ export function Contact() {
           ) : (
             <form onSubmit={submit} noValidate className="form-grid">
               <div className="span-2"><RequiredLegend /></div>
-              <Field label="Nombre" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={set('nombre')} />}</Field>
+              <Field label="Nombre" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: soloNombre(e.target.value) })} />}</Field>
               <Field label="Correo electrónico" required error={errors.email}>{(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} />}</Field>
               <Field label="Asunto" className="span-2">
                 {(p) => <select {...p} className="select" value={form.asunto} onChange={set('asunto')}>{Object.entries(ASUNTOS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
@@ -376,8 +376,8 @@ function ProfileForm() {
         <RequiredLegend />
         <h2 className="panel-title"><User size={20} aria-hidden="true" /> Datos personales</h2>
         <div className="form-grid">
-          <Field label="Nombres" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="given-name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} />}</Field>
-          <Field label="Apellidos" required error={errors.apellido}>{(p) => <input {...p} className="input" autoComplete="family-name" maxLength={LIMITES.nombrePersona} value={form.apellido} onChange={(e) => setForm({ ...form, apellido: e.target.value })} />}</Field>
+          <Field label="Nombres" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="given-name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: soloNombre(e.target.value) })} />}</Field>
+          <Field label="Apellidos" required error={errors.apellido}>{(p) => <input {...p} className="input" autoComplete="family-name" maxLength={LIMITES.nombrePersona} value={form.apellido} onChange={(e) => setForm({ ...form, apellido: soloNombre(e.target.value) })} />}</Field>
           <Field label="Teléfono" error={errors.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">{(p) => <input {...p} className="input" type="tel" inputMode="numeric" placeholder="0991234567" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })} />}</Field>
           <Field label="Cédula" hint="Cédula ecuatoriana de 10 dígitos. Se usa para autocompletar tus reservas" error={errors.documento}>{(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" maxLength={LIMITES.documento} value={form.documento} onChange={(e) => setForm({ ...form, documento: soloDigitos(e.target.value) })} />}</Field>
         </div>

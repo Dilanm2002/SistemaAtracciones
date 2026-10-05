@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
 import { ACEPTA, esImagen, normalizarFoto } from '../utils/imagen';
-import { ECUADOR, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
+import { ECUADOR, limitarDigitos, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
 
 // El mapa (Leaflet) solo se descarga al abrir el formulario
 const MapaUbicacion = lazyRecarga(() => import('./MapaUbicacion'));
@@ -86,12 +86,22 @@ const toApi = (f, destinos, operadores, { esAdmin = true, aprobada = true } = {}
 function ListEditor({ items, onChange, placeholder, addLabel, name }) {
   return (
     <div className="list-editor" role="group" aria-label={name}>
-      {items.map((v, i) => (
-        <div key={i} className="list-editor-item">
-          <input className="input" value={v} placeholder={placeholder} maxLength={150} onChange={(e) => onChange(items.map((x, j) => (j === i ? e.target.value : x)))} aria-label={`${name}, elemento ${i + 1}`} />
-          <button type="button" className="icon-btn sm" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label={`Quitar «${v || `elemento ${i + 1}`}» de ${name}`}><X size={18} aria-hidden="true" /></button>
-        </div>
-      ))}
+      {items.map((v, i) => {
+        // Cada elemento se valida al escribir; el error aparece junto a ese elemento
+        const err = v.trim() ? texto(v, { min: 2, max: LIMITES.item, que: 'Este elemento', maxDigitos: 4 }) : null;
+        const errId = `${name}-${i}-err`.replace(/\W+/g, '-');
+        return (
+          <div key={i}>
+            <div className="list-editor-item">
+              <input className="input" value={v} placeholder={placeholder} maxLength={LIMITES.item}
+                onChange={(e) => onChange(items.map((x, j) => (j === i ? limitarDigitos(e.target.value) : x)))}
+                aria-label={`${name}, elemento ${i + 1}`} aria-invalid={!!err} aria-describedby={err ? errId : undefined} />
+              <button type="button" className="icon-btn sm" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label={`Quitar «${v || `elemento ${i + 1}`}» de ${name}`}><X size={18} aria-hidden="true" /></button>
+            </div>
+            {err && <span id={errId} className="error-text">{err}</span>}
+          </div>
+        );
+      })}
       <button type="button" className="btn btn-ghost btn-sm" style={{ justifySelf: 'start' }} onClick={() => onChange([...items, ''])} aria-label={`${addLabel} en ${name}`}><Plus size={16} aria-hidden="true" /> {addLabel}</button>
     </div>
   );

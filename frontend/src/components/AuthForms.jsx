@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Alert, Field, RequiredLegend, Spinner } from './ui';
 import { iniciarConGoogle } from '../utils/google';
-import { correo, LIMITES, limpiar, nombrePersona, password, soloDigitos, telefono } from '../utils/validation';
+import { correo, LIMITES, limpiar, nombrePersona, password, sinEspacios, soloDigitos, soloNombre, telefono } from '../utils/validation';
 
 
 function PasswordInput({ value, onChange, autoComplete, ...p }) {
@@ -138,24 +138,30 @@ export function RegisterForm({ onSuccess }) {
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
-
   const rules = [
     [form.password.length >= 8, 'Al menos 8 caracteres'],
     [/[A-Za-z]/.test(form.password), 'Al menos una letra'],
     [/\d/.test(form.password), 'Al menos un número'],
   ];
 
+  // Validación de cada campo: al salir de él y, si ya mostró un error, mientras se corrige
+  const validar = (k, f) => ({
+    nombre: () => nombrePersona(f.nombre, { que: 'Tus nombres' }),
+    apellido: () => nombrePersona(f.apellido, { que: 'Tus apellidos' }),
+    email: () => correo(f.email),
+    telefono: () => telefono(f.telefono, { requerido: true }),
+    password: () => (f.password.length >= 8 && /[A-Za-z]/.test(f.password) && /\d/.test(f.password) ? password(f.password) : 'La contraseña no cumple los requisitos'),
+  })[k]?.() ?? null;
+  const cambiar = (k, mascara = (v) => v) => (e) => {
+    const f = { ...form, [k]: mascara(e.target.value) };
+    setForm(f);
+    if (errors[k]) setErrors((x) => ({ ...x, [k]: validar(k, f) }));
+  };
+  const alSalir = (k) => () => form[k] && setErrors((x) => ({ ...x, [k]: validar(k, form) }));
+
   const submit = async (e) => {
     e.preventDefault();
-    const errs = {};
-    Object.assign(errs, limpiar({
-      nombre: nombrePersona(form.nombre, { que: 'Tus nombres' }),
-      apellido: nombrePersona(form.apellido, { que: 'Tus apellidos' }),
-      email: correo(form.email),
-      telefono: telefono(form.telefono),
-      password: rules.every(([ok]) => ok) ? password(form.password) : 'La contraseña no cumple los requisitos',
-    }));
+    const errs = limpiar(Object.fromEntries(['nombre', 'apellido', 'email', 'telefono', 'password'].map((k) => [k, validar(k, form)])));
     if (!form.terms) errs.terms = 'Debes aceptar los términos para continuar';
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -167,7 +173,7 @@ export function RegisterForm({ onSuccess }) {
         apellido: form.apellido.trim(),
         email: form.email.trim(),
         password: form.password,
-        ...(form.telefono ? { telefono: form.telefono.replace(/\s/g, '') } : {}),
+        telefono: form.telefono,
       });
       toast(`¡Bienvenido/a a Descubre EC, ${u.nombre.split(' ')[0]}!`, 'success');
       onSuccess?.(u);
@@ -188,32 +194,32 @@ export function RegisterForm({ onSuccess }) {
         <Field label="Nombres" required error={errors.nombre}>
           {(p) => (
             <div className="input-icon"><User size={18} aria-hidden="true" />
-              <input {...p} className="input" autoComplete="given-name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={set('nombre')} placeholder="Como en tu documento" />
+              <input {...p} className="input" autoComplete="given-name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={cambiar('nombre', soloNombre)} onBlur={alSalir('nombre')} placeholder="Como en tu documento" />
             </div>
           )}
         </Field>
         <Field label="Apellidos" required error={errors.apellido}>
-          {(p) => <input {...p} className="input" autoComplete="family-name" maxLength={LIMITES.nombrePersona} value={form.apellido} onChange={set('apellido')} />}
+          {(p) => <input {...p} className="input" autoComplete="family-name" maxLength={LIMITES.nombrePersona} value={form.apellido} onChange={cambiar('apellido', soloNombre)} onBlur={alSalir('apellido')} />}
         </Field>
       </div>
       <Field label="Correo electrónico" required error={errors.email} hint="Aquí te enviaremos la confirmación de tus reservas">
         {(p) => (
           <div className="input-icon"><Mail size={18} aria-hidden="true" />
-            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} placeholder="nombre@correo.com" />
+            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={cambiar('email', sinEspacios)} onBlur={alSalir('email')} placeholder="nombre@correo.com" />
           </div>
         )}
       </Field>
-      <Field label="Teléfono (opcional)" error={errors.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">
+      <Field label="Teléfono / WhatsApp" required error={errors.telefono} hint="Tu propio número; se usará en tus reservas. Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">
         {(p) => (
           <div className="input-icon"><Phone size={18} aria-hidden="true" />
-            <input {...p} className="input" type="tel" autoComplete="tel-national" inputMode="numeric" maxLength={LIMITES.telefono} value={form.telefono} onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })} placeholder="0991234567" />
+            <input {...p} className="input" type="tel" autoComplete="tel-national" inputMode="numeric" maxLength={LIMITES.telefono} value={form.telefono} onChange={cambiar('telefono', soloDigitos)} onBlur={alSalir('telefono')} />
           </div>
         )}
       </Field>
       <Field label="Contraseña" required error={errors.password}>
         {(p) => (
           <>
-            <PasswordInput {...p} autoComplete="new-password" value={form.password} onChange={set('password')} />
+            <PasswordInput {...p} autoComplete="new-password" value={form.password} onChange={cambiar('password')} onBlur={alSalir('password')} />
             <ul className="pw-rules" aria-label="Requisitos de la contraseña">
               {rules.map(([ok, t]) => (
                 <li key={t} className={ok ? 'ok' : ''}>{ok ? <Check size={14} /> : <X size={14} />} {t}<span className="sr-only">{ok ? ' (cumplido)' : ' (pendiente)'}</span></li>
@@ -224,7 +230,7 @@ export function RegisterForm({ onSuccess }) {
       </Field>
       <div>
         <label className="check">
-          <input type="checkbox" checked={form.terms} onChange={set('terms')} aria-invalid={!!errors.terms} />
+          <input type="checkbox" checked={form.terms} onChange={(e) => { setForm({ ...form, terms: e.target.checked }); if (e.target.checked) setErrors((x) => ({ ...x, terms: null })); }} aria-invalid={!!errors.terms} />
           <span>Acepto los términos de uso y la política de privacidad de Descubre EC.</span>
         </label>
         {errors.terms && <span className="error-text" role="alert">{errors.terms}</span>}

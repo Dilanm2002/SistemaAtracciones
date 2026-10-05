@@ -8,7 +8,7 @@ import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePage
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtMoney } from '../utils/format';
-import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, nombrePersona, RE_NOMBRE_PERSONA, soloDigitos, telefono, texto } from '../utils/validation';
+import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, nombrePersona, RE_NOMBRE_PERSONA, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
 
 const luhn = (num) => {
   const d = num.replace(/\D/g, '');
@@ -246,7 +246,7 @@ export default function Checkout() {
               <p className="muted small">Presenta un documento con este nombre en el punto de encuentro.</p>
               <div className="form-grid">
                 <Field label="Nombre completo" required error={errors.nombre} className="span-2">
-                  {(p) => <input {...p} className="input" autoComplete="name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={set('nombre')} />}
+                  {(p) => <input {...p} className="input" autoComplete="name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: soloNombre(e.target.value) })} />}
                 </Field>
                 <Field label="Correo electrónico" required error={errors.email} hint="Te enviaremos aquí el código de reserva">
                   {(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} />}

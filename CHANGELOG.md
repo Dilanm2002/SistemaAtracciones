@@ -7,6 +7,19 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.4.3] - 2026-10-05
+
+### Corregido
+- **Registro con validación en vivo:**
+  - Los nombres y apellidos solo aceptan letras al escribir (con tildes y ñ, espacios, apóstrofes y guiones), y el correo no admite espacios.
+  - Cada campo se valida al salir de él y mientras se corrige.
+  - El **teléfono es obligatorio**, porque las reservas usan el de la cuenta.
+- **Nombres en el resto del sitio:** la misma máscara de solo letras en el checkout, el contacto, «Mi perfil» y el alta de usuarios del panel.
+- **«Incluye», «No incluye» y «Recomendaciones» de una actividad:** al escribir se cortan las secuencias de más de 4 dígitos seguidos, y cada elemento inválido se marca en rojo con su propio mensaje.
+
+### Seguridad
+- jest se actualiza de la versión 29 a la 30.5. La 29 dependía de `braces`, que tiene un aviso de severidad alta (GHSA-vfj7-8cjw-p6xm) que hacía fallar el `npm audit` del CI. Solo afecta a las herramientas de pruebas.
+
 ## [2.4.2] - 2026-10-05
 
 ### Corregido

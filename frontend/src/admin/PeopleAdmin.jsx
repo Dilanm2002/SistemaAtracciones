@@ -6,7 +6,7 @@ import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, S
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateTime, fmtMoney, fmtRelative, initials } from '../utils/format';
-import { correo, LIMITES, limpiar, nombrePersona, password, soloDigitos, telefono } from '../utils/validation';
+import { correo, LIMITES, limpiar, nombrePersona, password, soloDigitos, soloNombre, telefono } from '../utils/validation';
 import { useAdmin } from './AdminLayout';
 import { exportXlsx } from './excel';
 
@@ -101,8 +101,8 @@ function UsuarioModal({ item, onClose, onSaved }) {
         <RequiredLegend />
         {err.api && <Alert tone="danger">{err.api}</Alert>}
         <div className="form-grid">
-          <Field label="Nombres" required error={err.nombre}>{(p) => <input {...p} className="input" maxLength={LIMITES.nombrePersona} value={f.nombre} onChange={set('nombre')} />}</Field>
-          <Field label="Apellidos" required error={err.apellido}>{(p) => <input {...p} className="input" maxLength={LIMITES.nombrePersona} value={f.apellido} onChange={set('apellido')} />}</Field>
+          <Field label="Nombres" required error={err.nombre}>{(p) => <input {...p} className="input" maxLength={LIMITES.nombrePersona} value={f.nombre} onChange={(e) => setF({ ...f, nombre: soloNombre(e.target.value) })} />}</Field>
+          <Field label="Apellidos" required error={err.apellido}>{(p) => <input {...p} className="input" maxLength={LIMITES.nombrePersona} value={f.apellido} onChange={(e) => setF({ ...f, apellido: soloNombre(e.target.value) })} />}</Field>
         </div>
         <Field label="Correo" required error={err.email}>{(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.email} onChange={set('email')} />}</Field>
         <Field label="Teléfono" error={err.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">{(p) => <input {...p} className="input" type="tel" inputMode="numeric" placeholder="0991234567" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: soloDigitos(e.target.value) })} />}</Field>
