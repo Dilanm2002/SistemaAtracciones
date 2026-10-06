@@ -259,7 +259,8 @@
 .detail-meta a { color: inherit; }
 
 .detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 40px; margin-top: 28px; align-items: start; }
-@media (max-width: 1000px) { .detail-layout { grid-template-columns: 1fr; } }
+/* minmax(0, …): un hijo ancho no puede ensanchar la columna más que la pantalla (antes, 36 px de scroll lateral a 320-375 px) */
+@media (max-width: 1000px) { .detail-layout { grid-template-columns: minmax(0, 1fr); } }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 28px; }
 .fact { display: flex; gap: 12px; align-items: flex-start; padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); }
 .fact svg { color: var(--primary); flex-shrink: 0; margin-top: 2px; }
@@ -279,6 +280,8 @@
 
 .booking { position: sticky; top: calc(var(--header-h) + 16px); }
 .booking .card { padding: 22px; }
+/* A 320 px el calendario (7 días × 38 px) no cabía: tarjeta más compacta y días cuadrados flexibles */
+@media (max-width: 400px) { .booking .card { padding: 14px; } .booking .cal-day { min-height: 0; } }
 .booking-price { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .booking-price .price { font-size: 1.8rem; }
 .booking h3 { font-size: 0.95rem; margin: 18px 0 10px; font-family: var(--font-body); font-weight: 700; }
@@ -350,6 +353,13 @@
   .checkout-barra > div { display: flex; flex-direction: column; }
   .checkout-barra .btn { min-width: 140px; }
   .con-barra-pago { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
+/* MOV-006: en el teléfono el checkout empieza directo en el formulario: la ruta de navegación
+   (que con nombres largos ocupaba 3 líneas) sobra porque ya está «Volver a la experiencia» */
+@media (max-width: 640px) {
+  .checkout-page .breadcrumbs { display: none; }
+  .checkout-page .page-head { padding-top: 0 !important; }
+  .checkout-page .page-head h1 { font-size: 1.45rem; margin-bottom: 4px; }
 }
 .order-summary { position: sticky; top: calc(var(--header-h) + 16px); }
 .order-summary .os-img { aspect-ratio: 16/9; border-radius: var(--r) var(--r) 0 0; overflow: hidden; }
@@ -430,8 +440,9 @@
 .info-list .ti-icon { width: 40px; height: 40px; border-radius: 10px; background: var(--primary-50); color: var(--primary); display: grid; place-items: center; flex-shrink: 0; }
 .help-grid { display: grid; grid-template-columns: 240px 1fr; gap: 32px; align-items: start; }
 .help-nav { position: sticky; top: calc(var(--header-h) + 16px); display: grid; gap: 4px; }
-.help-nav a { padding: 8px 12px; border-radius: 8px; text-decoration: none; color: var(--text-2); font-weight: 600; font-size: 0.93rem; }
-.help-nav a:hover { background: var(--surface-2); }
+/* :not(.btn): el botón «¿No encuentras la respuesta?» conserva sus colores (antes gris sobre verde, 1,6:1) */
+.help-nav a:not(.btn) { padding: 8px 12px; border-radius: 8px; text-decoration: none; color: var(--text-2); font-weight: 600; font-size: 0.93rem; }
+.help-nav a:not(.btn):hover { background: var(--surface-2); }
 @media (max-width: 800px) { .help-grid { grid-template-columns: 1fr; } .help-nav { position: static; display: flex; flex-wrap: wrap; } }
 .not-found { text-align: center; padding: 80px 20px; }
 .not-found .big { font-family: var(--font-head); font-size: 6rem; font-weight: 700; color: var(--primary-100); line-height: 1; }
@@ -553,7 +564,7 @@ body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-are
     left: min(0px, calc((100% - 44px) / 2)); right: min(0px, calc((100% - 44px) / 2));
   }
   .btn-sm, .chip { min-height: 44px; }
-  .help-nav a { display: flex; align-items: center; min-height: 44px; }
+  .help-nav a:not(.btn) { display: flex; align-items: center; min-height: 44px; }
 }
 
 /* MOV-017: al llevar un campo a la vista, que no quede debajo de una barra fija inferior */

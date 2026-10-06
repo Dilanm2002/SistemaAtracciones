@@ -355,7 +355,7 @@
 /* ── Calendario de disponibilidad ────────────────────────────────────── */
 .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .cal-head strong { font-family: var(--font-head); }
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .cal-dow { text-align: center; font-size: 0.72rem; font-weight: 700; color: var(--muted); padding: 4px 0; text-transform: uppercase; }
 .cal-day {
   position: relative;

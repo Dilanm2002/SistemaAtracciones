@@ -14,7 +14,7 @@ export default defineConfig({
   reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: { baseURL: 'http://127.0.0.1:4173', trace: 'retain-on-failure', locale: 'es-EC', timezoneId: 'America/Guayaquil' },
   projects: [
-    { name: 'iPhone SE', use: chromium('iPhone SE') },
+    { name: 'iPhone SE', use: chromium('iPhone SE (3rd gen)') }, // 375×667, el mínimo real de la matriz de la auditoría
     { name: 'iPhone 13', use: chromium('iPhone 13') },
     { name: 'Pixel 5', use: chromium('Pixel 5') },
     { name: 'iPad Mini', use: chromium('iPad Mini') },

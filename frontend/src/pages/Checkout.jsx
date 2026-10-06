@@ -218,7 +218,7 @@ export default function Checkout() {
   );
 
   return (
-    <div className={`container${isAuth && step === 2 ? ' con-barra-pago' : ''}`} style={{ paddingTop: 24 }}>
+    <div className={`container checkout-page${isAuth && step === 2 ? ' con-barra-pago' : ''}`} style={{ paddingTop: 24 }}>
       <Breadcrumbs items={[{ label: 'Inicio', to: '/' }, { label: a.name, to: back }, { label: 'Reserva' }]} />
       <div className="page-head" style={{ paddingTop: 14 }}>
         <Link to={back} className="btn btn-ghost btn-sm" style={{ marginLeft: -12 }}><ArrowLeft size={16} /> Volver a la experiencia</Link>

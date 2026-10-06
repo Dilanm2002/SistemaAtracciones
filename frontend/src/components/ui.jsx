@@ -71,6 +71,8 @@ export function useFocusTrap(ref, active, onClose) {
         const els = [...ref.current.querySelectorAll(FOCUSABLE)];
         if (!els.length) return;
         const [f, l] = [els[0], els[els.length - 1]];
+        // Si el foco quedó fuera (p. ej. Tab justo al abrir, antes del foco inicial), se trae adentro
+        if (!ref.current.contains(document.activeElement)) { e.preventDefault(); (e.shiftKey ? l : f).focus(); return; }
         if (e.shiftKey && document.activeElement === f) { e.preventDefault(); l.focus(); }
         else if (!e.shiftKey && document.activeElement === l) { e.preventDefault(); f.focus(); }
       }

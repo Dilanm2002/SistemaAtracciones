@@ -7,6 +7,17 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.5.1] - 2026-10-06
+
+Fallos que encontró en su primera ejecución el nuevo job de pruebas móviles (Playwright y axe).
+
+### Corregido
+- **Detalle de una atracción a 320-375 px:** la columna principal se ensanchaba 36 px más que la pantalla (`minmax(0, 1fr)`), y el calendario de reserva (7 días × 38 px) no cabía a 320 px. Ya no hay scroll lateral.
+- **Ayuda:** el botón «¿No encuentras la respuesta?» heredaba el gris de los enlaces del menú lateral sobre fondo verde (contraste 1,6:1). Ahora conserva sus colores.
+- **Checkout en el teléfono:** sin la ruta de navegación (ya está «Volver a la experiencia») y con un título más compacto, el primer campo queda a la vista sin desplazarse.
+- **Trampa de foco de modales y menús:** si el foco quedó fuera, por ejemplo al pulsar Tab justo al abrir, Tab lo devuelve adentro en lugar de dejarlo escapar.
+- **Pruebas móviles:** el perfil «iPhone SE» pasa a ser el de 3.ª generación (375×667), el mínimo de la matriz de la auditoría. La prueba de reflow a 320 px se mantiene aparte.
+
 ## [2.5.0] - 2026-10-05
 
 Cierre de la auditoría móvil (`MOV-001` a `MOV-020`). El detalle y las mediciones están en [docs/CORRECCIONES-MOVIL.md](docs/CORRECCIONES-MOVIL.md).
