@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Building2, ImagePlus, Map, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Building2, Camera, ImagePlus, Map, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Categorias, Destinos, Geo, Operadores, Uploads } from '../api/client';
 import { FALLBACK_IMG, onImgError } from '../components/AttractionCard';
 import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, Switch, useAsync, useConfirm } from '../components/ui';
@@ -8,6 +8,7 @@ import { REGION } from '../utils/format';
 import { ACEPTA, esImagen, normalizarFoto } from '../utils/imagen';
 import { correo, LIMITES, limpiar, numero, ruc, soloDigitos, telefono, texto } from '../utils/validation';
 import { CATEGORY_ICONS, CategoryIcon } from '../utils/icons';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 /** Provincias del Ecuador (tabla provincia), agrupadas por región para los selects. */
 function useProvincias() {
@@ -212,6 +213,7 @@ export function CategoriasAdmin() {
 function DestinoModal({ item, onClose, onSaved }) {
   const toast = useToast();
   const fileRef = useRef(null);
+  const camRef = useRef(null); // MOV-013: cámara del celular
   const [f, setF] = useState(
     item
       ? { nombre: item.nombre, provincia_id: item.provincia_id, codigo_inec: item.codigo_inec, descripcion: item.descripcion ?? '', imagen: item.imagen ?? '', activo: item.activo }
@@ -268,9 +270,11 @@ function DestinoModal({ item, onClose, onSaved }) {
         <div className="field span-2">
           <span className="label">Imagen de portada</span>
           <div className="photo-list">
-            {f.imagen && <div className="photo-thumb"><img src={f.imagen} alt="Portada del destino" loading="lazy" decoding="async" onError={onImgError} /></div>}
+            {f.imagen && <div className="photo-thumb"><img {...fotoProps(f.imagen, SIZES.miniatura)} alt="Portada del destino" loading="lazy" decoding="async" onError={onImgError} /></div>}
             <button type="button" className="photo-add" onClick={() => fileRef.current?.click()} disabled={uploading}>{uploading ? <Spinner /> : <ImagePlus size={22} />} {f.imagen ? 'Cambiar' : 'Subir imagen'}</button>
             <input ref={fileRef} type="file" hidden accept={ACEPTA} onChange={(e) => e.target.files[0] && upload(e.target.files[0])} />
+            <button type="button" className="photo-add solo-tactil" onClick={() => camRef.current?.click()} disabled={uploading}><Camera size={22} /> Tomar foto</button>
+            <input ref={camRef} type="file" hidden accept="image/*" capture="environment" onChange={(e) => { if (e.target.files[0]) upload(e.target.files[0]); e.target.value = ''; }} />
           </div>
         </div>
         <div className="span-2"><Switch checked={f.activo} onChange={(v) => setF({ ...f, activo: v })} label="Visible en el sitio" /></div>
@@ -300,7 +304,7 @@ export function DestinosAdmin() {
                 <tr key={d.id}>
                   <td>
                     <div className="row" style={{ flexWrap: 'nowrap' }}>
-                      <img src={d.imagen || FALLBACK_IMG} alt="" width="56" height="42" loading="lazy" decoding="async" style={{ objectFit: 'cover', borderRadius: 8 }} onError={onImgError} />
+                      <img {...fotoProps(d.imagen || FALLBACK_IMG, '56px')} alt="" width="56" height="42" loading="lazy" decoding="async" style={{ objectFit: 'cover', borderRadius: 8 }} onError={onImgError} />
                       <div><strong>{d.nombre}</strong><div className="muted tiny">{d.provincia}</div></div>
                     </div>
                   </td>

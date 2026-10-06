@@ -1,6 +1,6 @@
 import { Suspense, useMemo, useRef, useState } from 'react';
 import { lazyRecarga } from '../utils/lazyRecarga';
-import { ArrowLeft, ArrowRight, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Star, Tag, Trash2, UploadCloud, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Star, Tag, Trash2, UploadCloud, X } from 'lucide-react';
 import { Atracciones, Uploads } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from '../components/ui';
@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { BADGE, LANG, PRODUCT_TYPE, REGION } from '../utils/format';
 import { ACEPTA, esImagen, normalizarFoto } from '../utils/imagen';
 import { ECUADOR, limitarDigitos, LIMITES, limpiar, mascaraNumero, numero, PRECIO_MAX, texto } from '../utils/validation';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 // El mapa (Leaflet) solo se descarga al abrir el formulario
 const MapaUbicacion = lazyRecarga(() => import('./MapaUbicacion'));
@@ -155,6 +156,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
   const [arrastrando, setArrastrando] = useState(false);
   const [apiError, setApiError] = useState(null);
   const fileRef = useRef(null);
+  const camRef = useRef(null); // MOV-013: abre directamente la cámara del celular
   const uploading = pendientes.length > 0;
   const dirty = JSON.stringify(f) !== JSON.stringify(initial);
   const destinoElegido = destinos.find((d) => String(d.codigo) === String(f.city));
@@ -199,6 +201,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     }
     setFotoErrores(errores);
     if (fileRef.current) fileRef.current.value = '';
+    if (camRef.current) camRef.current.value = '';
     if (!validos.length) return;
     tocar('photos');
     const lote = validos.map((file, i) => ({ id: `${Date.now()}-${i}-${file.name}`, url: URL.createObjectURL(file), nombre: file.name, file }));
@@ -482,11 +485,15 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             <button type="button" className="btn btn-sm" onClick={() => fileRef.current?.click()} disabled={uploading || f.photos.length >= MAX_FOTOS} aria-describedby="fotos-reglas">
               <ImagePlus size={16} aria-hidden="true" /> Elegir fotos
             </button>
+            <button type="button" className="btn btn-sm solo-tactil" onClick={() => camRef.current?.click()} disabled={uploading || f.photos.length >= MAX_FOTOS}>
+              <Camera size={16} aria-hidden="true" /> Tomar foto
+            </button>
             <p id="fotos-reglas" className="hint" style={{ margin: 0 }}>
               Cualquier formato (JPG, PNG, WebP, HEIC del iPhone, GIF…) y tamaño · las ajustamos automáticamente para que se vean bien
             </p>
             <span className="photo-count" aria-live="polite">{f.photos.length}/{MAX_FOTOS} fotos</span>
             <input ref={fileRef} type="file" accept={ACEPTA} multiple hidden onChange={(e) => upload([...e.target.files])} />
+            <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => upload([...e.target.files])} />
           </div>
           {fotoErrores.length > 0 && (
             <div style={{ marginTop: 10 }}>
@@ -502,7 +509,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
               <ul className="photo-grid">
                 {f.photos.map((url, i) => (
                   <li key={url} className={`photo-card${i === 0 ? ' is-cover' : ''}`}>
-                    <img src={url} alt={`Foto ${i + 1} de ${f.photos.length}`} loading="lazy" decoding="async" onError={onImgError} />
+                    <img {...fotoProps(url, SIZES.miniatura)} alt={`Foto ${i + 1} de ${f.photos.length}`} loading="lazy" decoding="async" onError={onImgError} />
                     {i === 0 ? <span className="badge badge-cta ph-main"><Star size={12} aria-hidden="true" /> Portada</span> : <span className="ph-num">{i + 1}</span>}
                     <div className="ph-actions">
                       {i > 0 && <button type="button" onClick={() => hacerPortada(i)} title="Usar como portada" aria-label={`Usar la foto ${i + 1} como portada`}><Star size={15} /></button>}

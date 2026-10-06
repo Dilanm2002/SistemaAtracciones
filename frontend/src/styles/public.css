@@ -7,6 +7,7 @@
 .site-header {
   position: sticky; top: 0; z-index: var(--z-header);
   background: rgba(250, 247, 242, 0.92);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
   backdrop-filter: saturate(160%) blur(10px);
   border-bottom: 1px solid var(--border);
 }
@@ -63,7 +64,8 @@
   padding: 48px 0 80px;
   color: #fff; isolation: isolate;
 }
-.hero-bg { position: absolute; inset: 0; z-index: -2; background: #1c2b2a center / cover no-repeat; }
+.hero-bg { position: absolute; inset: 0; z-index: -2; background: #1c2b2a; }
+.hero-bg img { width: 100%; height: 100%; object-fit: cover; object-position: center; display: block; }
 .hero::before {
   content: ''; position: absolute; inset: 0; z-index: -1;
   /* ACC-026: más oscuro a la izquierda, donde va el texto; medido sobre la foto real (peor píxel):
@@ -78,7 +80,7 @@
 }
 .hero h1 { color: #fff; font-size: clamp(2.2rem, 5.4vw, 3.8rem); max-width: 760px; text-shadow: 0 2px 20px rgba(0,0,0,0.25); }
 .hero-sub { font-size: clamp(1.02rem, 1.8vw, 1.2rem); max-width: 620px; color: #eef6f4; margin-bottom: 28px; }
-.hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; padding: 6px 14px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); border-radius: 99px; margin-bottom: 18px; backdrop-filter: blur(6px); }
+.hero-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.9rem; padding: 6px 14px; background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.25); border-radius: 99px; margin-bottom: 18px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .hero-credit { position: absolute; right: 16px; top: 12px; font-size: 0.72rem; color: rgba(255,255,255,0.88); text-shadow: 0 1px 3px rgba(0,0,0,0.6); background: rgba(8, 26, 24, 0.72); padding: 2px 8px; border-radius: 6px; } /* ACC-026: 7,6:1 sobre la zona clara */
 .hero-credit a { color: inherit; }
 
@@ -169,6 +171,14 @@
 .price small { font-family: var(--font-body); font-weight: 500; font-size: 0.78rem; color: var(--muted); }
 
 .a-card-skel .a-card-img { aspect-ratio: 4/3; }
+/* MOV-018: en teléfonos grandes y en horizontal caben 2 columnas (antes hacían falta 542 px); en los
+   angostos la foto es más baja (16:10), así entran más resultados por pantalla y la imagen pesa menos */
+@media (max-width: 760px) {
+  .grid-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+}
+@media (max-width: 487px) {
+  .a-card-img, .a-card-skel .a-card-img { aspect-ratio: 16 / 10; }
+}
 .a-card-skel .line { height: 14px; margin: 6px 0; }
 
 /* ── Regiones y destinos ─────────────────────────────────────────────── */
@@ -247,16 +257,6 @@
 .detail-head h1 { font-size: clamp(1.6rem, 3.4vw, 2.3rem); margin: 12px 0 10px; }
 .detail-meta { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; font-size: 0.93rem; color: var(--text-2); }
 .detail-meta a { color: inherit; }
-.gallery { display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr 1fr; gap: 10px; height: 440px; border-radius: var(--r-lg); overflow: hidden; }
-.gallery button { border: 0; padding: 0; background: var(--surface-2); overflow: hidden; position: relative; }
-.gallery button:first-child { grid-row: 1 / -1; }
-.gallery img { width: 100%; height: 100%; object-fit: cover; transition: transform 400ms ease; }
-.gallery button:hover img { transform: scale(1.03); }
-.gallery.single { grid-template-columns: 1fr; }
-.gallery.double { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
-.gallery.double button:first-child { grid-row: auto; }
-.gallery .more { position: absolute; right: 12px; bottom: 12px; }
-@media (max-width: 760px) { .gallery { grid-template-columns: 1fr; grid-template-rows: 1fr; height: 280px; } .gallery button:not(:first-child) { display: none; } }
 
 .detail-layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 40px; margin-top: 28px; align-items: start; }
 @media (max-width: 1000px) { .detail-layout { grid-template-columns: 1fr; } }
@@ -316,7 +316,7 @@
 @media (max-width: 560px) { .review-summary { grid-template-columns: 1fr; } }
 
 /* ── Lightbox ────────────────────────────────────────────────────────── */
-.lightbox { position: fixed; inset: 0; z-index: var(--z-modal); background: rgba(5, 12, 11, 0.94); display: flex; align-items: center; justify-content: center; }
+.lightbox { position: fixed; inset: 0; z-index: var(--z-modal); background: rgba(5, 12, 11, 0.94); display: flex; align-items: center; justify-content: center; touch-action: pinch-zoom; }
 .lightbox img { max-width: min(1200px, 92vw); max-height: 82vh; object-fit: contain; border-radius: 8px; }
 .lightbox .icon-btn { position: absolute; color: #fff; background: rgba(255,255,255,0.1); }
 .lightbox .icon-btn:hover { background: rgba(255,255,255,0.22); color: #fff; }
@@ -329,6 +329,28 @@
 .checkout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; align-items: start; }
 /* En celular el resumen va arriba y NO queda fijo: si no, tapaba el formulario al bajar */
 @media (max-width: 1000px) { .checkout { grid-template-columns: 1fr; } .checkout aside { order: -1; } .order-summary { position: static; } }
+/* MOV-006: resumen plegable en el celular (una línea con el total) y barra fija con el botón de pagar */
+.os-toggle, .checkout-barra { display: none; }
+@media (max-width: 1000px) {
+  .os-toggle {
+    display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 12px 16px;
+    background: none; border: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer;
+  }
+  .os-toggle-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .os-toggle-total { font-family: var(--font-head); font-weight: 700; }
+  .os-toggle-ver { display: inline-flex; align-items: center; gap: 2px; color: var(--primary); font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+  .order-summary:not(.colapsado) .os-toggle-ver svg { transform: rotate(180deg); }
+  .order-summary.colapsado .os-detalle { display: none; }
+  .checkout-barra {
+    display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-header);
+    justify-content: space-between; align-items: center; gap: 12px;
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+    background: var(--surface); border-top: 1px solid var(--border); box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.06);
+  }
+  .checkout-barra > div { display: flex; flex-direction: column; }
+  .checkout-barra .btn { min-width: 140px; }
+  .con-barra-pago { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
 .order-summary { position: sticky; top: calc(var(--header-h) + 16px); }
 .order-summary .os-img { aspect-ratio: 16/9; border-radius: var(--r) var(--r) 0 0; overflow: hidden; }
 .order-summary .os-img img { width: 100%; height: 100%; object-fit: cover; }
@@ -359,6 +381,7 @@
 /* ── Auth ────────────────────────────────────────────────────────────── */
 .auth-page { display: grid; grid-template-columns: 1fr 1fr; min-height: calc(100vh - var(--header-h)); }
 .auth-visual { position: relative; background: #1c2b2a center / cover; color: #fff; display: flex; align-items: flex-end; padding: 48px; isolation: isolate; }
+.auth-visual-img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
 .auth-visual::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(8,26,24,0.1), rgba(8,26,24,0.8)); }
 .auth-visual h2 { color: #fff; font-size: 2rem; }
 .auth-visual p { color: #e4efed; max-width: 440px; }
@@ -416,7 +439,6 @@
 .btn-on-dark { --btn-bg: transparent; --btn-ink: #fff; --btn-border: rgba(255, 255, 255, 0.55); }
 .btn-on-dark:hover { --btn-bg: rgba(255, 255, 255, 0.14); color: #fff; }
 
-@media (max-width: 760px) { .gallery.double { grid-template-columns: 1fr; } .gallery.double button:not(:first-child) { display: none; } }
 @media (max-width: 440px) {
   .hide-xs { display: none !important; }
   .header-inner { gap: 8px; }
@@ -476,8 +498,74 @@
 .mapa-buscar { display: flex; gap: 8px; margin-bottom: 8px; }
 .mapa-lienzo { height: 340px; border-radius: 12px; border: 1px solid var(--border-strong); overflow: hidden; z-index: 0; }
 .mapa-lienzo.is-invalid { border-color: var(--danger); }
+.mapa-marco { position: relative; }
+.mapa-mover { position: absolute; z-index: 500; right: 10px; top: 10px; background: var(--surface); box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.12)); }
+.mapa-mover.activo { background: var(--primary); color: #fff; border-color: var(--primary); }
+@media (max-width: 760px) { .mapa-lienzo { height: 240px; } }
 .coords-manual { margin-top: 10px; }
 .coords-manual summary { cursor: pointer; font-size: .85rem; color: var(--primary); font-weight: 600; }
 .mapa-resultados { list-style: none; margin: 0 0 8px; padding: 4px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface, #fff); max-height: 200px; overflow-y: auto; }
 .mapa-resultados button { width: 100%; text-align: left; padding: 8px 10px; border: 0; border-radius: 8px; background: none; font-size: .88rem; color: var(--text); }
 .mapa-resultados button:hover, .mapa-resultados button:focus-visible { background: var(--surface-2); color: var(--primary); }
+
+/* ══ Móvil: áreas seguras, unidades dinámicas, compatibilidad iOS y toque (AUDITORIA.MOVIL) ══════════ */
+
+/* MOV-009: sin desenfoque (Safari antiguo, modo de ahorro), las superficies de cristal pasan a ser opacas
+   para no perder contraste sobre lo que hay detrás */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .site-header { background: rgb(250, 247, 242); }
+  .badge-dark { background: rgba(12, 20, 19, 0.92); }
+  .hero-eyebrow { background: rgba(8, 26, 24, 0.6); }
+}
+
+/* MOV-008: con viewport-fit=cover la página llega a los bordes del iPhone; cada elemento fijo deja libre
+   la muesca / Dynamic Island (arriba), el indicador de inicio (abajo) y los lados en horizontal */
+body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+.site-header { padding-top: env(safe-area-inset-top, 0px); }
+.modal { max-height: calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+.toasts { right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+.drawer { padding-top: calc(18px + env(safe-area-inset-top, 0px)); padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+.lightbox .lb-close { top: calc(16px + env(safe-area-inset-top, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); }
+.lightbox .lb-count { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+.lightbox img { max-height: 82dvh; }
+.filters { max-height: calc(100dvh - var(--header-h) - 32px); }
+.auth-page { min-height: calc(100dvh - var(--header-h)); }
+@media (max-width: 640px) {
+  .modal { max-height: calc(94dvh - env(safe-area-inset-top, 0px)); }
+  .modal-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 960px) {
+  .filters.open .filters-drawer-head { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+  .filters.open .filters-drawer-foot { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+}
+@media (max-width: 1000px) {
+  .mobile-book-bar { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .has-book-bar .site-footer { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* MOV-012: en pantallas táctiles, todo control alcanza 44×44 px de área de toque (Apple HIG / Material).
+   En los botones de solo icono se amplía el área invisible (::after) sin cambiar su tamaño visual. */
+:where(.icon-btn, .car-flecha) { position: relative; }
+@media (pointer: coarse) {
+  .icon-btn::after, .car-flecha::after {
+    content: ''; position: absolute;
+    top: min(0px, calc((100% - 44px) / 2)); bottom: min(0px, calc((100% - 44px) / 2));
+    left: min(0px, calc((100% - 44px) / 2)); right: min(0px, calc((100% - 44px) / 2));
+  }
+  .btn-sm, .chip { min-height: 44px; }
+  .help-nav a { display: flex; align-items: center; min-height: 44px; }
+}
+
+/* MOV-017: al llevar un campo a la vista, que no quede debajo de una barra fija inferior */
+@media (max-width: 1000px) { html { scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); } }
+
+/* MOV-013: botones que solo tienen sentido en pantallas táctiles (p. ej. «Tomar foto» con la cámara) */
+.solo-tactil { display: none !important; }
+@media (pointer: coarse) { .solo-tactil { display: inline-flex !important; } }
+
+/* MOV-020: las pestañas (p. ej. Mis reservas) se reparten el ancho y, si no caben, pasan a otra línea
+   en lugar de quedar ocultas en un scroll horizontal sin barra */
+@media (max-width: 480px) {
+  .tabs { flex-wrap: wrap; overflow-x: visible; }
+  .tab { flex: 1 1 auto; justify-content: center; padding: 10px 10px; }
+}

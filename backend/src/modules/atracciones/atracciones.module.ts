@@ -1,3 +1,4 @@
+import { CalendarioController } from './calendario.controller';
 import { MediaController } from './media.controller';
 import { Module } from '@nestjs/common';
 import { CommonModule } from '../../common/common.module';
@@ -18,7 +19,7 @@ import { ReservasService } from './reservas.service';
  */
 @Module({
   imports: [CommonModule],
-  controllers: [AtraccionesController, CatalogoController, AdminAtraccionesController, FavoritosController, MediaController],
+  controllers: [AtraccionesController, CatalogoController, AdminAtraccionesController, FavoritosController, MediaController, CalendarioController],
   providers: [AtraccionesService, ReservasService, ResenasService, CatalogoService, ReportesService, AtraccionMapper],
   exports: [AtraccionesService, AtraccionMapper],
 })

@@ -3,13 +3,24 @@ import { CheckCircle2, Clock, Heart, MapPin } from 'lucide-react';
 import { useFavorites } from '../context/FavoritesContext';
 import { BADGE, badgeCls, fmtDuration, fmtMoney, insigniasTarjeta } from '../utils/format';
 import { RatingInline } from './ui';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 export const FALLBACK_IMG =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 3'%3E%3Crect fill='%23ebe4d8' width='4' height='3'/%3E%3Cpath d='M0 3 1.5 1.3 2.4 2.2 3 1.7 4 3z' fill='%23d3c8b6'/%3E%3C/svg%3E";
 
+/**
+ * Si una foto falla: primero se reintenta con la original (sin srcset, por si falta una variante)
+ * y, si también falla, se muestra el marcador gris.
+ */
 export const onImgError = (e) => {
-  e.currentTarget.onerror = null;
-  e.currentTarget.src = FALLBACK_IMG;
+  const img = e.currentTarget;
+  if (img.hasAttribute('srcset')) {
+    img.removeAttribute('srcset');
+    img.removeAttribute('sizes');
+    return;
+  }
+  img.onerror = null;
+  img.src = FALLBACK_IMG;
 };
 
 export default function AttractionCard({ a, query = '' }) {
@@ -20,7 +31,7 @@ export default function AttractionCard({ a, query = '' }) {
   return (
     <article className="a-card">
       <div className="a-card-img">
-        <img src={a.photos?.[0]?.url ?? FALLBACK_IMG} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
+        <img {...fotoProps(a.photos?.[0]?.url ?? FALLBACK_IMG, SIZES.tarjeta)} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
         <div className="a-card-badges">
           {insigniasTarjeta(a.badges).map((b) => (
             <span key={b} className={`badge ${badgeCls(b, b === 'likely_to_sell_out' ? 'badge-dark' : 'badge-cta')}`}>{BADGE[b] ?? b}</span>

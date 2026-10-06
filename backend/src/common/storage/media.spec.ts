@@ -1,4 +1,25 @@
-import { firmaValida, firmarMedia, objetoValido } from './media';
+import { cargarSharp, firmaValida, firmarMedia, objetoValido, variante } from './media';
+
+describe('Variantes livianas de las fotos (MOV-002)', () => {
+  const foto = async () => (await cargarSharp())({ create: { width: 1600, height: 1067, channels: 3, background: '#2a7f62' } }).jpeg().toBuffer();
+
+  it('?w=480 y ?w=960 devuelven WebP a ese ancho', async () => {
+    for (const ancho of [480, 960]) {
+      const v = await variante(await foto(), ancho);
+      const m = await (await cargarSharp())(v!).metadata();
+      expect(m).toMatchObject({ format: 'webp', width: ancho });
+    }
+  });
+
+  it('otros anchos no se generan (no se puede pedir cualquier tamaño)', async () => {
+    expect(await variante(await foto(), 1234)).toBeNull();
+    expect(await variante(await foto(), NaN)).toBeNull();
+  });
+
+  it('si la imagen no se puede leer, se sirve el original (null)', async () => {
+    expect(await variante(Buffer.from('no es una imagen'), 480)).toBeNull();
+  });
+});
 
 describe('Fotos del bucket privado (SEG-008)', () => {
   const secreto = 'x'.repeat(40);

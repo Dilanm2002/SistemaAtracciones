@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { BADGE, badgeCls, insigniasTarjeta, fmtDuration, fmtMoney } from '../utils/format';
 import { texto } from '../utils/validation';
 import AtraccionForm from './AtraccionForm';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 /** Estados de revisión (migración 006): lo que sube una empresa pasa por el administrador. */
 export const ESTADO = {
@@ -31,7 +32,7 @@ function AdminCard({ a, isAdmin, onEdit, onToggle, onDelete, onApprove, onReject
       onMouseLeave={() => setTapped(false)}
     >
       <div className="adm-card-img">
-        <img src={a.photos[0]?.url} alt="" loading="lazy" onError={onImgError} />
+        <img {...fotoProps(a.photos[0]?.url, SIZES.tarjeta)} alt="" loading="lazy" decoding="async" onError={onImgError} />
         <div className="adm-card-badges">
           {a.status !== 'PUBLICADA' && <span className={`badge ${est.cls}`}>{a.status === 'EN_REVISION' ? <Clock size={12} /> : a.status === 'RECHAZADA' ? <XCircle size={12} /> : <EyeOff size={12} />} {est.label}</span>}
           {a.featured && <span className="badge badge-cta"><Star size={12} fill="currentColor" /> Destacada</span>}

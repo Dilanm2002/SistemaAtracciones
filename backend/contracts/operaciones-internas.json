@@ -68,7 +68,9 @@
       "GET /errores",
       "GET /errores/{tipo}",
       "GET /media/{archivo}",
-      "GET /media/{carpeta}/{archivo}"
+      "GET /media/{carpeta}/{archivo}",
+      "GET /atracciones/reservations/{reservationId}/calendar-link",
+      "GET /calendario/{archivo}"
     ],
     "empresas_proveedoras": [
       "POST /proveedores/solicitudes",

@@ -486,4 +486,27 @@ describeDb('Reservas (E2E)', () => {
       expect((await http(app).delete(`/atracciones/${atr}`).set(bearer(admin))).status).toBe(409);
     });
   });
+
+  describe('añadir al calendario (MOV-014)', () => {
+    it('el dueño recibe un enlace firmado que responde text/calendar; sin firma, con otra firma o de otro → 404', async () => {
+      const atr = await crearAtraccion();
+      const r = await reservar(atr, cliente, reserva(fechaEc(23)));
+      expect(r.status).toBe(201);
+      const id = r.body.reservation_id as string;
+
+      const link = await http(app).get(`/atracciones/reservations/${id}/calendar-link`).set(bearer(cliente));
+      expect(link.status).toBe(200);
+      const ruta = new URL(link.body.url).pathname.replace(/^\/api\/v1/, '') + new URL(link.body.url).search;
+      const ics = await http(app).get(ruta);
+      expect(ics.status).toBe(200);
+      expect(ics.headers['content-type']).toMatch(/^text\/calendar/);
+      expect(ics.text).toContain(`UID:${id}@descubre-ec`);
+      expect(ics.text).toContain(r.body.code);
+
+      expect((await http(app).get(`/calendario/${id}.ics`)).status).toBe(404); // sin firma
+      expect((await http(app).get(`/calendario/${randomUUID()}.ics${new URL(link.body.url).search}`)).status).toBe(404); // firma de otra reserva
+      // Otro cliente no puede pedir el enlace de una reserva ajena
+      expect((await http(app).get(`/atracciones/reservations/${id}/calendar-link`).set(bearer(ana))).status).toBe(404);
+    });
+  });
 });

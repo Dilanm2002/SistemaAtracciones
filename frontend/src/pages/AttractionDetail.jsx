@@ -11,8 +11,10 @@ import { Breadcrumbs, EmptyState, ErrorState, RatingInline, usePageTitle } from 
 import { recentStore, useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { BADGE, badgeCls, fmtDuration, fmtLangs, fmtMoney, PRODUCT_TYPE } from '../utils/format';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 function Lightbox({ photos, index, onClose, onIndex }) {
+  const toque = useRef(null);
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -25,7 +27,23 @@ function Lightbox({ photos, index, onClose, onIndex }) {
   }, [index, photos.length, onClose, onIndex]);
 
   return (
-    <div className="lightbox" role="dialog" aria-modal="true" aria-label="Galería de fotos" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Galería de fotos"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      // MOV-019: en el celular se pasa de foto deslizando el dedo (y se cierra deslizando hacia abajo)
+      onTouchStart={(e) => { toque.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+      onTouchEnd={(e) => {
+        if (!toque.current) return;
+        const dx = e.changedTouches[0].clientX - toque.current.x;
+        const dy = e.changedTouches[0].clientY - toque.current.y;
+        toque.current = null;
+        if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) && photos.length > 1) onIndex((index + (dx < 0 ? 1 : -1) + photos.length) % photos.length);
+        else if (dy > 80 && Math.abs(dy) > Math.abs(dx)) onClose();
+      }}
+    >
       <img src={photos[index].url} alt={`Foto ${index + 1} de ${photos.length}`} loading="eager" decoding="async" /* foto abierta en el visor: visible de inmediato (WEB-006) */ />
       <button className="icon-btn lb-close" onClick={onClose} aria-label="Cerrar galería" autoFocus><X size={24} /></button>
       {photos.length > 1 && (
@@ -51,7 +69,13 @@ function Carrusel({ photos, nombre, onAbrir }) {
   const ir = (k) => setI(((k % n) + n) % n);
   // Precarga la siguiente para que el cambio sea inmediato
   useEffect(() => {
-    if (n > 1) new Image().src = photos[(i + 1) % n].url;
+    if (n > 1) {
+      // Precarga la MISMA variante que elegirá el navegador para la siguiente foto
+      const img = new Image();
+      const p = fotoProps(photos[(i + 1) % n].url, SIZES.galeria, { completa: true });
+      if (p.srcSet) { img.sizes = p.sizes; img.srcset = p.srcSet; }
+      img.src = p.src;
+    }
   }, [i, n, photos]);
 
   return (
@@ -80,7 +104,7 @@ function Carrusel({ photos, nombre, onAbrir }) {
         }}
       >
         <button type="button" className="car-foto" onClick={() => onAbrir(i)} aria-label={`Ver la foto ${i + 1} de ${n} a pantalla completa`}>
-          <img key={photos[i].url} src={photos[i].url} alt={i === 0 ? nombre : `${nombre}, foto ${i + 1}`} loading="eager" decoding="async" {...(i === 0 ? { fetchpriority: 'high' } : {})} onError={onImgError} />
+          <img key={photos[i].url} {...fotoProps(photos[i].url, SIZES.galeria, { completa: true })} alt={i === 0 ? nombre : `${nombre}, foto ${i + 1}`} loading="eager" decoding="async" {...(i === 0 ? { fetchpriority: 'high' } : {})} onError={onImgError} />
         </button>
         {n > 1 && <span className="car-contador" aria-live="polite">{i + 1} / {n}</span>}
       </div>
@@ -93,7 +117,7 @@ function Carrusel({ photos, nombre, onAbrir }) {
         <div className="car-miniaturas" role="group" aria-label="Elegir foto">
           {photos.map((p, k) => (
             <button key={p.url} type="button" aria-current={k === i ? 'true' : undefined} aria-label={`Foto ${k + 1}`} onClick={() => setI(k)}>
-              <img src={p.url} alt="" loading="lazy" decoding="async" onError={onImgError} />
+              <img {...fotoProps(p.url, SIZES.miniatura)} alt="" loading="lazy" decoding="async" onError={onImgError} />
             </button>
           ))}
         </div>

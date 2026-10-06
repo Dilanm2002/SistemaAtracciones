@@ -8,6 +8,7 @@ import { Alert, EmptyState, ErrorState, Field, Modal, Spinner, StatusBadge, useA
 import { useToast } from '../context/ToastContext';
 import { fmtDate, fmtDateLong, fmtDateTime, fmtMoney, PAYMENT, salidaEc } from '../utils/format';
 import { downloadIcs } from './Confirmation';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 const MOTIVOS = ['Cambio de planes', 'Problemas con mi vuelo o transporte', 'Motivos de salud', 'Clima o seguridad', 'Encontré otra opción', 'Otro'];
 
@@ -192,7 +193,7 @@ export default function MyReservations() {
         <div className="res-list">
           {list.map((r) => (
             <article key={r.reservation_id} className="card res-card">
-              <img src={r.attraction.photo} alt="" loading="lazy" decoding="async" onError={onImgError} />
+              <img {...fotoProps(r.attraction.photo, SIZES.resumen)} alt="" loading="lazy" decoding="async" onError={onImgError} />
               <div>
                 <div className="row" style={{ gap: 8 }}>
                   <StatusBadge status={r.status} />

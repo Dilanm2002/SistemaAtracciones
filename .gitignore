@@ -6,3 +6,7 @@ backend/public/uploads/*
 !backend/public/uploads/.gitkeep
 .env.*
 !.env.example
+
+# Pruebas móviles (Playwright)
+playwright-report/
+test-results/

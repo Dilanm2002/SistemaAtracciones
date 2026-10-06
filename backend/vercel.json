@@ -22,5 +22,16 @@
       "source": "/((?!img/|uploads/|vendor/).*)",
       "destination": "/api"
     }
+  ],
+  "headers": [
+    {
+      "source": "/img/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800, s-maxage=31536000"
+        }
+      ]
+    }
   ]
 }

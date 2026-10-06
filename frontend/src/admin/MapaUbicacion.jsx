@@ -4,7 +4,7 @@ import 'leaflet/dist/leaflet.css';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
-import { Crosshair, Search } from 'lucide-react';
+import { Crosshair, Move, Search } from 'lucide-react';
 import { Spinner } from '../components/ui';
 import { ECUADOR } from '../utils/validation';
 
@@ -13,6 +13,8 @@ const PIN = L.icon({ iconUrl, iconRetinaUrl, shadowUrl, iconSize: [25, 41], icon
 const CENTRO_EC = [-1.6, -78.5];
 const LIMITES_EC = L.latLngBounds([ECUADOR.latMin, ECUADOR.lngMin], [ECUADOR.latMax, ECUADOR.lngMax]);
 const NOMINATIM = 'https://nominatim.openstreetmap.org';
+/** MOV-015: en pantallas táctiles el mapa no captura el arrastre de un dedo (si no, el formulario no se puede desplazar). */
+const TACTIL = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
 const redondear = (n) => Math.round(n * 1e6) / 1e6;
 const dentro = (lat, lng) => lat >= ECUADOR.latMin && lat <= ECUADOR.latMax && lng >= ECUADOR.lngMin && lng <= ECUADOR.lngMax;
 
@@ -56,9 +58,17 @@ export default function MapaUbicacion({ lat, lng, onChange, ciudad, onDireccion,
     }
   };
 
+  const [moverMapa, setMoverMapa] = useState(!TACTIL);
+  useEffect(() => {
+    const m = mapa.current;
+    if (!m) return;
+    if (moverMapa) m.dragging.enable();
+    else m.dragging.disable();
+  }, [moverMapa]);
+
   // Crear el mapa una sola vez
   useEffect(() => {
-    const m = L.map(contenedor.current, { maxBounds: LIMITES_EC.pad(0.2), minZoom: 5 }).setView(hayPunto ? [Number(lat), Number(lng)] : CENTRO_EC, hayPunto ? 14 : 6);
+    const m = L.map(contenedor.current, { maxBounds: LIMITES_EC.pad(0.2), minZoom: 5, dragging: !TACTIL }).setView(hayPunto ? [Number(lat), Number(lng)] : CENTRO_EC, hayPunto ? 14 : 6);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>',
@@ -154,7 +164,15 @@ export default function MapaUbicacion({ lat, lng, onChange, ciudad, onDireccion,
           ))}
         </ul>
       )}
-      <div ref={contenedor} className={`mapa-lienzo${error ? ' is-invalid' : ''}`} aria-label="Mapa: haz clic para marcar la ubicación de la actividad" />
+      <div className="mapa-marco">
+        <div ref={contenedor} className={`mapa-lienzo${error ? ' is-invalid' : ''}`} aria-label="Mapa: haz clic para marcar la ubicación de la actividad" />
+        {TACTIL && (
+          <button type="button" className={`btn btn-sm mapa-mover${moverMapa ? ' activo' : ''}`} aria-pressed={moverMapa} onClick={() => setMoverMapa((v) => !v)}>
+            <Move size={16} aria-hidden="true" /> {moverMapa ? 'Listo' : 'Mover el mapa'}
+          </button>
+        )}
+      </div>
+      {TACTIL && !moverMapa && <p className="hint" style={{ margin: '6px 0 0' }}>Desliza fuera del mapa para seguir con el formulario. Toca el mapa para marcar el lugar o pellizca para acercar.</p>}
       <p className="hint" style={{ margin: '6px 0 0', display: 'flex', gap: 6, alignItems: 'center' }}>
         <Crosshair size={14} aria-hidden="true" />
         {hayPunto ? `Ubicación marcada (${Number(lat).toFixed(5)}, ${Number(lng).toFixed(5)}). Arrastra el marcador para ajustarla.` : 'Haz clic en el mapa o busca el lugar para marcar dónde se realiza la actividad.'}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Table2, BarChart3 } from 'lucide-react';
 
@@ -87,21 +87,55 @@ export function ColumnChart({ data, dataKey, name, fmt, height = 260, color = SE
   );
 }
 
-/** Barras horizontales para rankings (nombres largos legibles). Etiqueta directa del valor. */
+/** Ancho actual de un contenedor (se actualiza al girar el teléfono o redimensionar). */
+function useAncho() {
+  const ref = useRef(null);
+  const [ancho, setAncho] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(([e]) => setAncho(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, ancho];
+}
+
+const recortar = (v, n) => (v.length > n ? `${v.slice(0, n - 1)}…` : v);
+
+/**
+ * Barras horizontales para rankings (nombres largos legibles). Etiqueta directa del valor.
+ * MOV-003: en contenedores angostos (teléfono) el nombre va ENCIMA de su barra y la barra usa todo
+ * el ancho; antes la columna fija de nombres (230 px) dejaba ~5 px para las barras.
+ */
 export function RankChart({ data, dataKey, name, fmt, color = SERIES[0] }) {
-  const height = Math.max(160, data.length * 38 + 20);
+  const [ref, ancho] = useAncho();
+  const angosto = ancho > 0 && ancho < 560;
+  const height = Math.max(160, data.length * (angosto ? 52 : 38) + 20);
+  const valor = (v) => (fmt ? fmt(v, true) : v);
+  const maxChars = Math.max(16, Math.floor((ancho - 16) / 7));
   return (
-    <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 64, left: 4, bottom: 4 }} barCategoryGap="24%">
-        <CartesianGrid horizontal={false} stroke={INK.grid} />
-        <XAxis type="number" hide />
-        <YAxis type="category" dataKey="label" width={230} tickLine={false} axisLine={false} tick={{ fill: INK.primary, fontSize: 12 }} tickFormatter={(v) => (v.length > 34 ? `${v.slice(0, 33)}…` : v)} />
-        <Tooltip cursor={{ fill: 'rgba(15,118,110,0.06)' }} content={<ChartTooltip fmt={fmt} />} />
-        <Bar dataKey={dataKey} name={name} fill={color} radius={[0, 4, 4, 0]} maxBarSize={22}>
-          <LabelList dataKey={dataKey} position="right" formatter={(v) => (fmt ? fmt(v, true) : v)} style={{ fill: INK.primary, fontSize: 12, fontWeight: 600 }} />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
+    <div ref={ref} style={{ width: '100%' }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={data} layout="vertical" margin={{ top: angosto ? 18 : 4, right: angosto ? 44 : 64, left: 4, bottom: 4 }} barCategoryGap={angosto ? '42%' : '24%'} accessibilityLayer>
+          <CartesianGrid horizontal={false} stroke={INK.grid} />
+          <XAxis type="number" hide />
+          <YAxis type="category" dataKey="label" hide={angosto} width={angosto ? 0 : 230} tickLine={false} axisLine={false} tick={{ fill: INK.primary, fontSize: 12 }} tickFormatter={(v) => recortar(v, 34)} />
+          <Tooltip cursor={{ fill: 'rgba(15,118,110,0.06)' }} content={<ChartTooltip fmt={fmt} />} />
+          <Bar dataKey={dataKey} name={name} fill={color} radius={[0, 4, 4, 0]} maxBarSize={22}>
+            {angosto && (
+              <LabelList
+                dataKey="label"
+                content={({ x, y, value }) => (
+                  <text x={x} y={y - 6} fill={INK.primary} fontSize={12} fontWeight={600}>{recortar(String(value), maxChars)}</text>
+                )}
+              />
+            )}
+            <LabelList dataKey={dataKey} position="right" formatter={valor} style={{ fill: INK.primary, fontSize: 12, fontWeight: 600 }} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 

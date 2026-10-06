@@ -6,8 +6,22 @@ import { Alert, ErrorState, Spinner, StatusBadge, usePageTitle } from '../compon
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtDateTime, fmtMoney, PAYMENT } from '../utils/format';
 
-/** Genera un archivo .ics para agregar la actividad al calendario del viajero. */
-export function downloadIcs(r) {
+/**
+ * «Añadir a mi calendario» (MOV-014). Se abre un enlace firmado de la API que responde text/calendar:
+ * iPhone muestra «Añadir al calendario» y Android/escritorio descargan el .ics. Si la API no
+ * responde, se genera el archivo en el navegador (funciona en Android y escritorio).
+ */
+export async function downloadIcs(r) {
+  try {
+    const { url } = await Reservas.calendario(r.reservation_id);
+    window.location.assign(url);
+    return;
+  } catch {
+    descargarIcsLocal(r);
+  }
+}
+
+function descargarIcsLocal(r) {
   const start = `${r.date.replace(/-/g, '')}T${r.time.replace(':', '')}00`;
   const ics = [
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Descubre EC//Reservas//ES',

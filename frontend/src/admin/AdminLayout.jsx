@@ -3,10 +3,10 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import '../styles/admin.css';
 import {
   BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, Home, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
-  MessageSquareText, Mountain, Shapes, Store, UserCog, Users, Webhook,
+  MessageSquareText, Mountain, Shapes, Store, UserCog, Users, Webhook, X,
 } from 'lucide-react';
 import { Atracciones, Auth, Mensajes, Proveedores, Reservas } from '../api/client';
-import { Field, Modal, RequiredLegend, Spinner } from '../components/ui';
+import { Field, Modal, RequiredLegend, Spinner, useFocusTrap } from '../components/ui';
 import { LIMITES, password } from '../utils/validation';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -121,18 +121,17 @@ export default function AdminLayout() {
     const c = document.querySelector('.adm-content');
     if (c) { c.scrollTop = 0; c.focus({ preventScroll: true }); }
   }, [pathname]);
-  // Menú móvil: al abrir, foco al primer enlace; Esc cierra y devuelve el foco al botón (ACC-005)
+  // Menú móvil (MOV-004, ACC-005): el foco queda DENTRO del menú (Tab no se escapa detrás del velo),
+  // Esc o el velo lo cierran y el foco vuelve al botón que lo abrió (lo hace useFocusTrap).
   const toggleRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const cerrarMenu = useCallback(() => setOpen(false), []);
+  useFocusTrap(sidebarRef, open, cerrarMenu);
   useEffect(() => {
     if (!open) return undefined;
-    const t = setTimeout(() => document.querySelector('#adm-sidebar .adm-nav-item')?.focus(), 30);
-    const esc = (e) => {
-      if (e.key !== 'Escape') return;
-      setOpen(false);
-      toggleRef.current?.focus();
-    };
-    document.addEventListener('keydown', esc);
-    return () => { clearTimeout(t); document.removeEventListener('keydown', esc); };
+    // Al abrir, el foco va al módulo actual (no siempre al primero)
+    const t = setTimeout(() => (document.querySelector('#adm-sidebar .adm-nav-item.active') ?? document.querySelector('#adm-sidebar .adm-nav-item'))?.focus(), 40);
+    return () => clearTimeout(t);
   }, [open]);
 
   const nav = NAV.map((g) => ({ ...g, items: g.items.filter((i) => hasScope(i.scope)) })).filter((g) => g.items.length);
@@ -146,7 +145,14 @@ export default function AdminLayout() {
     <AdminCtx.Provider value={{ counts, refreshCounts }}>
       <a href="#adm-content" className="skip-link">Saltar al contenido</a>
       <div className="adm-layout">
-        <aside className={`adm-sidebar ${open ? 'open' : ''}`} id="adm-sidebar" aria-label="Navegación del panel">
+        <aside
+          ref={sidebarRef}
+          className={`adm-sidebar ${open ? 'open' : ''}`}
+          id="adm-sidebar"
+          aria-label="Navegación del panel"
+          {...(open ? { role: 'dialog', 'aria-modal': 'true' } : {})}
+        >
+          <button type="button" className="icon-btn adm-close" onClick={cerrarMenu} aria-label="Cerrar menú"><X size={20} aria-hidden="true" /></button>
           <Link to="/admin" className="adm-brand">
             <span className="brand-mark" aria-hidden="true"><Mountain size={20} color="#1c1917" strokeWidth={2.4} /></span>
             <span>
@@ -185,7 +191,9 @@ export default function AdminLayout() {
             </div>
           </div>
         </aside>
-        <div className={`adm-overlay ${open ? 'open' : ''}`} onClick={() => setOpen(false)} aria-hidden="true" />
+        {/* El velo es un control real de cierre (antes era un div con aria-hidden); fuera del orden de Tab:
+            con teclado se cierra con Esc o con el botón «Cerrar menú» */}
+        <button type="button" className={`adm-overlay ${open ? 'open' : ''}`} onClick={cerrarMenu} aria-label="Cerrar menú" tabIndex={-1} />
 
         <div className="adm-main">
           <header className="adm-topbar">

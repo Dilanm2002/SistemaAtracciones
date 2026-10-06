@@ -7,6 +7,8 @@ import { AuthProvider } from './context/AuthContext';
 import { FavoritesProvider } from './context/FavoritesContext';
 import { ToastProvider } from './context/ToastContext';
 import { recargarPorVersion } from './utils/lazyRecarga';
+import { protegerCamposDelTeclado } from './utils/teclado';
+import './styles/fonts.css';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/public.css';
@@ -32,6 +34,8 @@ const PRECARGA = [
 ];
 // Si un archivo de una versión anterior ya no existe, recargar con la nueva (no pantalla en blanco)
 window.addEventListener('vite:preloadError', (e) => { if (recargarPorVersion()) e.preventDefault(); });
+
+protegerCamposDelTeclado();
 
 PRECARGA.forEach(([re, cargar]) => re.test(window.location.pathname) && cargar().catch(() => {}));
 

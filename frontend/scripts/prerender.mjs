@@ -23,6 +23,8 @@ const recortar = (s, n) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` :
 function pagina({ ruta, titulo, descripcion, imagen, cuerpo, ld }) {
   const url = `${SITIO}${ruta}`;
   let html = plantilla
+    // La precarga del hero solo sirve en el inicio: en las demás páginas gastaría datos (MOV-001)
+    .replace(/\s*<link rel="preload" as="image"[^>]*data-hero[^>]*>/, '')
     .replace(/<title>[^<]*<\/title>/, `<title>${esc(titulo)}</title>`)
     .replace(/(<meta name="description" content=")[^"]*(")/, `$1${esc(descripcion)}$2`)
     .replace(/(<link rel="canonical" href=")[^"]*(")/, `$1${esc(url)}$2`)

@@ -7,6 +7,54 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.5.0] - 2026-10-05
+
+Cierre de la auditoría móvil (`MOV-001` a `MOV-020`). El detalle y las mediciones están en [docs/CORRECCIONES-MOVIL.md](docs/CORRECCIONES-MOVIL.md).
+
+### Rendimiento
+- **Primera visita en un teléfono: de ~521 KB a ~205 KB.**
+  - Hero en AVIF, WebP y JPEG a 4 anchos: el teléfono baja 54 KB en lugar de 429 KB.
+  - Fuentes autoalojadas: 3 archivos (63 KB) en lugar de 7 pesos de Google Fonts.
+  - Caché de un año para `/assets`, `/img` y la vista previa al compartir (MOV-001, MOV-011).
+- **Fotos del catálogo en el ancho justo** con `srcset`/`sizes` (MOV-002):
+  - Las fotos de ejemplo tienen variantes WebP de 480 y 960 px.
+  - La API sirve las fotos subidas reducidas con `?w=480|960` (sharp), con caché en el CDN.
+  - Una tarjeta en el celular baja ~100 KB en lugar de ~380 KB.
+
+### Añadido
+- **App instalable:**
+  - Íconos de 192, 512, *maskable* y Apple de 180 px.
+  - Metadatos `apple-mobile-web-app-*` (MOV-007).
+- **«Añadir a mi calendario» en iPhone:**
+  - El dueño de la reserva recibe un enlace firmado (2 h) a un `.ics` real (`text/calendar`, RFC 5545, con aviso 2 h antes).
+  - Rutas: `GET /atracciones/reservations/{id}/calendar-link` y `GET /calendario/{id}.ics` (MOV-014).
+- **Botón «Tomar foto»** en pantallas táctiles: abre directamente la cámara al subir fotos de una actividad o la portada de un destino (MOV-013).
+- **CI: job «Frontend móvil»** (MOV-010):
+  - Playwright en iPhone SE, iPhone 13, Pixel 5 e iPad Mini, con axe para accesibilidad.
+  - Comprueba: reflow a 320 px, peso del hero, variantes de foto, checkout y menú del panel.
+  - Presupuesto de peso que falla el build si la primera visita vuelve a engordar.
+
+### Corregido
+- **Gráfico de rankings** legible en el celular: el nombre va sobre su barra, en lugar de una columna fija de 230 px que dejaba 5 px de barra (MOV-003).
+- **Menú del panel en el celular** (MOV-004):
+  - El foco queda dentro del menú y se cierra con Escape, con el velo o con un botón «Cerrar menú».
+  - Al cerrarlo, el foco vuelve al botón que lo abrió.
+- **Tabla de reportes:** en el celular no tiene un scroll vertical propio que «atasque» el dedo (MOV-005).
+- **Checkout en el celular** (MOV-006):
+  - El resumen se pliega a una línea con el total («Ver detalle»).
+  - En el pago, una barra fija muestra el total y el botón «Pagar».
+- **Áreas seguras del iPhone** (muesca, Dynamic Island, indicador de inicio): `viewport-fit=cover` junto con `env(safe-area-inset-*)` en todo elemento fijo y `dvh` en modales y visor (MOV-008).
+- **Superficies de cristal:** prefijo `-webkit-backdrop-filter` y fondo opaco cuando no hay desenfoque (MOV-009).
+- **Objetivos táctiles de 44 px** en pantallas táctiles: botones de icono, flechas del carrusel, chips, botones pequeños, ayuda y menú del panel (MOV-012).
+- **Mapa dentro del formulario** (MOV-015):
+  - En pantallas táctiles no captura el arrastre: un dedo desplaza el formulario, un toque marca el lugar y se pellizca para acercar.
+  - El botón «Mover el mapa» activa el arrastre. En el celular, el mapa es más bajo.
+- **Navegadores soportados declarados** en Vite: Safari/iOS 16.4, Chrome/Edge 111 y Firefox 114 (MOV-016).
+- **El teclado virtual no tapa el campo enfocado:** `interactive-widget=resizes-content` en Android y `visualViewport` en iPhone (MOV-017).
+- **Catálogo:** 2 columnas en teléfonos grandes y en horizontal; en los angostos, fotos 16:10 para ver más resultados por pantalla (MOV-018).
+- **Visor de fotos a pantalla completa:** se pasa de foto deslizando y se cierra deslizando hacia abajo. Se eliminó el CSS de la galería antigua (MOV-019).
+- **Pestañas** (p. ej. «Mis reservas») a 320 px: se reparten el ancho y pasan a otra línea en lugar de quedar ocultas (MOV-020).
+
 ## [2.4.3] - 2026-10-05
 
 ### Corregido

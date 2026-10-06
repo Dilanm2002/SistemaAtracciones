@@ -9,8 +9,10 @@ import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useFavorites } from '../context/FavoritesContext';
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
+import { AUTH_BG } from '../utils/heroImg';
 import { respuestaGoogle, rutaDespuesDeGoogle } from '../utils/google';
 import { correo, documento, LIMITES, limpiar, nombrePersona, password, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 // ── Favoritos ────────────────────────────────────────────────────────────
 export function Favorites() {
@@ -66,7 +68,7 @@ export function Destinations() {
               <div className="dest-grid">
                 {list.map((d) => (
                   <Link key={d.id} to={`/explorar?destino=${d.codigo}`} className="dest-card">
-                    <img src={d.imagen} alt="" loading="lazy" onError={onImgError} />
+                    <img {...fotoProps(d.imagen, SIZES.destino)} alt="" loading="lazy" decoding="async" onError={onImgError} />
                     <div className="rc-body">
                       <h3>{d.nombre}</h3>
                       <p>{d.total_atracciones} experiencia{d.total_atracciones === 1 ? '' : 's'} · {d.provincia}</p>
@@ -240,7 +242,9 @@ export function Contact() {
 function AuthLayout({ title, subtitle, children, footer }) {
   return (
     <div className="auth-page">
-      <div className="auth-visual" style={{ backgroundImage: 'url(/img/auth-bg.jpg)' }}>
+      <div className="auth-visual">
+        {/* Solo en escritorio (en celular .auth-visual se oculta y la imagen no se descarga: loading="lazy") */}
+        <img className="auth-visual-img" src={AUTH_BG.w960} srcSet={AUTH_BG.srcSet} sizes="50vw" alt="" loading="lazy" decoding="async" />
         <div>
           <h2>Tu próxima aventura empieza aquí</h2>
           <p>Guarda tus reservas, cancela sin llamadas y recibe recomendaciones de viaje por todo el Ecuador.</p>

@@ -95,6 +95,39 @@ jobs:
       - name: npm audit (todas las dependencias, también las de desarrollo; falla con high o critical)
         run: npm audit --audit-level=high
 
+  frontend-movil:
+    name: Frontend móvil (Playwright · axe · presupuesto)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_API_URL: https://sistemaatracciones-backend.vercel.app/api/v1
+      - name: Presupuesto de peso móvil (JS, CSS, hero y fuentes)
+        run: npm run presupuesto
+      - name: Instalar Chromium para Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Pruebas en iPhone SE, iPhone 13, Pixel 5 e iPad Mini (reflow, axe, imágenes, checkout, panel)
+        run: npm run test:movil
+        env:
+          CI: 'true'
+      - name: Informe de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
   secrets:
     name: Escaneo de secretos (gitleaks)
     runs-on: ubuntu-latest

@@ -3,10 +3,19 @@
   "short_name": "Descubre EC",
   "description": "Reserva tours, entradas y experiencias en Galápagos, los Andes, la Amazonía y la Costa.",
   "lang": "es-EC",
+  "dir": "ltr",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#FAF7F2",
   "theme_color": "#0F766E",
-  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+  "categories": ["travel", "lifestyle"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
 }

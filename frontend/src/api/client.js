@@ -172,6 +172,7 @@ export const Atracciones = {
 };
 
 export const Reservas = {
+  calendario: (id) => api(`/atracciones/reservations/${id}/calendar-link`),
   create: (atraccionId, body, idempotencyKey) =>
     api(`/atracciones/${atraccionId}/reservations`, { method: 'POST', body, idempotencyKey }),
   list: (params = {}) => api(`/atracciones/reservations${qs(params)}`),

@@ -7,6 +7,8 @@ import SearchBar from '../components/SearchBar';
 import { CardSkeleton, ErrorState, usePageTitle } from '../components/ui';
 import { recentStore } from '../context/FavoritesContext';
 import { CategoryIcon } from '../utils/icons';
+import { HERO } from '../utils/heroImg';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 const REGIONES = [
   { key: 'GALAPAGOS', name: 'Galápagos', text: 'Fauna única en el mundo', img: 'galapagos-tortugas.jpg' },
@@ -41,7 +43,12 @@ export default function Home() {
   return (
     <>
       <section className="hero" aria-labelledby="hero-title">
-        <div className="hero-bg" style={{ backgroundImage: 'url(/img/hero-cotopaxi.jpg)' }} role="img" aria-label="Volcán Cotopaxi cubierto de nieve sobre el páramo andino" />
+        {/* MOV-001: AVIF/WebP/JPEG en 4 anchos; el navegador baja solo la que necesita (≈54 KB en un teléfono) */}
+        <picture className="hero-bg">
+          <source type="image/avif" srcSet={HERO.avif} sizes="100vw" />
+          <source type="image/webp" srcSet={HERO.webp} sizes="100vw" />
+          <img src={HERO.jpg1280} srcSet={HERO.jpg} sizes="100vw" alt="Volcán Cotopaxi cubierto de nieve sobre el páramo andino" fetchPriority="high" decoding="async" width="1920" height="1280" />
+        </picture>
         <div className="container">
           <span className="hero-eyebrow"><Sparkles size={16} aria-hidden="true" /> +20 experiencias con guías locales</span>
           <h1 id="hero-title">Vive Ecuador, cuatro mundos en un solo país</h1>
@@ -131,7 +138,7 @@ export default function Home() {
           <div className="region-grid">
             {REGIONES.map((r) => (
               <Link key={r.key} to={`/explorar?region=${r.key}`} className="region-card">
-                <img src={`${imgBase}/img/${r.img}`} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
+                <img {...fotoProps(`${imgBase}/img/${r.img}`, SIZES.destino)} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
                 <div className="rc-body">
                   <h3>{r.name}</h3>
                   <p>{r.text}</p>
@@ -153,7 +160,7 @@ export default function Home() {
             <div className="dest-grid">
               {[...destinos].sort((a, b) => b.total_atracciones - a.total_atracciones).slice(0, 4).map((d) => (
                 <Link key={d.id} to={`/explorar?destino=${d.codigo}`} className="dest-card">
-                  <img src={d.imagen} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
+                  <img {...fotoProps(d.imagen, SIZES.destino)} alt="" loading="lazy" decoding="async" width="400" height="300" onError={onImgError} />
                   <div className="rc-body">
                     <h3>{d.nombre}</h3>
                     <p>{d.total_atracciones} experiencias · {d.provincia}</p>

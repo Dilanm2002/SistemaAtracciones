@@ -138,7 +138,7 @@
 .badge-primary { background: var(--primary-50); color: var(--primary); }
 .badge-cta { background: var(--cta); color: var(--cta-ink); }
 .badge-nuevo { background: #047857; color: #fff; } /* «Nuevo»: primeros 7 días (5,5:1) */
-.badge-dark { background: rgba(12, 20, 19, 0.72); color: #fff; backdrop-filter: blur(4px); }
+.badge-dark { background: rgba(12, 20, 19, 0.72); color: #fff; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
 
 .chip {
   display: inline-flex; align-items: center; gap: 6px;

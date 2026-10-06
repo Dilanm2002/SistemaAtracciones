@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Banknote, CalendarDays, Clock, CreditCard, Landmark, Lock, MapPin, ShieldCheck, Users } from 'lucide-react';
+import { ArrowLeft, Banknote, CalendarDays, ChevronDown, Clock, CreditCard, Landmark, Lock, MapPin, ShieldCheck, Users } from 'lucide-react';
 import { Atracciones, newIdempotencyKey, Reservas } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { LoginForm, RegisterForm } from '../components/AuthForms';
@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtMoney } from '../utils/format';
 import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, nombrePersona, RE_NOMBRE_PERSONA, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
+import { fotoProps, SIZES } from '../utils/fotos';
 
 const luhn = (num) => {
   const d = num.replace(/\D/g, '');
@@ -60,6 +61,7 @@ export default function Checkout() {
   const [pay, setPay] = useState({ metodo: 'TARJETA', numero: '', exp: '', cvv: '', titular: '', terms: false });
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState(null);
+  const [verResumen, setVerResumen] = useState(false);
   const [sending, setSending] = useState(false);
   // Una sola clave por intento de compra: reintentos o doble clic no crean dos reservas
   const idemKey = useRef(newIdempotencyKey());
@@ -186,8 +188,15 @@ export default function Checkout() {
       : `Cancelación gratis hasta ${a.cancellation_hours} h antes de la salida; después, sin reembolso.`;
 
   const Summary = (
-    <aside className="order-summary card" aria-label="Resumen de tu reserva">
-      <div className="os-img"><img src={a.photos?.[0]?.url} alt="" loading="lazy" decoding="async" onError={onImgError} /></div>
+    <aside className={`order-summary card${verResumen ? '' : ' colapsado'}`} aria-label="Resumen de tu reserva">
+      {/* MOV-006: en el celular el resumen se pliega a una línea con el total; el formulario queda a la vista */}
+      <button type="button" className="os-toggle" aria-expanded={verResumen} aria-controls="os-detalle" onClick={() => setVerResumen((v) => !v)}>
+        <span className="os-toggle-nombre">{a.name}</span>
+        <span className="os-toggle-total">{fmtMoney(total)}</span>
+        <span className="os-toggle-ver">{verResumen ? 'Ocultar' : 'Ver detalle'} <ChevronDown size={16} aria-hidden="true" /></span>
+      </button>
+      <div id="os-detalle" className="os-detalle">
+      <div className="os-img"><img {...fotoProps(a.photos?.[0]?.url, SIZES.resumen)} alt="" loading="lazy" decoding="async" onError={onImgError} /></div>
       <div className="os-body">
         <h2 style={{ fontSize: '1.08rem' }}>{a.name}</h2>
         <div className="os-row"><CalendarDays size={16} aria-hidden="true" /> <span>{fmtDateLong(fecha)}</span></div>
@@ -204,11 +213,12 @@ export default function Checkout() {
           <ShieldCheck size={16} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} /> {politica} Si pagas por transferencia o en sitio, puedes cancelar sin costo hasta 1 hora antes de la salida.
         </p>
       </div>
+      </div>
     </aside>
   );
 
   return (
-    <div className="container" style={{ paddingTop: 24 }}>
+    <div className={`container${isAuth && step === 2 ? ' con-barra-pago' : ''}`} style={{ paddingTop: 24 }}>
       <Breadcrumbs items={[{ label: 'Inicio', to: '/' }, { label: a.name, to: back }, { label: 'Reserva' }]} />
       <div className="page-head" style={{ paddingTop: 14 }}>
         <Link to={back} className="btn btn-ghost btn-sm" style={{ marginLeft: -12 }}><ArrowLeft size={16} /> Volver a la experiencia</Link>
@@ -273,7 +283,7 @@ export default function Checkout() {
               </div>
             </form>
           ) : (
-            <form className="card card-pad" onSubmit={submit} noValidate style={{ marginTop: sinCupo ? 16 : 0 }}>
+            <form id="form-pago" className="card card-pad" onSubmit={submit} noValidate style={{ marginTop: sinCupo ? 16 : 0 }}>
         <RequiredLegend />
               <h2 style={{ fontSize: '1.2rem' }}>Método de pago</h2>
               <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
@@ -352,6 +362,15 @@ export default function Checkout() {
         </div>
         {Summary}
       </div>
+      {/* MOV-006: en el celular, el total y el botón de pagar siempre a la vista en el paso de pago */}
+      {isAuth && step === 2 && (
+        <div className="checkout-barra" role="region" aria-label="Total y pago">
+          <div><span className="tiny muted">Total</span><strong className="price">{fmtMoney(total)}</strong></div>
+          <button type="submit" form="form-pago" className="btn btn-cta" disabled={sending || sinCupo}>
+            {sending ? <><Spinner /> Procesando…</> : pay.metodo === 'TARJETA' ? 'Pagar' : 'Confirmar'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

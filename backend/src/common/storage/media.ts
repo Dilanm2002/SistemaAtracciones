@@ -30,3 +30,32 @@ export function firmaValida(objeto: string, token: string | undefined, secreto: 
 
 /** Nombre de objeto seguro: `archivo.ext` o `catalogo/archivo.ext` (sin `..` ni rutas arbitrarias). */
 export const objetoValido = (objeto: string) => /^(catalogo\/)?[\w-]{1,80}\.(jpe?g|png|webp)$/i.test(objeto);
+
+/**
+ * Anchos de las variantes livianas (MOV-002): `?w=480` y `?w=960` devuelven la foto en WebP a ese ancho.
+ * En un teléfono la tarjeta mide ~345 px, así que no hace falta bajar la foto completa de 1600 px.
+ */
+export const ANCHOS_VARIANTE: Record<number, number> = { 480: 60, 960: 56 }; // ancho → calidad WebP
+
+type SharpFn = (typeof import('sharp'))['default'];
+
+/**
+ * Carga diferida de sharp: si no estuviera disponible, la API sigue funcionando y sirve el original.
+ * Los tipos son los del build ESM (`default`), pero en CommonJS el módulo es la propia función.
+ */
+export async function cargarSharp(): Promise<SharpFn> {
+  const mod = (await import('sharp')) as unknown as { default?: SharpFn };
+  return mod.default ?? (mod as unknown as SharpFn);
+}
+
+/** Variante WebP de `cuerpo` a `ancho` px. null si el ancho no está permitido o sharp no está disponible. */
+export async function variante(cuerpo: Buffer, ancho: number): Promise<Buffer | null> {
+  const calidad = ANCHOS_VARIANTE[ancho];
+  if (!calidad) return null;
+  try {
+    const sharp = await cargarSharp();
+    return await sharp(cuerpo).rotate().resize({ width: ancho, withoutEnlargement: true }).webp({ quality: calidad }).toBuffer();
+  } catch {
+    return null; // sin sharp o imagen ilegible: se sirve el original
+  }
+}

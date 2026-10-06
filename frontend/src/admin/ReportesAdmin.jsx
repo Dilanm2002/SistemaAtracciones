@@ -138,7 +138,7 @@ export default function ReportesAdmin() {
 
           <section aria-labelledby="det-title">
             <h3 id="det-title" className="adm-section-title">Detalle de reservas ({data.rows.length})</h3>
-            <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable" style={{ maxHeight: 480, overflowY: 'auto' }}>
+            <div className="table-wrap table-wrap-alta" tabIndex={0} role="region" aria-label="Tabla desplazable">
               <table className="table">
 <caption className="sr-only">Detalle de ventas del período</caption>
                 <thead><tr><th scope="col">Código</th><th scope="col">Creada</th><th scope="col">Atracción</th><th scope="col">Tour</th><th scope="col">Cliente</th><th scope="col" className="num">Total</th><th scope="col">Estado</th></tr></thead>
