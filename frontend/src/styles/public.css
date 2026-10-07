@@ -331,7 +331,8 @@
 /* ── Checkout ────────────────────────────────────────────────────────── */
 .checkout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 32px; align-items: start; }
 /* En celular el resumen va arriba y NO queda fijo: si no, tapaba el formulario al bajar */
-@media (max-width: 1000px) { .checkout { grid-template-columns: 1fr; } .checkout aside { order: -1; } .order-summary { position: static; } }
+/* minmax(0, …): el nombre largo del resumen plegado (nowrap) ya no ensancha la página más que la pantalla */
+@media (max-width: 1000px) { .checkout { grid-template-columns: minmax(0, 1fr); } .checkout aside { order: -1; } }
 /* MOV-006: resumen plegable en el celular (una línea con el total) y barra fija con el botón de pagar */
 .os-toggle, .checkout-barra { display: none; }
 @media (max-width: 1000px) {
@@ -354,6 +355,12 @@
   .checkout-barra .btn { min-width: 140px; }
   .con-barra-pago { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
 }
+/* Botones del checkout en el teléfono: la acción principal ocupa todo el ancho y va primero;
+   «Cancelar» / «Volver» queda debajo (antes se partían en dos líneas desalineadas) */
+@media (max-width: 480px) {
+  .checkout-acciones { flex-direction: column-reverse; align-items: stretch; }
+  .checkout-acciones .btn { width: 100%; justify-content: center; }
+}
 /* MOV-006: en el teléfono el checkout empieza directo en el formulario: la ruta de navegación
    (que con nombres largos ocupaba 3 líneas) sobra porque ya está «Volver a la experiencia» */
 @media (max-width: 640px) {
@@ -361,7 +368,9 @@
   .checkout-page .page-head { padding-top: 0 !important; }
   .checkout-page .page-head h1 { font-size: 1.45rem; margin-bottom: 4px; }
 }
-.order-summary { position: sticky; top: calc(var(--header-h) + 16px); }
+/* Fijo al desplazar SOLO en escritorio: en el celular quedaba flotando encima del formulario.
+   (Antes la regla de celular iba antes en el archivo y esta la anulaba.) */
+@media (min-width: 1001px) { .order-summary { position: sticky; top: calc(var(--header-h) + 16px); } }
 .order-summary .os-img { aspect-ratio: 16/9; border-radius: var(--r) var(--r) 0 0; overflow: hidden; }
 .order-summary .os-img img { width: 100%; height: 100%; object-fit: cover; }
 .os-body { padding: 18px 20px; }

@@ -277,7 +277,7 @@ export default function Checkout() {
                   {(p) => <textarea {...p} className="textarea" value={form.notas} onChange={set('notas')} maxLength={LIMITES.notas} style={{ minHeight: 80 }} />}
                 </Field>
               </div>
-              <div className="row-between" style={{ marginTop: 20 }}>
+              <div className="row-between checkout-acciones" style={{ marginTop: 20 }}>
                 <Link to={back} className="btn btn-ghost">Cancelar</Link>
                 <button className="btn btn-primary btn-lg">Continuar al pago</button>
               </div>
@@ -351,7 +351,7 @@ export default function Checkout() {
                 </div>
               )}
 
-              <div className="row-between" style={{ marginTop: 20 }}>
+              <div className="row-between checkout-acciones" style={{ marginTop: 20 }}>
                 <button type="button" className="btn btn-ghost" onClick={() => setStep(1)} disabled={sending}><ArrowLeft size={16} /> Volver a tus datos</button>
                 <button className="btn btn-cta btn-lg" disabled={sending || sinCupo}>
                   {sending ? <><Spinner /> Procesando…</> : pay.metodo === 'TARJETA' ? `Pagar ${fmtMoney(total)}` : 'Confirmar reserva'}

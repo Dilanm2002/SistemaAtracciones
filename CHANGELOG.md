@@ -7,6 +7,15 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.5.3] - 2026-10-06
+
+### Corregido
+- **Checkout en el celular:**
+  - El nombre largo de la atracción en el resumen plegado ensanchaba la página más que la pantalla: el formulario se salía por la derecha y el encabezado y el pie quedaban angostos. La columna pasa a ser `minmax(0, 1fr)`.
+  - El resumen quedaba flotando encima del formulario al bajar. La regla de escritorio (`sticky`) estaba después en el CSS y anulaba la del celular desde la 2.4.1; ahora solo aplica en pantallas de más de 1000 px.
+  - Los botones «Continuar al pago» / «Cancelar» se apilan: la acción principal ocupa todo el ancho y va primero.
+- **Pruebas móviles:** comprueban también que el checkout no tenga scroll lateral (incluso a 320 px con sesión iniciada) y que el resumen no tape el botón al bajar.
+
 ## [2.5.2] - 2026-10-06
 
 ### Corregido

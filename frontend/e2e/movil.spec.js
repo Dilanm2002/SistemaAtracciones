@@ -67,6 +67,22 @@ test('MOV-006 · en el checkout el primer campo se ve sin desplazarse y el resum
   expect(caja.y + caja.height).toBeLessThanOrEqual(page.viewportSize().height);
   await expect(page.locator('.os-toggle')).toBeVisible();
   await expect(page.locator('#os-detalle')).toBeHidden();
+  // Sin scroll lateral (el nombre largo del resumen plegado no debe ensanchar la página)
+  expect(await desbordeHorizontal(page)).toBeLessThanOrEqual(0);
+  // Al bajar, el resumen NO queda flotando encima del formulario (no es sticky en el celular)
+  await page.getByRole('button', { name: 'Continuar al pago' }).scrollIntoViewIfNeeded();
+  expect(await page.locator('.order-summary').evaluate((el) => getComputedStyle(el).position)).toBe('static');
+  const boton = await page.getByRole('button', { name: 'Continuar al pago' }).boundingBox();
+  const resumen = await page.locator('.order-summary').boundingBox();
+  expect(resumen.y + resumen.height <= boton.y || resumen.y >= boton.y + boton.height, 'el resumen no tapa el botón').toBe(true);
+});
+
+test('reflow a 320 px del checkout con sesión iniciada', async ({ page }, info) => {
+  test.skip(info.project.name !== 'iPhone SE', 'una sola vez basta');
+  await page.setViewportSize({ width: 320, height: 640 });
+  await simularApi(page, { usuario: CLIENTE });
+  await abrir(page, `/reservar/${ATRACCION.id}?fecha=${enDias(10)}&hora=09:00&adultos=1`);
+  expect(await desbordeHorizontal(page)).toBeLessThanOrEqual(0);
 });
 
 test('MOV-004 · el menú del panel atrapa el foco, se cierra con Escape y devuelve el foco', async ({ page }) => {
