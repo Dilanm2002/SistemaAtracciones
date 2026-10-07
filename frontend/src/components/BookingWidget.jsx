@@ -109,6 +109,17 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
   }, [a.id, date]);
 
   const slot = avail?.slots?.find((s) => s.time === time);
+  // Al elegir un horario con menos cupos que los participantes ya elegidos, se ajustan solos al cupo
+  // (antes se podía quedar en 30 con solo 10 cupos) y se avisa del cambio
+  const [ajuste, setAjuste] = useState(null);
+  useEffect(() => {
+    if (!slot || adults + children <= slot.available) { setAjuste(null); return; }
+    const ninos = Math.min(children, Math.max(0, slot.available - 1));
+    const adultos = Math.max(1, slot.available - ninos);
+    setChildren(ninos);
+    setAdults(adultos);
+    setAjuste(`Ajustamos a ${adultos + ninos} participante${adultos + ninos > 1 ? 's' : ''}: es el cupo disponible a las ${slot.time}.`);
+  }, [slot]); // eslint-disable-line react-hooks/exhaustive-deps
   const pax = adults + children;
   const childPrice = a.child_price?.total ?? a.price.total;
   const total = adults * a.price.total + children * childPrice;
@@ -177,6 +188,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           <Qty value={children} onChange={setChildren} min={0} max={Math.max(0, Math.min(MAX_TICKETS - adults, slot ? slot.available - adults : MAX_TICKETS))} label="niños" />
         </div>
         {overCapacity && <Alert tone="warning">Solo quedan {slot.available} cupos a las {time}. Reduce participantes o elige otro horario.</Alert>}
+        {ajuste && !overCapacity && <Alert tone="info">{ajuste}</Alert>}
 
         <div className="summary-lines">
           <div><span>{adults} adulto{adults > 1 ? 's' : ''} × {fmtMoney(a.price.total)}</span><span>{fmtMoney(adults * a.price.total)}</span></div>
@@ -186,7 +198,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           <span>Total</span>
           <span className="price">{fmtMoney(total)}</span>
         </div>
-        <button className="btn btn-cta btn-lg btn-block" onClick={go} aria-describedby="book-hint">
+        <button className="btn btn-cta btn-lg btn-block" onClick={go} disabled={!!overCapacity} aria-describedby="book-hint">
           <CalendarCheck size={20} aria-hidden="true" /> Reservar ahora
         </button>
         <p id="book-hint" className={`small center ${touched && missing ? 'error-text' : 'muted'}`} style={{ margin: '10px 0 0', justifyContent: 'center' }}>

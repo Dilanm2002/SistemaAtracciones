@@ -4,7 +4,7 @@ import { CreateOperadorDto } from '../../modules/atracciones/dto/catalogo.dto';
 import { LocationDto, PriceDto } from '../../modules/atracciones/dto/nested-types.dto';
 import { CancelReservationRequestDto, ReservationRequestDto } from '../../modules/atracciones/dto/reservation.dto';
 import { RegisterDto } from '../../modules/auth/dto/auth.dto';
-import { esCedulaEc, esDocumento, esRucEc, esTextoLegible, maxDigitosSeguidos, RE_NOMBRE_PERSONA, RE_TELEFONO_EC } from './validators';
+import { esCedulaEc, esDocumento, esRucEc, esTextoLegible, maxDigitosSeguidos, pareceAlAzar, RE_NOMBRE_PERSONA, RE_TELEFONO_EC } from './validators';
 
 const errores = <T extends object>(cls: new () => T, plain: object) => validateSync(plainToInstance(cls, plain)).map((e) => e.property);
 const manana = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -70,5 +70,16 @@ describe('Validaciones del dominio', () => {
     expect(errores(RegisterDto, { nombre: 'Ana', apellido: '123', email: 'a@b.ec', password: 'Clave123' })).toContain('apellido');
     expect(errores(CreateOperadorDto, { nombre: 'Tours', provincia_id: 1, ruc: '1272345678001' })).toContain('ruc');
     expect(errores(CreateOperadorDto, { nombre: '99999', provincia_id: 1 })).toContain('nombre');
+  });
+});
+
+describe('pareceAlAzar: texto tecleado al azar', () => {
+  it('rechaza trozos repetidos, palabras sin vocales y teclas seguidas del teclado', () => {
+    for (const t of ['asdasdasdasdsa', 'dilanb asdasdasdadas', 'qwrtpsd', 'sdfghjk', 'Calle qwerty 12']) expect(pareceAlAzar(t)).toBe(true);
+    expect(esTextoLegible('asdasdasdasdsa')).toBe(false);
+  });
+
+  it('acepta textos reales, con tildes, ñ o enlaces', () => {
+    for (const t of ['Plaza Grande, Centro Histórico de Quito', 'Ñuñoa', 'Mississippi', 'Hotel Liberty', 'https://descubre-ec.vercel.app', 'Muelle de Puerto Ayora']) expect(pareceAlAzar(t)).toBe(false);
   });
 });

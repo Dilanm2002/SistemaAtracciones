@@ -7,6 +7,20 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.5.5] - 2026-10-07
+
+### Corregido
+- **Participantes al reservar:** si se elegían más personas que los cupos del horario (por ejemplo 30 con 10 cupos), el número se quedaba así. Ahora:
+  - Al elegir el horario se ajusta solo al cupo disponible y se avisa del cambio.
+  - «Reservar ahora» queda deshabilitado mientras se superen los cupos.
+- **Texto tecleado al azar** (p. ej. «asdasdasdasdsa» en el punto de encuentro): la web y la API lo rechazan en todos los textos libres. El detector `pareceAlAzar` busca:
+  - un trozo repetido 3 o más veces;
+  - una palabra de 6 o más letras sin vocales;
+  - 5 teclas seguidas del teclado.
+
+  Sobre los 759 textos reales del catálogo no da falsos positivos: solo marcó 3 textos de prueba que sí estaban escritos al azar.
+- **Despliegue del backend:** el caché incremental de TypeScript queda dentro de `dist/`. Desde el ajuste del `tsconfig` para TypeScript 6, el build en Vercel quedaba vacío.
+
 ## [2.5.4] - 2026-10-07
 
 ### Corregido

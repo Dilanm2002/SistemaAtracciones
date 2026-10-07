@@ -78,7 +78,24 @@ export function texto(v, { min = 1, max, requerido = true, que = 'Este campo', l
   if (nDigitos > nLetras) return `${que} debe ser principalmente texto, no números`;
   if (maxDigitosSeguidos(t) > maxDigitos) return `${que} no puede tener más de ${maxDigitos} números seguidos`;
   if (/(.)\1{5,}/u.test(t)) return `${que} tiene un carácter repetido demasiadas veces`;
+  if (pareceAlAzar(t)) return `${que} parece escrito al azar; escribe un texto real`;
   return null;
+}
+
+/** Secuencias de 5 teclas seguidas del teclado («asdfg», «qwert», también al revés). */
+const SECUENCIAS_TECLADO = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm']
+  .flatMap((f) => [f, [...f].reverse().join('')])
+  .flatMap((f) => Array.from({ length: f.length - 4 }, (_, i) => f.slice(i, i + 5)));
+
+/**
+ * Texto tecleado al azar (misma regla que la API): un trozo repetido 3+ veces («asdasdasd»),
+ * una palabra de 6+ letras sin vocales («qwrtpsd») o 5 teclas seguidas del teclado («asdfg»).
+ */
+export function pareceAlAzar(t) {
+  const s = String(t ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/([a-z]{2,4})\1{2,}/.test(s)) return true;
+  if (s.split(/[^a-z]+/).some((w) => w.length >= 6 && !/[aeiouy]/.test(w))) return true;
+  return SECUENCIAS_TECLADO.some((q) => s.includes(q));
 }
 
 /**

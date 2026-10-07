@@ -3,4 +3,4 @@
  * GET /atracciones/health. Debe coincidir con backend/package.json, frontend/package.json y la
  * última entrada de CHANGELOG.md (lo comprueba version.spec.ts). Cómo publicar una versión: README.
  */
-export const API_VERSION = '2.5.4';
+export const API_VERSION = '2.5.5';

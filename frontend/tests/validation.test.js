@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   correo,
   mascaraCorreo,
+  pareceAlAzar,
   documento,
   esCedulaEc,
   esRucEc,
@@ -147,5 +148,16 @@ describe('números, fechas y horas', () => {
   });
   it('limpiar() deja solo los errores', () => {
     assert.deepEqual(limpiar({ a: null, b: 'x', c: undefined, d: '' }), { b: 'x' });
+  });
+});
+
+describe('texto tecleado al azar', () => {
+  it('pareceAlAzar y texto() lo rechazan', () => {
+    for (const t of ['asdasdasdasdsa', 'qwrtpsd', 'sdfghjk']) assert.equal(pareceAlAzar(t), true, t);
+    assert.match(texto('asdasdasdasdsa', { que: 'El punto de encuentro' }), /al azar/);
+  });
+
+  it('acepta textos reales', () => {
+    for (const t of ['Plaza Grande', 'Ñuñoa', 'Hotel Liberty', 'Muelle de Puerto Ayora']) assert.equal(pareceAlAzar(t), false, t);
   });
 });

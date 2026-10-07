@@ -64,7 +64,24 @@ function decorador(nombre: string, validar: (v: unknown) => boolean, mensaje: st
 export function esTextoLegible(t: string): boolean {
   const letras = (t.match(new RegExp(LETRA.source, 'g')) ?? []).length;
   const digitos = (t.match(/\d/g) ?? []).length;
-  return letras > 0 && letras >= digitos && !/(.)\1{5,}/u.test(t) && !/\d{11,}/.test(t);
+  return letras > 0 && letras >= digitos && !/(.)\1{5,}/u.test(t) && !/\d{11,}/.test(t) && !pareceAlAzar(t);
+}
+
+/** Secuencias de 5 teclas seguidas del teclado («asdfg», «qwert», también al revés). */
+const FILAS_TECLADO = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+const SECUENCIAS_TECLADO = FILAS_TECLADO.flatMap((f) => [f, [...f].reverse().join('')]).flatMap((f) =>
+  Array.from({ length: f.length - 4 }, (_, i) => f.slice(i, i + 5)),
+);
+
+/**
+ * Texto tecleado al azar: un trozo repetido 3+ veces («asdasdasd»), una palabra de 6+ letras sin
+ * vocales («qwrtpsd») o 5 teclas seguidas del teclado («asdfg»). Las tildes no cuentan («Ñuñoa» es válido).
+ */
+export function pareceAlAzar(t: string): boolean {
+  const s = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/([a-z]{2,4})\1{2,}/.test(s)) return true;
+  if (s.split(/[^a-z]+/).some((w) => w.length >= 6 && !/[aeiouy]/.test(w))) return true;
+  return SECUENCIAS_TECLADO.some((q) => s.includes(q));
 }
 
 /** Longitud de la secuencia de dígitos seguidos más larga ("Ruta 66" → 2). */

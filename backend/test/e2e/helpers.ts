@@ -80,12 +80,15 @@ export function fechaEc(dias: number): string {
 let seq = 0;
 /** Nombres de prueba sin dígitos largos (pasan las reglas de texto legible). */
 export const nombreUnico = (base: string) => {
-  const letras = 'abcdefghijklmnopqrstuvwxyz';
+  // Sílabas consonante+vocal («bake», «tomi»…): únicas y pronunciables, para que la API no las
+  // rechace como texto tecleado al azar (palabras sin vocales o teclas seguidas del teclado)
+  const consonantes = 'bcdfgklmnprstvz';
+  const vocales = 'aeiou';
   let n = Date.now() * 100 + seq++;
   let sufijo = '';
   while (n > 0) {
-    sufijo += letras[n % 26];
-    n = Math.floor(n / 26);
+    sufijo += consonantes[n % 15] + vocales[Math.floor(n / 15) % 5];
+    n = Math.floor(n / 75);
   }
   return `${base} ${sufijo}`;
 };
