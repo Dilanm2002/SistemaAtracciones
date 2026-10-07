@@ -99,3 +99,16 @@ test('MOV-004 · el menú del panel atrapa el foco, se cierra con Escape y devue
   await expect(page.locator('#adm-sidebar')).not.toHaveClass(/open/);
   await expect(boton).toBeFocused();
 });
+
+test('registro · el correo se valida mientras se escribe (sin salir del campo)', async ({ page }) => {
+  await simularApi(page);
+  await abrir(page, '/registro');
+  const campo = page.getByLabel('Correo electrónico');
+  await campo.pressSequentially('1231231231231231');
+  await expect(page.getByText('Al correo le falta la @')).toBeVisible();
+  await campo.pressSequentially('@gmail');
+  await expect(page.getByText('Falta el dominio después de la @')).toBeVisible();
+  await campo.pressSequentially('.com');
+  await expect(page.getByText(/falta|dominio/i)).toHaveCount(0);
+  await expect(campo).toBeFocused(); // todo sin salir del campo
+});

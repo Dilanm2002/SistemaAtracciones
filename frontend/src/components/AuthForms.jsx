@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Alert, Field, RequiredLegend, Spinner } from './ui';
 import { iniciarConGoogle } from '../utils/google';
-import { correo, LIMITES, limpiar, nombrePersona, password, sinEspacios, soloDigitos, soloNombre, telefono } from '../utils/validation';
+import { correo, LIMITES, limpiar, mascaraCorreo, nombrePersona, password, soloDigitos, soloNombre, telefono } from '../utils/validation';
 
 
 function PasswordInput({ value, onChange, autoComplete, ...p }) {
@@ -107,7 +107,7 @@ export function LoginForm({ onSuccess, showDemo = true }) {
         {(p) => (
           <div className="input-icon">
             <Mail size={18} aria-hidden="true" />
-            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="nombre@correo.com" />
+            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={(e) => setForm({ ...form, email: mascaraCorreo(e.target.value) })} placeholder="nombre@correo.com" />
           </div>
         )}
       </Field>
@@ -152,10 +152,11 @@ export function RegisterForm({ onSuccess }) {
     telefono: () => telefono(f.telefono, { requerido: true }),
     password: () => (f.password.length >= 8 && /[A-Za-z]/.test(f.password) && /\d/.test(f.password) ? password(f.password) : 'La contraseña no cumple los requisitos'),
   })[k]?.() ?? null;
-  const cambiar = (k, mascara = (v) => v) => (e) => {
+  const cambiar = (k, mascara = (v) => v, enVivo = false) => (e) => {
     const f = { ...form, [k]: mascara(e.target.value) };
     setForm(f);
-    if (errors[k]) setErrors((x) => ({ ...x, [k]: validar(k, f) }));
+    // El correo se valida mientras se escribe; el resto, al salir del campo o si ya mostró un error
+    if (errors[k] || (enVivo && f[k])) setErrors((x) => ({ ...x, [k]: f[k] ? validar(k, f) : null }));
   };
   const alSalir = (k) => () => form[k] && setErrors((x) => ({ ...x, [k]: validar(k, form) }));
 
@@ -205,7 +206,7 @@ export function RegisterForm({ onSuccess }) {
       <Field label="Correo electrónico" required error={errors.email} hint="Aquí te enviaremos la confirmación de tus reservas">
         {(p) => (
           <div className="input-icon"><Mail size={18} aria-hidden="true" />
-            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={cambiar('email', sinEspacios)} onBlur={alSalir('email')} placeholder="nombre@correo.com" />
+            <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={cambiar('email', mascaraCorreo, true)} onBlur={alSalir('email')} placeholder="nombre@correo.com" />
           </div>
         )}
       </Field>

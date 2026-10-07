@@ -7,7 +7,7 @@ import { Alert, Breadcrumbs, Field, RequiredLegend, Spinner, usePageTitle } from
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateTime } from '../utils/format';
-import { correo, LIMITES, limpiar, ruc, soloDigitos, telefono, texto } from '../utils/validation';
+import { correo, LIMITES, limpiar, mascaraCorreo, ruc, soloDigitos, telefono, texto } from '../utils/validation';
 
 const PASOS = [
   [UserPlus, 'Crea tu cuenta', 'O inicia sesión con la que ya tienes.'],
@@ -164,7 +164,7 @@ function SolicitudForm({ user, anterior, onEnviada }) {
           )}
         </Field>
         <Field label="Correo de reservas" required error={errors.correo}>
-          {(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.correo} onChange={set('correo')} />}
+          {(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.correo} onChange={(e) => { const v = mascaraCorreo(e.target.value); setF({ ...f, correo: v }); setErrors((x) => ({ ...x, correo: v ? correo(v) : undefined })); }} />}
         </Field>
         <Field label="Teléfono" required error={errors.telefono} hint="Celular 09XXXXXXXX o fijo 0[2-7]XXXXXXX">
           {(p) => <input {...p} className="input" type="tel" inputMode="numeric" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: soloDigitos(e.target.value) })} placeholder="0991234567" />}

@@ -6,7 +6,7 @@ import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, S
 import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
 import { ACEPTA, esImagen, normalizarFoto } from '../utils/imagen';
-import { correo, LIMITES, limpiar, numero, ruc, soloDigitos, telefono, texto } from '../utils/validation';
+import { correo, LIMITES, mascaraCorreo, limpiar, numero, ruc, soloDigitos, telefono, texto } from '../utils/validation';
 import { CATEGORY_ICONS, CategoryIcon } from '../utils/icons';
 import { fotoProps, SIZES } from '../utils/fotos';
 
@@ -378,7 +378,7 @@ function OperadorModal({ item, onClose, onSaved }) {
         <Field label="Provincia de la sede" required error={err.provincia_id}>{(p) => <ProvinciaSelect {...p} value={f.provincia_id} onChange={(provincia_id) => setF({ ...f, provincia_id })} />}</Field>
         <Field label="Dirección" error={err.direccion}>{(p) => <input {...p} className="input" maxLength={255} value={f.direccion} onChange={set('direccion')} />}</Field>
         <Field label="RUC" error={err.ruc} hint="13 dígitos, termina en 001">{(p) => <input {...p} className="input" inputMode="numeric" maxLength={13} value={f.ruc} onChange={(e) => setF({ ...f, ruc: e.target.value.replace(/\D/g, '') })} />}</Field>
-        <Field label="Correo de reservas" error={err.email}>{(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.email} onChange={set('email')} />}</Field>
+        <Field label="Correo de reservas" error={err.email}>{(p) => <input {...p} className="input" type="email" maxLength={LIMITES.correo} value={f.email} onChange={(e) => { const v = mascaraCorreo(e.target.value); setF({ ...f, email: v }); setErr((x) => ({ ...x, email: v ? correo(v) : undefined })); }} />}</Field>
         <Field label="Teléfono" error={err.telefono} hint="Celular 09XXXXXXXX (10 dígitos) o fijo 0[2-7]XXXXXXX (9 dígitos)">{(p) => <input {...p} className="input" type="tel" inputMode="numeric" placeholder="022456789" maxLength={LIMITES.telefono} value={f.telefono} onChange={(e) => setF({ ...f, telefono: soloDigitos(e.target.value) })} />}</Field>
         <Switch checked={f.activo} onChange={(v) => setF({ ...f, activo: v })} label="Operador activo" />
       </form>

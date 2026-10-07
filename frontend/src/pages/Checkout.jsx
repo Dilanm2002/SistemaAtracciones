@@ -8,7 +8,7 @@ import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePage
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtMoney } from '../utils/format';
-import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, nombrePersona, RE_NOMBRE_PERSONA, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
+import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, mascaraCorreo, nombrePersona, RE_NOMBRE_PERSONA, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
 import { fotoProps, SIZES } from '../utils/fotos';
 
 const luhn = (num) => {
@@ -259,7 +259,7 @@ export default function Checkout() {
                   {(p) => <input {...p} className="input" autoComplete="name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: soloNombre(e.target.value) })} />}
                 </Field>
                 <Field label="Correo electrónico" required error={errors.email} hint="Te enviaremos aquí el código de reserva">
-                  {(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} />}
+                  {(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={(e) => { const v = mascaraCorreo(e.target.value); setForm({ ...form, email: v }); setErrors((x) => ({ ...x, email: v ? correo(v) : undefined })); }} />}
                 </Field>
                 {telefonoCuenta ? (
                   <Field label="Teléfono / WhatsApp" hint={<>Es el teléfono de tu cuenta. Para cambiarlo, ve a <Link to="/perfil">Mi perfil</Link>.</>}>

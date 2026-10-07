@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   correo,
+  mascaraCorreo,
   documento,
   esCedulaEc,
   esRucEc,
@@ -85,6 +86,20 @@ describe('datos personales y de cuenta', () => {
     for (const ok of ["María José", "O'Brien", 'Ana-Lucía', 'Ñusta']) assert.equal(nombrePersona(ok), null, ok);
     for (const mal of ['Maria2', 'A', '<script>', '..', 'x'.repeat(121)]) assert.notEqual(nombrePersona(mal), null, mal);
   });
+  it('correo: dice qué falta mientras se escribe', () => {
+    assert.match(correo('1231231231231231'), /falta la @/);
+    assert.match(correo('ana@'), /dominio/);
+    assert.match(correo('ana@gmail'), /dominio/);
+    assert.match(correo('@gmail.com'), /usuario antes de la @/);
+    assert.match(correo('a@b@c.com'), /una @/);
+  });
+
+  it('mascaraCorreo: minúsculas, sin espacios ni caracteres inválidos y una sola @', () => {
+    assert.equal(mascaraCorreo('  Ana.Paz@@Gmail.COM '), 'ana.paz@gmail.com');
+    assert.equal(mascaraCorreo('a@b@c.com'), 'a@bc.com');
+    assert.equal(mascaraCorreo('ana(1)!#@x.ec'), 'ana1@x.ec');
+  });
+
   it('correo', () => {
     assert.equal(correo('ana@correo.ec'), null);
     for (const mal of ['ana@', 'ana@correo', 'ana correo@x.ec', `${'a'.repeat(160)}@x.ec`]) assert.notEqual(correo(mal), null, mal);

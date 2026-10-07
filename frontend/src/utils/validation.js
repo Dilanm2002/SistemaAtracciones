@@ -106,12 +106,26 @@ export function nombrePersona(v, { que = 'El nombre', requerido = true } = {}) {
   return null;
 }
 
+/** Valida un correo y dice QUÉ le falta (se usa también mientras se escribe). */
 export function correo(v, { requerido = true } = {}) {
   const t = String(v ?? '').trim();
   if (!t) return requerido ? 'El correo es obligatorio' : null;
-  if (t.length > LIMITES.correo || !RE_CORREO.test(t)) return 'Ingresa un correo válido, ej. nombre@correo.com';
+  if (t.length > LIMITES.correo) return `El correo puede tener hasta ${LIMITES.correo} caracteres`;
+  const [usuario, dominio, ...resto] = t.split('@');
+  if (dominio === undefined) return 'Al correo le falta la @, ej. nombre@correo.com';
+  if (resto.length) return 'El correo solo puede tener una @';
+  if (!usuario) return 'Escribe tu usuario antes de la @, ej. nombre@correo.com';
+  if (!/\.[A-Za-z]{2,}$/.test(dominio)) return 'Falta el dominio después de la @, ej. @gmail.com';
+  if (!RE_CORREO.test(t)) return 'Ingresa un correo válido, ej. nombre@correo.com';
   return null;
 }
+
+/** Máscara de correo: sin espacios, en minúsculas, solo caracteres válidos y una sola @. */
+export const mascaraCorreo = (v) => {
+  const t = String(v ?? '').toLowerCase().replace(/[^a-z0-9._%+@-]/g, '');
+  const i = t.indexOf('@');
+  return i < 0 ? t : t.slice(0, i + 1) + t.slice(i + 1).replace(/@/g, '');
+};
 
 export function telefono(v, { requerido = false } = {}) {
   const t = String(v ?? '').replace(/[\s-]/g, '');

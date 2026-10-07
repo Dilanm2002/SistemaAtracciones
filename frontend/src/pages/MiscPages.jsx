@@ -11,7 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { REGION } from '../utils/format';
 import { AUTH_BG } from '../utils/heroImg';
 import { respuestaGoogle, rutaDespuesDeGoogle } from '../utils/google';
-import { correo, documento, LIMITES, limpiar, nombrePersona, password, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
+import { correo, documento, LIMITES, limpiar, mascaraCorreo, nombrePersona, password, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
 import { fotoProps, SIZES } from '../utils/fotos';
 
 // ── Favoritos ────────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ export function Contact() {
             <form onSubmit={submit} noValidate className="form-grid">
               <div className="span-2"><RequiredLegend /></div>
               <Field label="Nombre" required error={errors.nombre}>{(p) => <input {...p} className="input" autoComplete="name" maxLength={LIMITES.nombrePersona} value={form.nombre} onChange={(e) => setForm({ ...form, nombre: soloNombre(e.target.value) })} />}</Field>
-              <Field label="Correo electrónico" required error={errors.email}>{(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={set('email')} />}</Field>
+              <Field label="Correo electrónico" required error={errors.email}>{(p) => <input {...p} className="input" type="email" autoComplete="email" maxLength={LIMITES.correo} value={form.email} onChange={(e) => { const v = mascaraCorreo(e.target.value); setForm({ ...form, email: v }); setErrors((x) => ({ ...x, email: v ? correo(v) : undefined })); }} />}</Field>
               <Field label="Asunto" className="span-2">
                 {(p) => <select {...p} className="select" value={form.asunto} onChange={set('asunto')}>{Object.entries(ASUNTOS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
               </Field>

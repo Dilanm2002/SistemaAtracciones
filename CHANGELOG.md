@@ -7,6 +7,14 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.5.4] - 2026-10-07
+
+### Corregido
+- **Campos de correo** en registro, ingreso, checkout, contacto, empresas y panel:
+  - Se validan **mientras se escribe**, no solo al salir del campo o al enviar.
+  - El mensaje dice qué falta: la @, el usuario antes de la @ o el dominio (ej. @gmail.com).
+  - Una máscara deja solo caracteres válidos de correo, en minúsculas, sin espacios y con una sola @.
+
 ## [2.5.3] - 2026-10-06
 
 ### Corregido
