@@ -7,6 +7,11 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.5.2] - 2026-10-06
+
+### Corregido
+- **Panel › Categorías:** al mostrarse el error «El nombre de la categoría es obligatorio», el campo «Nueva categoría» subía y quedaba desalineado de «Descripción» y «Dentro de». Ahora los campos de la fila se alinean por arriba (`.inline-form`).
+
 ## [2.5.1] - 2026-10-06
 
 Fallos que encontró en su primera ejecución el nuevo job de pruebas móviles (Playwright y axe).

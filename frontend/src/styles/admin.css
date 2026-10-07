@@ -310,7 +310,8 @@ a.adm-kpi:hover { transform: translateY(-5px); }
 /* ── Paneles de detalle ──────────────────────────────────────────────── */
 .adm-split { display: grid; grid-template-columns: 340px 1fr; gap: 20px; align-items: start; }
 @media (max-width: 1100px) { .adm-split { grid-template-columns: 1fr !important; } }
-.inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; padding: 18px; background: #fff; border: 1.5px dashed rgba(15, 118, 110, 0.3); border-radius: 16px; margin-bottom: 18px; }
+/* flex-start: un mensaje de error bajo un campo ya no desalinea los demás campos de la fila */
+.inline-form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-start; padding: 18px; background: #fff; border: 1.5px dashed rgba(15, 118, 110, 0.3); border-radius: 16px; margin-bottom: 18px; }
 .inline-form .field { flex: 1; min-width: 160px; }
 .date-nav { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1.5px solid var(--border-strong); border-radius: 10px; padding: 2px; }
 .date-nav span { min-width: 150px; text-align: center; font-weight: 600; font-size: 0.9rem; }
