@@ -1,4 +1,5 @@
-import { pruebaDpop } from './dpop';
+import { pruebaDpop, reiniciarLlaves } from './dpop';
+import { ahoraServidor, sincronizarReloj } from './reloj';
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
 const TOKEN_KEY = 'dec_token';
 
@@ -55,7 +56,7 @@ const wait = (ms, signal) =>
  * @param {string} path  ruta relativa a /api/v1
  * @param {{method?:string, body?:any, idempotencyKey?:string, signal?:AbortSignal, form?:FormData}} opts
  */
-export async function api(path, { method = 'GET', body, idempotencyKey, signal, form } = {}) {
+export async function api(path, { method = 'GET', body, idempotencyKey, signal, form, _reintentoDpop = false } = {}) {
   const token = tokenStore.get();
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -85,6 +86,7 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
         // Con sesión (admin/cliente) evitamos respuestas cacheadas para ver cambios al instante
         cache: token ? 'no-store' : 'default',
       });
+      sincronizarReloj(res);
     } catch (e) {
       if (e.name === 'AbortError') throw e;
       if (attempt < retriesRed) { await wait(400 * 2 ** attempt, signal); continue; }
@@ -97,6 +99,12 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
 
   if (res.status === 204) return null;
   const data = await res.json().catch(() => null);
+  // Prueba DPoP rechazada: con el reloj ya sincronizado (o con una llave nueva, si la guardada falló)
+  // se reintenta UNA vez antes de mostrar el error o cerrar la sesión
+  if (res.status === 401 && conPrueba && !_reintentoDpop && /Prueba DPoP inválida/.test(data?.detail ?? '')) {
+    if (!/hora/.test(data.detail)) await reiniciarLlaves();
+    return api(path, { method, body, idempotencyKey, signal, form, _reintentoDpop: true });
+  }
   if (!res.ok) {
     if (res.status === 401 && token) window.dispatchEvent(new CustomEvent('auth:expired'));
     const espera = Number(res.headers.get('Retry-After'));
@@ -255,7 +263,7 @@ function datosToken(token) {
 export function usuarioDelToken(token) {
   try {
     const p = datosToken(token);
-    if (!p?.sub || (p.exp && p.exp * 1000 < Date.now())) return null;
+    if (!p?.sub || (p.exp && p.exp * 1000 < ahoraServidor())) return null;
     return { id: p.sub, email: p.email, nombre: p.nombre, rol: p.rol, scope: p.scope ?? [], operadorCodigo: p.operador ?? null, _provisional: true };
   } catch {
     return null;

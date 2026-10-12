@@ -7,6 +7,15 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.5.6] - 2026-10-12
+
+### Corregido
+- **«Prueba DPoP inválida: hora» al iniciar sesión** en computadoras con el reloj desfasado más de 5 minutos. En otra computadora sí funcionaba.
+  - El navegador toma la hora del servidor de cada respuesta (cabecera `Date`, ahora expuesta por CORS) y firma las pruebas DPoP con ella.
+  - Si una prueba se rechaza igual, sincroniza y reintenta una vez.
+  - Si la llave guardada en el navegador está dañada, crea una nueva y reintenta.
+  - La seguridad no cambia: el servidor sigue exigiendo una prueba vigente y firmada.
+
 ## [2.5.5] - 2026-10-07
 
 ### Corregido

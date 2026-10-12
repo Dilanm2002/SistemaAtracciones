@@ -1,14 +1,14 @@
 {
   "name": "descubre-ec-frontend",
   "private": true,
-  "version": "2.5.5",
+  "version": "2.5.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/prerender.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
-    "test": "node --test tests/validation.test.js tests/format.test.js tests/fotos.test.js",
+    "test": "node --test tests/validation.test.js tests/format.test.js tests/fotos.test.js tests/reloj.test.js",
     "test:movil": "playwright test",
     "presupuesto": "node scripts/presupuesto.mjs"
   },

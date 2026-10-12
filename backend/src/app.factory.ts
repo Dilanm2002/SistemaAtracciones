@@ -80,7 +80,8 @@ export async function createApp(): Promise<NestExpressApplication> {
     origin: origins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization', 'DPoP', 'Idempotency-Key', 'X-Request-Id'],
-    exposedHeaders: ['Location', 'X-API-Deprecation-Date', 'X-Total-Count', 'X-Request-Id', 'Retry-After'],
+    // Date: el navegador sincroniza su reloj con el del servidor para firmar las pruebas DPoP
+    exposedHeaders: ['Location', 'X-API-Deprecation-Date', 'X-Total-Count', 'X-Request-Id', 'Retry-After', 'Date'],
     maxAge: 86400,
   });
 

@@ -7,6 +7,8 @@
  * Un token robado (p. ej. por XSS) no sirve en otro equipo: la llave privada no se puede leer.
  * Si el navegador no soporta WebCrypto o IndexedDB, se sigue con Bearer (sin romper nada).
  */
+import { ahoraServidor } from './reloj';
+
 const DB = 'descubre-ec-dpop';
 const STORE = 'llaves';
 const ID = 'navegador';
@@ -45,6 +47,12 @@ function obtenerLlaves() {
   return llaves;
 }
 
+/** Descarta la llave guardada (p. ej. si quedó dañada en este navegador) y crea una nueva en la próxima prueba. */
+export async function reiniciarLlaves() {
+  llaves = undefined;
+  await idb('readwrite', (s) => s.delete(ID)).catch(() => {});
+}
+
 /** Prueba DPoP para `metodo` + `url` (sin query). Con `token`, incluye `ath`. null si no hay soporte. */
 export async function pruebaDpop(metodo, url, token) {
   const ll = await obtenerLlaves();
@@ -55,7 +63,7 @@ export async function pruebaDpop(metodo, url, token) {
   const payload = {
     htm: metodo.toUpperCase(),
     htu: htu.href,
-    iat: Math.floor(Date.now() / 1000),
+    iat: Math.floor(ahoraServidor() / 1000), // hora del servidor: tolera computadoras con el reloj desfasado
     jti: crypto.randomUUID ? crypto.randomUUID() : b64u(crypto.getRandomValues(new Uint8Array(18))),
     ...(token ? { ath: b64u(await crypto.subtle.digest('SHA-256', enc.encode(token))) } : {}),
   };
