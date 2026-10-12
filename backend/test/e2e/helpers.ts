@@ -81,14 +81,16 @@ let seq = 0;
 /** Nombres de prueba sin dígitos largos (pasan las reglas de texto legible). */
 export const nombreUnico = (base: string) => {
   // Sílabas consonante+vocal («bake», «tomi»…): únicas y pronunciables, para que la API no las
-  // rechace como texto tecleado al azar (palabras sin vocales o teclas seguidas del teclado)
+  // rechace como texto tecleado al azar. La consonante codifica el número (base 15) y las vocales
+  // van en ciclo a-e-i-o-u: así nunca se repite un trozo 3 veces seguidas («bababa»), ni hay
+  // palabras sin vocales ni teclas seguidas del teclado.
   const consonantes = 'bcdfgklmnprstvz';
   const vocales = 'aeiou';
   let n = Date.now() * 100 + seq++;
   let sufijo = '';
-  while (n > 0) {
-    sufijo += consonantes[n % 15] + vocales[Math.floor(n / 15) % 5];
-    n = Math.floor(n / 75);
+  for (let i = 0; n > 0; i++) {
+    sufijo += consonantes[n % 15] + vocales[i % 5];
+    n = Math.floor(n / 15);
   }
   return `${base} ${sufijo}`;
 };
