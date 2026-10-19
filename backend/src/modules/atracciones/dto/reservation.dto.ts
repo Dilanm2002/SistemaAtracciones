@@ -146,6 +146,31 @@ export class AttractionSummaryDto {
   @ApiPropertyOptional() cancellation_hours?: number;
 }
 
+export class InvoiceLineDto {
+  @ApiProperty({ example: 1 }) line: number;
+  @ApiProperty({ description: 'Código principal del producto', example: 'ATR-12-AD' }) code: string;
+  @ApiProperty({ example: 'Tour Quilotoa · 2026-10-20 09:00 · Adulto' }) description: string;
+  @ApiProperty({ example: 2 }) quantity: number;
+  @ApiProperty({ example: 25 }) unit_price: number;
+  @ApiProperty({ example: 0 }) discount: number;
+  @ApiProperty({ description: 'Precio × cantidad − descuento', example: 50 }) taxable_base: number;
+  @ApiProperty({ description: 'Tarifa de IVA en porcentaje', example: 0 }) tax_rate: number;
+  @ApiProperty({ example: 0 }) tax: number;
+  @ApiProperty({ example: 50 }) total: number;
+}
+
+export class InvoiceDto {
+  @ApiProperty({ example: '001-001-000000123' }) number: string;
+  @ApiProperty({ enum: ['ISSUED', 'VOIDED'], description: 'ISSUED emitida; VOIDED anulada (p. ej. tras un reembolso)' }) status: 'ISSUED' | 'VOIDED';
+  @ApiProperty({ description: 'Fecha de emisión (ISO 8601)' }) issued_at: string;
+  @ApiPropertyOptional({ example: 'María Guamán' }) customer_name?: string;
+  @ApiProperty({ example: 'USD' }) currency: string;
+  @ApiProperty({ example: 50 }) subtotal: number;
+  @ApiProperty({ example: 0 }) tax: number;
+  @ApiProperty({ example: 50 }) total: number;
+  @ApiProperty({ type: [InvoiceLineDto], description: 'Detalle de la factura (una línea por tipo de pasajero)' }) lines: InvoiceLineDto[];
+}
+
 export class ReservationResponseDto {
   @ApiProperty({ description: 'ID único de reserva', format: 'uuid', example: 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d' })
   reservation_id: string;
@@ -176,6 +201,7 @@ export class ReservationResponseDto {
   @ApiPropertyOptional({ enum: ['FULL_REFUND', 'NO_CHARGE', 'NO_REFUND', 'NOT_ALLOWED'], description: 'Qué pasa si el cliente cancela ahora' }) cancellation_policy?: string;
   @ApiPropertyOptional({ description: 'Si cancelar ahora no tiene costo para el cliente' }) refundable?: boolean;
   @ApiPropertyOptional({ description: 'Hasta cuándo es gratis cancelar (ISO 8601)' }) free_cancellation_until?: string;
+  @ApiPropertyOptional({ type: InvoiceDto, description: 'Factura de la reserva (solo cuando el pago está aprobado)' }) invoice?: InvoiceDto;
   @ApiPropertyOptional() _links?: Record<string, Link>;
 }
 

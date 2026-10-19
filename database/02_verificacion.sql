@@ -528,6 +528,26 @@ FROM unnest(ARRAY['TARJETA','TRANSFERENCIA','EN_SITIO']) AS m
 WHERE NOT EXISTS (SELECT 1 FROM metodo_pago WHERE mpa_codigo = m);
 
 
+-- ============================================================================
+--  V-16 · FACTURA: encabezado y detalle cuadran
+--  ---------------------------------------------------------------------------
+--  PASS: 0 filas. Toda factura tiene sus lineas en factura_detalle y la suma
+--  de esas lineas (base imponible, IVA y total) coincide con el encabezado.
+-- ============================================================================
+SELECT 'V-16 · Factura sin detalle o que no cuadra: ' || f.fac_numero AS verificacion,
+       f.fac_subtotal, f.fac_iva, f.fac_total,
+       d.base, d.iva, d.total
+FROM factura f
+LEFT JOIN LATERAL (
+    SELECT SUM(x.fde_base_imponible) AS base, SUM(x.fde_valor_iva) AS iva, SUM(x.fde_total) AS total
+    FROM factura_detalle x WHERE x.fac_id = f.fac_id) d ON TRUE
+WHERE d.total IS NULL
+   OR d.base  <> f.fac_subtotal
+   OR d.iva   <> f.fac_iva
+   OR d.total <> f.fac_total
+ORDER BY 1;
+
+
 SELECT 'V-12 - Resumen' AS verificacion,
        (SELECT COUNT(*) FROM information_schema.tables
         WHERE table_schema='public' AND table_type='BASE TABLE') AS tablas,

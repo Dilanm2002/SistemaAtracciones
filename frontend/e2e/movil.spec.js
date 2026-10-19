@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
-import { ADMIN, ATRACCION, CLIENTE, enDias, simularApi } from './api-simulada.js';
+import { ADMIN, ATRACCION, CLIENTE, enDias, RESERVA, simularApi } from './api-simulada.js';
 
 /**
  * Pruebas móviles (MOV-010). Recorren el sitio construido en teléfonos y tablet y comprueban lo que
@@ -111,4 +111,16 @@ test('registro · el correo se valida mientras se escribe (sin salir del campo)'
   await campo.pressSequentially('.com');
   await expect(page.getByText(/falta|dominio/i)).toHaveCount(0);
   await expect(campo).toBeFocused(); // todo sin salir del campo
+});
+
+test('la confirmación muestra la factura con su detalle, sin scroll horizontal y accesible', async ({ page }) => {
+  await simularApi(page, { usuario: CLIENTE });
+  await abrir(page, `/reserva/${RESERVA.reservation_id}/confirmada`);
+  const factura = page.locator('.factura');
+  await expect(factura.getByRole('heading', { name: /Factura 001-001-000000123/ })).toBeVisible();
+  await expect(factura.locator('.factura-lineas li')).toHaveCount(2);
+  await expect(factura.locator('.factura-lineas li').nth(1)).toContainText('Niño');
+  expect(await desbordeHorizontal(page)).toBeLessThanOrEqual(0);
+  const { violations } = await new AxeBuilder({ page }).include('.factura').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(violations.filter((v) => v.impact === 'critical' || v.impact === 'serious').map((v) => v.id)).toEqual([]);
 });

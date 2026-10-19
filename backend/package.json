@@ -1,6 +1,6 @@
 {
   "name": "descubre-ec-atracciones-api",
-  "version": "2.5.6",
+  "version": "2.6.0",
   "description": "Descubre EC - Microservicio de Atracciones (basado en la plantilla Booking Prototipo)",
   "author": "",
   "private": true,

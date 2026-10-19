@@ -4,8 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { link } from '../../common/utils/hateoas';
 import { AtraccionResponseDto } from './dto/atraccion-response.dto';
 import { ProductType } from './dto/create-atraccion.dto';
-import { ReservationResponseDto, ReservationStatus } from './dto/reservation.dto';
-import { ESTADO_A_STATUS, FilaAtraccion, FilaReserva, TIPO_A_CONTRATO } from './modelo';
+import { InvoiceDto, ReservationResponseDto, ReservationStatus } from './dto/reservation.dto';
+import { ESTADO_A_STATUS, FilaAtraccion, FilaFactura, FilaReserva, TIPO_A_CONTRATO } from './modelo';
 import { fechaHoraEc, horasAIso } from './utils/fechas';
 
 /**
@@ -202,12 +202,39 @@ export class AtraccionMapper {
         refundable: pol.policy === 'FULL_REFUND' || pol.policy === 'NO_CHARGE',
         ...(pol.freeUntil ? { free_cancellation_until: pol.freeUntil.toISOString() } : {}),
       }))(this.politicaCancelacion(r)),
+      ...(r.factura ? { invoice: this.toInvoice(r.factura, r.moneda) } : {}),
       _links: {
         self: link(self),
         attraction: link(`/atracciones/${r.atr_uuid}`),
         ...(status !== ReservationStatus.CANCELLED ? { cancel: link(`${self}/cancel`, 'POST') } : {}),
         ...(status === ReservationStatus.PENDING ? { confirm: link(`${self}/confirm`, 'POST') } : {}),
       },
+    };
+  }
+
+  /** Factura (encabezado + detalle de factura_detalle) en el formato del contrato. */
+  toInvoice(f: FilaFactura, moneda: string): InvoiceDto {
+    return {
+      number: f.numero,
+      status: f.estado === 'ANULADA_FAC' ? 'VOIDED' : 'ISSUED',
+      issued_at: new Date(f.emitida_en).toISOString(),
+      customer_name: f.razon_social ?? undefined,
+      currency: moneda,
+      subtotal: f.subtotal,
+      tax: f.iva,
+      total: f.total,
+      lines: f.lineas.map((l) => ({
+        line: l.linea,
+        code: l.codigo,
+        description: l.descripcion,
+        quantity: l.cantidad,
+        unit_price: l.precio_unitario,
+        discount: l.descuento,
+        taxable_base: l.base_imponible,
+        tax_rate: l.tarifa_iva,
+        tax: l.valor_iva,
+        total: l.total,
+      })),
     };
   }
 }

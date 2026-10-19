@@ -7,6 +7,18 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.6.0] - 2026-10-19
+
+### Agregado
+- **Detalle de la factura** (`factura_detalle`, migración `007_factura_detalle.sql`). Hasta ahora `factura` era solo el encabezado y sus líneas se tomaban de `orden_detalle`. Pero la orden es el documento comercial (puede cambiar o cancelarse) y la factura es el documento tributario del SRI (no se modifica: se anula). Ahora la factura tiene sus propias líneas, congeladas al emitirse:
+  - una línea por tipo de pasajero (adulto y niño), con código, cantidad, precio unitario, descuento, base imponible, tarifa e importe de IVA y total;
+  - las crea la función `factura_generar_detalle` al emitir la factura (pago con tarjeta o pago confirmado por la empresa); es idempotente;
+  - las facturas ya emitidas recibieron su detalle al aplicar la migración;
+  - una factura anulada por reembolso conserva su detalle.
+- **API:** la reserva incluye `invoice` (encabezado y `lines`) cuando el pago está aprobado. Es un campo opcional: el contrato con Booking no se rompe. Esquemas `Invoice` e `InvoiceLine` en el OpenAPI y `Factura` en el GraphQL.
+- **Web:** la confirmación de la reserva, «Mis reservas» y el panel de reservas muestran la factura con su detalle (estado «Anulada» si se reembolsó).
+- **Verificación V-16** en `02_verificacion.sql`: toda factura tiene detalle y sus líneas cuadran con el encabezado (subtotal, IVA y total).
+
 ## [2.5.6] - 2026-10-12
 
 ### Corregido

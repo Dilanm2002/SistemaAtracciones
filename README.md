@@ -7,7 +7,7 @@ Plataforma web para buscar, reservar y administrar tours, entradas y paquetes tu
 ```
 Proyecto Ecommerce/
 ├── docs/       Documentación técnica (ARQUITECTURA.md) y guía de la defensa (GUIA-DEFENSA.md)
-├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN), 02_verificacion.sql, 03_eventos.sql y los cambios 04 (cédula/teléfono EC) y 05 (contacto del pasajero)
+├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN), 02_verificacion.sql, 03_eventos.sql y los cambios 04 (cédula/teléfono EC), 05 (contacto del pasajero), 06 (empresas proveedoras) y 07 (detalle de la factura)
 ├── backend/    NestJS 10 + PostgreSQL + Swagger · solo el dominio de Atracciones
 │   └── contracts/   OpenAPI (REST), AsyncAPI (eventos), GraphQL (Federation) y gRPC
 └── frontend/   React 18 + Vite + CSS propio (sitio público + panel de administración)
@@ -32,7 +32,7 @@ Variables de la API en Vercel: `DATABASE_URL`, `DB_SSL=true`, `DB_POOL_MAX=1`, `
 
 ### Base de datos: modelo relacional SQL-first
 
-El modelo es **`database/01_esquema.sql`**: 43 tablas en 3FN con la convención `<sigla>_id` (región → provincia → ciudad; usuario ↔ rol N:M; operador ↔ usuario; atracción con tarifas versionadas, horarios, inventario diario en `disponibilidad`, fotos, idiomas e inclusiones normalizadas; orden → detalle → reserva → pasajero; pago, pago con tarjeta, factura y reembolso; favoritos, sesiones, idempotencia y bitácora). `database/02_verificacion.sql` comprueba estructura, integridad y reglas de negocio.
+El modelo es **`database/01_esquema.sql`**: 43 tablas en 3FN con la convención `<sigla>_id` (región → provincia → ciudad; usuario ↔ rol N:M; operador ↔ usuario; atracción con tarifas versionadas, horarios, inventario diario en `disponibilidad`, fotos, idiomas e inclusiones normalizadas; orden → detalle → reserva → pasajero; pago, pago con tarjeta, factura con su propio detalle (`factura_detalle`, migración 007) y reembolso; favoritos, sesiones, idempotencia y bitácora). `database/02_verificacion.sql` comprueba estructura, integridad y reglas de negocio.
 
 - La API aplica el modelo con migraciones SQL (`backend/src/database/sql/`): `001_modelo_relacional.sql` es **copia exacta** de `01_esquema.sql` (un test lo exige) y `002_seguridad.sql` activa RLS y retira los permisos de `anon`/`authenticated` de Supabase (la API pública de Supabase no expone nada).
 - El control de migraciones vive en `ops.migracion`, fuera de `public`. En desarrollo se aplican al arrancar; en Vercel, en el build (`npm run vercel-build`).
@@ -88,7 +88,7 @@ Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha 
 
 ## Control de versiones
 
-Versión actual: **2.5.6** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+Versión actual: **2.6.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
 
 Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
 

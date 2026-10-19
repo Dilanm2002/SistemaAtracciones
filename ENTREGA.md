@@ -25,7 +25,7 @@ Las cuentas de administrador y de operador se entregan aparte.
 | `frontend/` | Sitio web y panel de administración (React + Vite) |
 | `backend/` | API REST (NestJS): `src/modules/*/*.controller.ts` son las APIs; los `*.service.ts`, la lógica |
 | `backend/contracts/` | Contratos de integración: OpenAPI, AsyncAPI (eventos), GraphQL y gRPC (proto) |
-| `database/` | **Base de datos**: esquema (`01_esquema.sql`), verificación (`02_verificacion.sql`) y migraciones `03` a `06` |
+| `database/` | **Base de datos**: esquema (`01_esquema.sql`), verificación (`02_verificacion.sql`) y migraciones `03` a `07` |
 | `backend/src/seed/` | Datos iniciales del sistema: 22 atracciones, destinos, categorías, operadores y usuarios demo |
 | `docs/` | Documentación técnica: arquitectura, modelo de datos, APIs, integración (`ARQUITECTURA.md`), guía de defensa y correcciones de auditorías |
 | `README.md` | Cómo instalar y ejecutar el proyecto |
@@ -48,12 +48,12 @@ Con una base PostgreSQL vacía (15 o superior) y su conexión en `backend/.env` 
 ```bash
 npm ci
 npm run build
-node dist/database/run-migrations.js   # aplica database/01_esquema.sql y las migraciones 002 a 006
+node dist/database/run-migrations.js   # aplica database/01_esquema.sql y las migraciones 002 a 007
 node dist/seed/run-seed.js             # carga los datos de ejemplo (destinos, atracciones, usuarios demo)
 npm run db:verify                      # ejecuta database/02_verificacion.sql (restricciones y reglas)
 ```
 
-Son los mismos pasos que corre el CI en cada cambio. La base de datos en uso es PostgreSQL en Supabase (45 tablas) y su estado se ve en la URL de *health* de la sección 1.
+Son los mismos pasos que corre el CI en cada cambio. La base de datos en uso es PostgreSQL en Supabase (46 tablas) y su estado se ve en la URL de *health* de la sección 1.
 
 ## 5. Cómo ejecutar el proyecto en local
 

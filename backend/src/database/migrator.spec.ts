@@ -5,7 +5,7 @@ import { leerMigraciones, SQL_DIR } from './migrator';
 describe('Migraciones SQL-first', () => {
   it('se aplican en orden numérico y cada una tiene checksum', () => {
     const m = leerMigraciones();
-    expect(m.map((x) => x.nombre)).toEqual(['001_modelo_relacional.sql', '002_seguridad.sql', '003_eventos.sql', '004_documento_telefono_ec.sql', '005_contacto_pasajero.sql', '006_proveedores.sql']);
+    expect(m.map((x) => x.nombre)).toEqual(['001_modelo_relacional.sql', '002_seguridad.sql', '003_eventos.sql', '004_documento_telefono_ec.sql', '005_contacto_pasajero.sql', '006_proveedores.sql', '007_factura_detalle.sql']);
     m.forEach((x) => expect(x.checksum).toMatch(/^[0-9a-f]{64}$/));
   });
 

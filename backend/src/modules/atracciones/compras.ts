@@ -115,16 +115,22 @@ export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCo
   }
 }
 
-/** Factura (SRI) de una orden pagada: número 001-001-<ord_id> y totales de la orden. */
+/**
+ * Factura (SRI) de una orden pagada: encabezado (número 001-001-<ord_id> y totales de la orden)
+ * y su detalle, una línea por tipo de pasajero, congelado en factura_detalle (migración 007).
+ * Idempotente: si la orden ya tiene factura no se crea otra ni se duplican sus líneas.
+ */
 export async function emitirFactura(tx: Sql, cat: CatalogosService, ordId: string, fecha: Date = new Date()) {
-  await tx.query(
+  const fac = await tx.one<{ fac_id: string }>(
     `INSERT INTO factura (ord_id, fac_numero, est_id, fac_emitida_en, fac_subtotal, fac_iva, fac_total, fac_razon_social)
      SELECT o.ord_id, '001-001-' || lpad(o.ord_id::text, 9, '0'), $2, $3, o.ord_subtotal, o.ord_iva, o.ord_total,
             left(u.usu_nombre || ' ' || u.usu_apellido, 150)
        FROM orden o JOIN usuario u ON u.usu_id = o.usu_id WHERE o.ord_id = $1
-     ON CONFLICT (ord_id) DO NOTHING`,
+     ON CONFLICT (ord_id) DO NOTHING
+     RETURNING fac_id::text`,
     [ordId, await cat.estado('PAGADA_FAC'), fecha],
   );
+  if (fac) await tx.query('SELECT factura_generar_detalle($1::bigint)', [fac.fac_id]);
 }
 
 /**

@@ -107,6 +107,37 @@ type Reserva @key(fields: "id") {
   adultos: Int!
   ninos: Int!
   total: Precio!
+  "Solo cuando el pago está aprobado"
+  factura: Factura
+}
+
+enum EstadoFactura {
+  EMITIDA
+  ANULADA
+}
+
+"Factura (SRI): encabezado + detalle (tablas factura y factura_detalle)"
+type Factura {
+  numero: String!
+  estado: EstadoFactura!
+  emitidaEn: String!
+  subtotal: Float!
+  iva: Float!
+  total: Precio!
+  lineas: [LineaFactura!]!
+}
+
+type LineaFactura {
+  linea: Int!
+  codigo: String!
+  descripcion: String!
+  cantidad: Int!
+  precioUnitario: Float!
+  descuento: Float!
+  baseImponible: Float!
+  tarifaIva: Float!
+  valorIva: Float!
+  total: Float!
 }
 
 extend type Query {

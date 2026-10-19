@@ -179,6 +179,30 @@ export interface FilaReserva {
   pax_correo: string | null;
   pax_telefono: string | null;
   metodo: PaymentMethod | null;
+  factura: FilaFactura | null;
+}
+
+/** Factura de la orden (encabezado + factura_detalle), armada como JSON por SELECT_RESERVA. */
+export interface FilaFactura {
+  numero: string;
+  estado: string;
+  emitida_en: string;
+  razon_social: string | null;
+  subtotal: number;
+  iva: number;
+  total: number;
+  lineas: {
+    linea: number;
+    codigo: string;
+    descripcion: string;
+    cantidad: number;
+    precio_unitario: number;
+    descuento: number;
+    base_imponible: number;
+    tarifa_iva: number;
+    valor_iva: number;
+    total: number;
+  }[];
 }
 
 export const SELECT_RESERVA = `
@@ -193,7 +217,8 @@ export const SELECT_RESERVA = `
          a.atr_cancelacion_gratuita AS cancelacion_gratuita, a.atr_horas_cancelacion AS horas_cancelacion,
          (SELECT f.fot_url FROM atraccion_foto f WHERE f.atr_id = a.atr_id ORDER BY f.fot_orden, f.fot_id LIMIT 1) AS foto,
          op.ope_codigo, o.usu_id::text AS usu_id, u.usu_correo AS correo, u.usu_telefono AS telefono,
-         pax.pax_nombre, pax.pax_documento, pax.pax_correo, pax.pax_telefono, mp.mpa_codigo AS metodo
+         pax.pax_nombre, pax.pax_documento, pax.pax_correo, pax.pax_telefono, mp.mpa_codigo AS metodo,
+         fac.factura
     FROM reserva r
     JOIN estado e         ON e.est_id = r.est_id
     JOIN orden_detalle dt ON dt.det_id = r.det_id
@@ -204,7 +229,20 @@ export const SELECT_RESERVA = `
     JOIN operador op      ON op.ope_id = a.ope_id
     LEFT JOIN metodo_pago mp ON mp.mpa_id = o.mpa_id
     LEFT JOIN LATERAL (SELECT x.pax_nombre, x.pax_documento, x.pax_correo, x.pax_telefono FROM reserva_pasajero x
-                        WHERE x.res_id = r.res_id ORDER BY x.pax_es_titular DESC, x.pax_id LIMIT 1) pax ON TRUE`;
+                        WHERE x.res_id = r.res_id ORDER BY x.pax_es_titular DESC, x.pax_id LIMIT 1) pax ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT json_build_object(
+               'numero', f.fac_numero, 'estado', ef.est_codigo, 'emitida_en', f.fac_emitida_en,
+               'razon_social', f.fac_razon_social, 'subtotal', f.fac_subtotal::float8, 'iva', f.fac_iva::float8,
+               'total', f.fac_total::float8,
+               'lineas', COALESCE((SELECT json_agg(json_build_object(
+                   'linea', d.fde_linea, 'codigo', d.fde_codigo, 'descripcion', d.fde_descripcion,
+                   'cantidad', d.fde_cantidad, 'precio_unitario', d.fde_precio_unitario::float8,
+                   'descuento', d.fde_descuento::float8, 'base_imponible', d.fde_base_imponible::float8,
+                   'tarifa_iva', d.fde_tarifa_iva::float8, 'valor_iva', d.fde_valor_iva::float8,
+                   'total', d.fde_total::float8) ORDER BY d.fde_linea)
+                 FROM factura_detalle d WHERE d.fac_id = f.fac_id), '[]'::json)) AS factura
+        FROM factura f JOIN estado ef ON ef.est_id = f.est_id WHERE f.ord_id = o.ord_id) fac ON TRUE`;
 
 export const slugify = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');

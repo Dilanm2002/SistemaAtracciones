@@ -75,6 +75,23 @@ describeDb('Reservas (E2E)', () => {
       );
       expect(fila).toMatchObject({ orden: 'PAGADA', pago: 'APROBADO', facturas: 1, ultimos4: '4242' });
       expect(fila.eventos).toEqual(expect.arrayContaining(['atracciones.reserva.creada', 'atracciones.pago.aprobado']));
+
+      // Factura = encabezado + su propio detalle (factura_detalle): una línea por tipo de pasajero
+      expect(res.body.invoice).toMatchObject({ status: 'ISSUED', currency: 'USD', subtotal: 105, tax: 0, total: 105 });
+      expect(res.body.invoice.number).toMatch(/^001-001-\d{9}$/);
+      expect(res.body.invoice.lines).toEqual([
+        expect.objectContaining({ line: 1, quantity: 2, unit_price: 40, taxable_base: 80, tax_rate: 0, tax: 0, total: 80 }),
+        expect.objectContaining({ line: 2, quantity: 1, unit_price: 25, taxable_base: 25, tax_rate: 0, tax: 0, total: 25 }),
+      ]);
+      expect(res.body.invoice.lines[0].description).toMatch(/· Adulto$/);
+      expect(res.body.invoice.lines[1].description).toMatch(/· Niño$/);
+      const [det] = await db(app).query(
+        `SELECT COUNT(*)::int AS lineas, SUM(d.fde_total)::float8 AS suma, MIN(f.fac_total)::float8 AS total
+           FROM factura f JOIN factura_detalle d ON d.fac_id = f.fac_id
+           JOIN orden_detalle dt ON dt.ord_id = f.ord_id JOIN reserva r ON r.det_id = dt.det_id WHERE r.res_uuid = $1`,
+        [res.body.reservation_id],
+      );
+      expect(det).toEqual({ lineas: 2, suma: 105, total: 105 });
     });
 
     it('transferencia: PENDING, sin factura hasta que se confirma', async () => {
@@ -88,6 +105,7 @@ describeDb('Reservas (E2E)', () => {
         [res.body.reservation_id],
       );
       expect(n).toBe(0);
+      expect(res.body.invoice).toBeUndefined();
     });
 
     it('guarda el correo de contacto; el teléfono de un cliente es SIEMPRE el de su cuenta', async () => {
@@ -268,6 +286,9 @@ describeDb('Reservas (E2E)', () => {
         [r.body.reservation_id],
       );
       expect(fila).toEqual({ orden: 'REEMBOLSADA', factura: 'ANULADA_FAC', reembolso: 80 });
+      // La factura anulada conserva su detalle (documento tributario: no se borra)
+      expect(c.body.invoice).toMatchObject({ status: 'VOIDED', total: 80 });
+      expect(c.body.invoice.lines).toEqual([expect.objectContaining({ quantity: 2, taxable_base: 80, total: 80 })]);
     });
 
     it('cancelar dos veces → 409; cancelar pendiente → pago RECHAZADO y orden CANCELADA', async () => {
@@ -386,6 +407,10 @@ describeDb('Reservas (E2E)', () => {
         [r.body.reservation_id],
       );
       expect(n).toBe(1);
+      // Confirmar emite la factura con su detalle
+      expect(c.body.invoice).toMatchObject({ status: 'ISSUED' });
+      expect(c.body.invoice.lines.length).toBeGreaterThan(0);
+      expect(c.body.invoice.lines.reduce((a: number, l: { total: number }) => a + l.total, 0)).toBe(c.body.invoice.total);
     });
 
     it('un cliente no puede confirmar (403 por scope)', async () => {

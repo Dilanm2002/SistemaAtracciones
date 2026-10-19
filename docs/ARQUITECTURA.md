@@ -89,6 +89,7 @@ erDiagram
   pago ||--o| pago_tarjeta : "últimos 4"
   pago ||--o{ reembolso : devuelve
   orden ||--o| factura : factura
+  factura ||--|{ factura_detalle : "líneas SRI"
   usuario ||--o{ favorito : guarda
   usuario ||--o{ sesion : abre
 ```
@@ -97,6 +98,7 @@ Decisiones clave del modelo:
 
 - **Inventario explícito**: `disponibilidad` guarda el cupo de cada fecha y horario. Reservar bloquea esa fila (`SELECT … FOR UPDATE`) y la sobreventa es imposible también por el `CHECK dis_cupo_reservado <= dis_cupo_total`.
 - **Precio congelado**: `tarifa` se versiona (`tar_vigente_desde/hasta`) y `orden_detalle`/`reserva` guardan el precio aplicado.
+- **Factura con detalle propio**: `factura` es el encabezado y `factura_detalle` sus líneas (una por tipo de pasajero, con base imponible e IVA), congeladas al emitir. La orden es el documento comercial y puede cambiar; la factura es el documento tributario y solo se anula (migración 007, verificación V-16).
 - **Separación comercial**: orden → detalle → reserva; el pago cuelga de la orden (puede reintentarse) y el reembolso del pago (un trigger impide reembolsar más de lo cobrado).
 - **PII aislada**: los datos del pasajero viven en `reserva_pasajero`; los eventos no llevan datos personales.
 - **Identificadores**: PK internas BIGINT/SMALLINT; el contrato expone UUID (`atr_uuid`, `res_uuid`).

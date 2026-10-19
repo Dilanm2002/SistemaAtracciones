@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { CalendarPlus, CheckCircle2, Clock3, Compass, Copy, ListChecks, Printer } from 'lucide-react';
 import { Reservas } from '../api/client';
+import Factura from '../components/Factura';
 import { Alert, ErrorState, Spinner, StatusBadge, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtDateTime, fmtMoney, PAYMENT } from '../utils/format';
@@ -92,6 +93,7 @@ export default function Confirmation() {
           <dt>Método de pago</dt><dd>{PAYMENT[r.payment_method]}</dd>
           <dt>Total</dt><dd><strong>{fmtMoney(r.total_price.total)}</strong></dd>
         </dl>
+        <Factura invoice={r.invoice} />
         {r.status !== 'CANCELLED' && (
           <div style={{ marginTop: 16 }}>
             {r.cancellation_policy === 'NO_CHARGE' ? (

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CalendarDays, CalendarPlus, CalendarX2, Clock, Eye, Info, MapPin, MessageSquarePlus, Ticket, Users, XCircle } from 'lucide-react';
 import { newIdempotencyKey, Reservas } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
+import Factura from '../components/Factura';
 import { ReviewModal } from '../components/Reviews';
 import { Alert, EmptyState, ErrorState, Field, Modal, Spinner, StatusBadge, useAsync, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
@@ -133,6 +134,7 @@ export function ReservationDetailModal({ r, onClose }) {
         <dt>Reservada</dt><dd>{fmtDateTime(r.created_at)}</dd>
         {r.status === 'CANCELLED' && (<><dt>Cancelada</dt><dd>{fmtDateTime(r.cancelled_at)} · {r.cancellation_reason}</dd></>)}
       </dl>
+      <Factura invoice={r.invoice} />
     </Modal>
   );
 }

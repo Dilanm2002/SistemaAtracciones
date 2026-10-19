@@ -1,7 +1,7 @@
 import { QueryFailedError } from 'typeorm';
 import { CatalogosService } from '../../common/db/catalogos.service';
 import { Sql } from '../../common/db/db.service';
-import { codigoAleatorio, DatosCompra, registrarCompra } from './compras';
+import { codigoAleatorio, DatosCompra, emitirFactura, registrarCompra } from './compras';
 import { PaymentMethod } from './dto/reservation.dto';
 
 /** Sql falso: registra cada sentencia y responde según la tabla del INSERT. */
@@ -23,6 +23,7 @@ function sqlFalso(fallar: (sql: string, intento: number) => unknown = () => unde
       if (/INSERT INTO orden_detalle/.test(sql)) return { det_id: '20' } as T;
       if (/INSERT INTO reserva /.test(sql)) return { res_id: '30', res_uuid: 'uuid-30' } as T;
       if (/INSERT INTO pago /.test(sql)) return { pag_id: '40' } as T;
+      if (/INSERT INTO factura /.test(sql)) return { fac_id: '50' } as T;
       return null;
     },
   };
@@ -50,6 +51,8 @@ describe('registrarCompra (orden → detalle → reserva → pago → factura)',
     expect(reserva.params[3]).toBe('CONFIRMADA');
     expect(reserva.params[8]).toBe(3); // tickets
     expect(log.some((l) => l.sql.startsWith('INSERT INTO factura'))).toBe(true);
+    // El detalle de la factura se genera para la factura recién creada
+    expect(log.find((l) => l.sql.includes('factura_generar_detalle'))!.params).toEqual(['50']);
     expect(log.at(-1)!.sql).toBe('RELEASE SAVEPOINT compra');
   });
 
@@ -58,6 +61,7 @@ describe('registrarCompra (orden → detalle → reserva → pago → factura)',
     await registrarCompra(tx, cat, compra({ metodo: PaymentMethod.TRANSFERENCIA }));
     expect(log.find((l) => l.sql.startsWith('INSERT INTO reserva '))!.params[3]).toBe('PENDIENTE_PAGO');
     expect(log.some((l) => l.sql.startsWith('INSERT INTO factura'))).toBe(false);
+    expect(log.some((l) => l.sql.includes('factura_generar_detalle'))).toBe(false);
     const pago = log.find((l) => l.sql.startsWith('INSERT INTO pago '))!;
     expect(pago.params[3]).toBe('PENDIENTE');
     expect(pago.params[8]).toBeNull();
@@ -95,5 +99,18 @@ describe('registrarCompra (orden → detalle → reserva → pago → factura)',
   it('codigoAleatorio usa todo el alfabeto sin salirse de rango', () => {
     expect(codigoAleatorio(() => 0)).toBe('AAAAAA');
     expect(codigoAleatorio(() => 0.99999)).toBe('999999');
+  });
+});
+
+describe('emitirFactura (encabezado + detalle)', () => {
+  it('si la orden ya tenía factura no vuelve a generar el detalle', async () => {
+    const log: string[] = [];
+    const tx: Sql = {
+      async query<T>(sql: string) { log.push(sql.trim()); return [] as T[]; },
+      async one<T>(sql: string) { log.push(sql.trim()); return null as T | null; }, // ON CONFLICT DO NOTHING: sin fila
+    };
+    await emitirFactura(tx, cat, '10');
+    expect(log).toHaveLength(1);
+    expect(log[0]).toMatch(/^INSERT INTO factura /);
   });
 });

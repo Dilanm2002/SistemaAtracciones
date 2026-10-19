@@ -441,6 +441,20 @@
 .detail-list dt { color: var(--muted); font-weight: 600; }
 .detail-list dd { margin: 0; }
 
+/* ── Factura (encabezado + detalle) ──────────────────────────────────── */
+.factura { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--border); }
+.factura-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.factura-cab h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.factura-anulada { font-size: 0.75rem; font-weight: 700; color: var(--danger); background: var(--danger-bg); border-radius: 999px; padding: 2px 10px; }
+.factura-lineas { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 8px; font-size: 0.92rem; }
+.factura-lineas li { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.factura-desc { min-width: 0; overflow-wrap: anywhere; }
+.factura-desc .small { display: block; }
+.factura-monto { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.factura-totales { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; margin: 0; padding-top: 8px; border-top: 1px solid var(--border); font-size: 0.92rem; }
+.factura-totales dt { color: var(--muted); }
+.factura-totales dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ── Contacto / Ayuda ────────────────────────────────────────────────── */
 .contact-layout { display: grid; grid-template-columns: 1fr 340px; gap: 32px; align-items: start; }
 @media (max-width: 900px) { .contact-layout { grid-template-columns: 1fr; } }

@@ -31,7 +31,7 @@ async function main() {
       fallos.forEach((f) => console.error('  ✘', JSON.stringify(f)));
       process.exitCode = 1;
     } else {
-      console.log(`\nModelo verificado: 0 filas en V-01…V-11 y V-15; ${casos.length} casos funcionales OK.`);
+      console.log(`\nModelo verificado: 0 filas en V-01…V-11, V-15 y V-16; ${casos.length} casos funcionales OK.`);
     }
   } finally {
     await client.end();

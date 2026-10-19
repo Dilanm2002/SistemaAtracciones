@@ -1008,8 +1008,72 @@ components:
           type: string
           format: date-time
           description: Hasta cuándo es gratis cancelar (solo con FULL_REFUND o NO_CHARGE).
+        invoice:
+          $ref: '#/components/schemas/Invoice'
         _links:
           $ref: '#/components/schemas/Links'
+    Invoice:
+      type: object
+      description: >-
+        Factura (SRI) de la reserva: encabezado y su detalle. Solo aparece cuando el pago está aprobado.
+        Es un documento tributario congelado al emitirse: no cambia si la reserva cambia; si se reembolsa queda VOIDED.
+      required: [number, status, issued_at, currency, subtotal, tax, total, lines]
+      properties:
+        number:
+          type: string
+          example: 001-001-000000123
+        status:
+          type: string
+          enum: [ISSUED, VOIDED]
+        issued_at:
+          type: string
+          format: date-time
+        customer_name:
+          type: string
+        currency:
+          type: string
+          example: USD
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        lines:
+          type: array
+          description: Detalle de la factura, una línea por tipo de pasajero (adulto / niño).
+          items:
+            $ref: '#/components/schemas/InvoiceLine'
+    InvoiceLine:
+      type: object
+      required: [line, code, description, quantity, unit_price, discount, taxable_base, tax_rate, tax, total]
+      properties:
+        line:
+          type: integer
+          minimum: 1
+        code:
+          type: string
+          example: ATR-12-AD
+        description:
+          type: string
+          example: Tour Quilotoa · 2026-10-20 09:00 · Adulto
+        quantity:
+          type: integer
+          minimum: 1
+        unit_price:
+          type: number
+        discount:
+          type: number
+        taxable_base:
+          type: number
+          description: Precio unitario × cantidad − descuento.
+        tax_rate:
+          type: number
+          description: Tarifa de IVA en porcentaje.
+        tax:
+          type: number
+        total:
+          type: number
     CancelReservationRequest:
       type: object
       required:

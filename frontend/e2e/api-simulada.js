@@ -31,6 +31,25 @@ const tokenFalso = (u) => {
 /** Fecha (YYYY-MM-DD) dentro de `n` días, en hora de Ecuador. */
 export const enDias = (n) => new Date(Date.now() + n * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/Guayaquil' });
 
+/** Reserva confirmada con su factura (encabezado + detalle), como la devuelve la API. */
+export const RESERVA = {
+  reservation_id: 'b6c0f1a2-3d4e-4f56-8a7b-9c0d1e2f3a4b', code: 'DEC-7F3K9Q', status: 'CONFIRMED', ticket_count: 3, adults: 2, children: 1,
+  total_price: { currency: 'USD', total: 105 }, date: enDias(10), time: '09:00', payment_method: 'TARJETA',
+  attraction: { id: ATRACCION.id, name: ATRACCION.name, city: 'Quito', photo: '/img/x.webp', meeting_point: 'Plaza Grande', free_cancellation: true, cancellation_hours: 24 },
+  customer: { name: 'María Guamán', email: 'cliente@descubre-ec.com', phone: '0991234567' },
+  created_at: new Date().toISOString(), can_cancel: true, cancellation_policy: 'FULL_REFUND', refundable: true,
+  free_cancellation_until: new Date(Date.now() + 9 * 86_400_000).toISOString(),
+  invoice: {
+    number: '001-001-000000123', status: 'ISSUED', issued_at: new Date().toISOString(), customer_name: 'María Guamán', currency: 'USD',
+    subtotal: 105, tax: 0, total: 105,
+    lines: [
+      { line: 1, code: 'ATR-12-AD', description: `${ATRACCION.name} · ${enDias(10)} 09:00 · Adulto`, quantity: 2, unit_price: 40, discount: 0, taxable_base: 80, tax_rate: 0, tax: 0, total: 80 },
+      { line: 2, code: 'ATR-12-NI', description: `${ATRACCION.name} · ${enDias(10)} 09:00 · Niño`, quantity: 1, unit_price: 25, discount: 0, taxable_base: 25, tax_rate: 0, tax: 0, total: 25 },
+    ],
+  },
+  _links: {},
+};
+
 function respuesta(metodo, ruta, query, usuario) {
   if (metodo !== 'GET') {
     if (ruta === '/atracciones/search' || ruta === '/atracciones/details') return { data: ATRACCIONES.data, metadata: { total_results: ATRACCIONES.data.length } };
@@ -41,6 +60,7 @@ function respuesta(metodo, ruta, query, usuario) {
   if (ruta === '/categorias') return fixture('categorias');
   if (ruta === '/destinos') return fixture('destinos');
   if (ruta === '/atracciones') return ATRACCIONES;
+  if (ruta === `/atracciones/reservations/${RESERVA.reservation_id}`) return RESERVA;
   if (ruta.startsWith('/atracciones/reservations')) return [];
   if (/^\/atracciones\/[^/]+\/reviews\/eligibility$/.test(ruta)) return { eligible: false };
   if (/^\/atracciones\/[^/]+\/reviews$/.test(ruta)) return fixture('resenas');
