@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import '../styles/admin.css';
 import {
-  BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, Home, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
+  Activity, BarChart3, Building2, CalendarClock, ClipboardList, ExternalLink, Home, KeyRound, LayoutGrid, LogOut, Mail, Map, Menu,
   MessageSquareText, Mountain, Shapes, Store, UserCog, Users, Webhook, X,
 } from 'lucide-react';
 import { Atracciones, Auth, Mensajes, Proveedores, Reservas } from '../api/client';
@@ -53,7 +53,10 @@ export const NAV = [
   },
   {
     group: 'INTEGRACIÓN',
-    items: [{ to: '/admin/integracion', label: 'Eventos y contratos', icon: Webhook, scope: 'admin:full' }],
+    items: [
+      { to: '/admin/integracion', label: 'Eventos y contratos', icon: Webhook, scope: 'admin:full' },
+      { to: '/admin/observabilidad', label: 'Observabilidad', icon: Activity, scope: 'admin:full' },
+    ],
   },
 ];
 

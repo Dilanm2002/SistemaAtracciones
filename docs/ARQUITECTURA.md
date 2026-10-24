@@ -121,7 +121,7 @@ Decisiones clave del modelo:
 | `/favoritos` | GET · PUT · DELETE | usuario autenticado |
 | `/eventos`, `/contracts` | GET | `admin:full` / público |
 
-Convenciones (contrato `backend/contracts/atracciones-openapi.yaml`): prefijo `/api/v1`, UUID, `Idempotency-Key` en operaciones transaccionales, errores RFC 7807 (`application/problem+json`), HATEOAS (`_links`), scopes OAuth2 en el JWT, `X-Request-Id`, `X-Total-Count`, límites de peticiones (`429` + `Retry-After`).
+Convenciones (contrato `backend/contracts/atracciones-openapi.yaml`): prefijo `/api/v1`, UUID, `Idempotency-Key` en operaciones transaccionales, errores RFC 7807 (`application/problem+json`), HATEOAS (`_links`), scopes OAuth2 en el JWT, `X-Request-Id` y `traceparent` (observabilidad: [OBSERVABILIDAD.md](OBSERVABILIDAD.md)), `X-Total-Count`, límites de peticiones (`429` + `Retry-After`).
 
 ## 4. Integración futura (API-First, SOA y EDA)
 

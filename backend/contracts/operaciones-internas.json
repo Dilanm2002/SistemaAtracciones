@@ -78,6 +78,12 @@
       "GET /proveedores/solicitudes",
       "POST /proveedores/solicitudes/{id}/aprobar",
       "POST /proveedores/solicitudes/{id}/rechazar"
+    ],
+    "observabilidad": [
+      "GET /ops/health/live",
+      "GET /ops/health/ready",
+      "POST /ops/telemetria",
+      "GET /ops/resumen"
     ]
   }
 }

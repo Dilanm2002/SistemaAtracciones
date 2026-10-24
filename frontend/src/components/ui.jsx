@@ -240,6 +240,10 @@ export function ErrorState({ error, onRetry }) {
   return (
     <EmptyState icon={AlertTriangle} title="No pudimos cargar esta información" action={onRetry && <button className="btn btn-primary" onClick={onRetry}>Reintentar</button>}>
       {error?.message ?? 'Intenta nuevamente en unos segundos.'}
+      {/* Código de soporte: con él se encuentra la petición en los logs y en el panel de Observabilidad */}
+      {error?.requestId && error.status >= 500 && (
+        <span className="muted small" style={{ display: 'block', marginTop: 8 }}>Código de soporte: <code>{error.requestId.slice(0, 8)}</code></span>
+      )}
     </EmptyState>
   );
 }

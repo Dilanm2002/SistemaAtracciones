@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Table2, BarChart3 } from 'lucide-react';
 
 /**
@@ -69,8 +69,11 @@ export function ChartCard({ title, subtitle, table, children, className = '' }) 
   );
 }
 
-/** Barras verticales de una sola serie (el título nombra la serie: no se necesita leyenda). */
-export function ColumnChart({ data, dataKey, name, fmt, height = 260, color = SERIES[0], extra, highlightLast = false }) {
+/**
+ * Barras verticales de una sola serie (el título nombra la serie: no se necesita leyenda).
+ * `reference` = { value, label }: línea de objetivo punteada en tinta secundaria (p. ej. el SLO).
+ */
+export function ColumnChart({ data, dataKey, name, fmt, height = 260, color = SERIES[0], extra, highlightLast = false, reference }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 18, right: 8, left: 0, bottom: 0 }} barCategoryGap="28%">
@@ -78,6 +81,10 @@ export function ColumnChart({ data, dataKey, name, fmt, height = 260, color = SE
         <XAxis dataKey="label" tickLine={false} axisLine={{ stroke: INK.grid }} tick={{ fill: INK.secondary, fontSize: 12 }} interval="preserveStartEnd" />
         <YAxis tickLine={false} axisLine={false} tick={{ fill: INK.secondary, fontSize: 12 }} tickFormatter={(v) => (fmt ? fmt(v, true) : v)} width={56} allowDecimals={false} />
         <Tooltip cursor={{ fill: 'rgba(15,118,110,0.06)' }} content={<ChartTooltip fmt={fmt} extra={extra} />} />
+        {reference && (
+          <ReferenceLine y={reference.value} stroke={INK.secondary} strokeDasharray="4 4" ifOverflow="extendDomain"
+            label={{ value: reference.label, position: 'insideTopRight', fill: INK.secondary, fontSize: 11 }} />
+        )}
         <Bar dataKey={dataKey} name={name} fill={color} radius={[4, 4, 0, 0]} maxBarSize={44}>
           {highlightLast && data.map((_, i) => <Cell key={i} fill={color} fillOpacity={i === data.length - 1 ? 1 : 0.55} />)}
           {data.length <= 8 && <LabelList dataKey={dataKey} position="top" formatter={(v) => (v ? (fmt ? fmt(v, true) : v) : '')} style={{ fill: INK.primary, fontSize: 11, fontWeight: 600 }} />}

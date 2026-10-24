@@ -7,6 +7,24 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.7.0] - 2026-10-24
+
+### Agregado
+- **Observabilidad completa** ([docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md)):
+  - **Métricas HTTP que sobreviven a las instancias serverless** (`ops.metrica_http`, migración `008_observabilidad.sql`): peticiones por minuto, ruta (plantilla, sin ids) y código, con histograma de duración para p50/p95/p99 y tiempo en la base. Se vuelcan después de responder (`waitUntil`) y al apagar la instancia.
+  - **Incidentes** (`ops.incidente`): errores 500 de la API y errores de la web (excepciones, promesas rechazadas, fallos al dibujar y llamadas a la API sin respuesta o con 5xx), agrupados por huella y con su código de soporte (`request_id`).
+  - **Core Web Vitals de usuarios reales** (`ops.web_vital`, librería `web-vitals` 6.2.2 cargada aparte): LCP, INP, CLS, FCP y TTFB por ruta y dispositivo; la calificación la recalcula la API.
+  - **Correlación de punta a punta:** la web envía un `X-Request-Id` por llamada; la API continúa la traza W3C (`traceparent`), devuelve `Server-Timing` (tiempo total y en la base) y pone `request_id` y `trace_id` en cada línea de log. Las consultas de más de 500 ms se registran.
+  - **Sondas** `GET /ops/health/live` y `GET /ops/health/ready` (503 si la base no responde o hay migraciones pendientes).
+  - **Panel de Observabilidad** (`/admin/observabilidad`): SLO (disponibilidad ≥ 99,5 %, p95 ≤ 1 s), presupuesto de errores, tráfico, latencia, errores 5xx, códigos, rutas más lentas, Web Vitals, incidentes y actividad del negocio.
+  - **Monitor sintético** cada 5 minutos (`keepalive.yml`): readiness y latencia real contra el SLO; si falla, GitHub avisa.
+  - **Runbook de incidentes** con severidades, triage y plantilla de postmortem.
+- **Web:** si una pantalla falla al dibujarse, se muestra un mensaje con «Recargar» en lugar de una página en blanco, y el error queda registrado. Los errores del servidor muestran un «Código de soporte».
+
+### Seguridad
+- Vite 8.3.4 (avisos GHSA-9jrq-w75r-8gcw y otros de Vite 8.3.0–8.3.2 y `launch-editor`, solo del servidor de desarrollo).
+- La telemetría no guarda datos personales: rutas como plantilla y la API depura correos, tokens y números largos antes de guardar.
+
 ## [2.6.0] - 2026-10-19
 
 ### Agregado

@@ -1,5 +1,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
+
+// Versión de la web en la telemetría (docs/OBSERVABILIDAD.md): se ve en cada incidente y Web Vital
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 /**
  * Navegadores soportados (MOV-016): el código usa dvh, :focus-visible, min(), aspect-ratio,
@@ -10,6 +14,7 @@ const NAVEGADORES = ['es2022', 'safari16.4', 'ios16.4', 'chrome111', 'edge111', 
 
 export default defineConfig({
   plugins: [react()],
+  define: { __APP_VERSION__: JSON.stringify(version) },
   server: { port: 5173 },
   build: {
     target: NAVEGADORES,

@@ -2,6 +2,7 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus, Logge
 import { Request, Response } from 'express';
 import { QueryFailedError } from 'typeorm';
 import { tipoError } from '../errors/problem-types';
+import { registrarIncidente } from '../observabilidad/metricas-http';
 
 /** Error de `http-errors` (lo lanzan body-parser y otros middlewares) con estado 4xx pensado para el cliente. */
 const esErrorHttpCliente = (e: unknown): e is Error & { status: number } => {
@@ -114,6 +115,16 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       };
     } else {
       this.logger.error(`[${(req as Request & { id?: string }).id ?? '-'}] ${exception instanceof Error ? exception.stack : String(exception)}`);
+      // Incidente para el panel de Observabilidad: mensaje, ruta y pila (sin datos personales)
+      void registrarIncidente({
+        origen: 'api',
+        tipo: 'http_5xx',
+        mensaje: exception instanceof Error ? `${exception.name}: ${exception.message}` : String(exception),
+        ruta: req.path,
+        metodo: req.method,
+        estado: 500,
+        detalle: exception instanceof Error ? exception.stack ?? null : null,
+      });
       body = {
         type: tipoError('internal'),
         title: ProblemDetailsFilter.TITLES[500],

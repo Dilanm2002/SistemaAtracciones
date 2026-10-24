@@ -390,3 +390,21 @@ a.adm-kpi:hover { transform: translateY(-5px); }
 
 /* Motivo de rechazo de una experiencia (marketplace de empresas) */
 .adm-card-reject { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--danger-bg); color: var(--danger); font-size: 0.8rem; line-height: 1.4; }
+
+/* ── Observabilidad ─────────────────────────────────────────────────── */
+.obs-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.obs-estado { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: 999px; font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.obs-vitals { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 30px; }
+.obs-vital { padding: 16px; }
+.obs-vital h4 { margin: 0; font-size: 1rem; }
+.obs-vital p { margin: 0; }
+.obs-vital-val { font-size: 1.6rem; font-weight: 700; margin: 10px 0 4px !important; font-variant-numeric: tabular-nums; }
+.obs-dist { display: flex; gap: 2px; height: 8px; margin-top: 10px; border-radius: 4px; overflow: hidden; background: var(--surface-2); }
+.obs-dist span { min-width: 2px; }
+.obs-dist-leyenda { display: flex; justify-content: space-between; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.obs-msg { min-width: 240px; max-width: 520px; overflow-wrap: anywhere; }
+.obs-msg summary { cursor: pointer; }
+.obs-pila { white-space: pre-wrap; font-size: 0.72rem; max-height: 220px; overflow: auto; background: var(--surface-2); padding: 8px; border-radius: 6px; margin: 6px 0 0; }
+.obs-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.obs-chip { border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 0.85rem; background: var(--surface); }
+

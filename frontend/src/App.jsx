@@ -27,6 +27,7 @@ const ClientesAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) =
 const UsuariosAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.UsuariosAdmin })));
 const ResenasAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ResenasAdmin })));
 const IntegracionAdmin = lazyRecarga(() => import('./admin/IntegracionAdmin'));
+const ObservabilidadAdmin = lazyRecarga(() => import('./admin/ObservabilidadAdmin'));
 const Empresas = lazyRecarga(() => import('./pages/Empresas'));
 const SolicitudesAdmin = lazyRecarga(() => import('./admin/SolicitudesAdmin'));
 const MensajesAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.MensajesAdmin })));
@@ -101,6 +102,7 @@ export default function App() {
           <Route path="resenas" element={<ResenasAdmin />} />
           <Route path="mensajes" element={<MensajesAdmin />} />
           <Route path="integracion" element={<IntegracionAdmin />} />
+          <Route path="observabilidad" element={<ObservabilidadAdmin />} />
           <Route path="solicitudes" element={<SolicitudesAdmin />} />
         </Route>
       </Routes>

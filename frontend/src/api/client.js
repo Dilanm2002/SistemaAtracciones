@@ -1,5 +1,6 @@
 import { pruebaDpop, reiniciarLlaves } from './dpop';
 import { ahoraServidor, sincronizarReloj } from './reloj';
+import { reportarError, rutaPlantilla } from './telemetria';
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
 const TOKEN_KEY = 'dec_token';
 
@@ -21,9 +22,11 @@ export const tokenStore = {
 
 /** Error de API con los campos de Problem Details (RFC 7807). */
 export class ApiError extends Error {
-  constructor({ status, title, detail, errors, code }) {
+  constructor({ status, title, detail, errors, code, requestId }) {
     super(detail || title || 'Error inesperado');
     this.status = status;
+    /** Código de soporte: el mismo request_id de los logs y del panel de Observabilidad */
+    this.requestId = requestId;
     this.title = title;
     this.detail = detail;
     this.code = code;
@@ -65,6 +68,9 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   if (token) headers.Authorization = `${ligado ? 'DPoP' : 'Bearer'} ${token}`;
   const conPrueba = ligado || (!token && (path === '/auth/login' || path === '/auth/register'));
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
+  // Un id por llamada (el mismo en sus reintentos): une lo que ve el usuario con los logs de la API
+  const requestId = newIdempotencyKey();
+  headers['X-Request-Id'] = requestId;
   const retries = method === 'GET' ? MAX_RETRIES : 0;
   // Si la petición ni siquiera llegó (fallo de red / arranque en frío), también se reintentan
   // el login y las operaciones con Idempotency-Key: repetirlas no duplica nada.
@@ -90,7 +96,8 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
     } catch (e) {
       if (e.name === 'AbortError') throw e;
       if (attempt < retriesRed) { await wait(400 * 2 ** attempt, signal); continue; }
-      throw new ApiError({ status: 0, title: 'Sin conexión', detail: 'No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.' });
+      if (navigator.onLine !== false) reportarError({ tipo: 'api', mensaje: `Sin respuesta de la API: ${method} ${rutaPlantilla(path)}`, request_id: requestId, estado: 0 });
+      throw new ApiError({ status: 0, title: 'Sin conexión', detail: 'No pudimos conectar con el servidor. Revisa tu conexión e intenta de nuevo.', requestId });
     }
     if (!RETRIABLE.has(res.status) || attempt >= retries) break;
     const retryAfter = Number(res.headers.get('Retry-After'));
@@ -107,6 +114,8 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   }
   if (!res.ok) {
     if (res.status === 401 && token) window.dispatchEvent(new CustomEvent('auth:expired'));
+    const rid = data?.request_id ?? res.headers.get('X-Request-Id') ?? requestId;
+    if (res.status >= 500) reportarError({ tipo: 'api', mensaje: `${res.status} ${data?.title ?? 'Error del servidor'}: ${method} ${rutaPlantilla(path)}`, request_id: rid, estado: res.status });
     const espera = Number(res.headers.get('Retry-After'));
     throw new ApiError({
       status: res.status,
@@ -117,6 +126,7 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
           : data?.detail ?? data?.message ?? 'Ocurrió un error inesperado.',
       errors: data?.errors,
       code: data?.code,
+      requestId: rid,
     });
   }
   return data;
@@ -273,3 +283,8 @@ export function usuarioDelToken(token) {
 /** Rendimiento: la sesión se valida en paralelo con la descarga del resto de la página. */
 export const sesionInicial = tokenStore.get() ? api('/auth/me') : null;
 sesionInicial?.catch(() => {}); // el error lo maneja AuthContext
+
+export const Ops = {
+  resumen: (rango = '24h') => api(`/ops/resumen${qs({ rango })}`),
+  listo: () => api('/ops/health/ready'),
+};

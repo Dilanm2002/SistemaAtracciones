@@ -2,6 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
+import { iniciarTelemetria } from './api/telemetria';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ConfirmProvider } from './components/ui';
 import { AuthProvider } from './context/AuthContext';
 import { FavoritesProvider } from './context/FavoritesContext';
@@ -25,6 +27,7 @@ const PRECARGA = [
   [/^\/admin\/(categorias|destinos|operadores)/, () => import('./admin/CatalogAdmin')],
   [/^\/admin\/(clientes|usuarios|resenas|mensajes)/, () => import('./admin/PeopleAdmin')],
   [/^\/admin\/solicitudes/, () => import('./admin/SolicitudesAdmin')],
+  [/^\/admin\/observabilidad/, () => import('./admin/ObservabilidadAdmin')],
   [/^\/explorar/, () => import('./pages/Explore')],
   [/^\/atraccion\//, () => import('./pages/AttractionDetail')],
   [/^\/reservar\//, () => import('./pages/Checkout')],
@@ -36,21 +39,25 @@ const PRECARGA = [
 window.addEventListener('vite:preloadError', (e) => { if (recargarPorVersion()) e.preventDefault(); });
 
 protegerCamposDelTeclado();
+// Errores del navegador y Web Vitals de usuarios reales → panel de Observabilidad (docs/OBSERVABILIDAD.md)
+iniciarTelemetria();
 
 PRECARGA.forEach(([re, cargar]) => re.test(window.location.pathname) && cargar().catch(() => {}));
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
-      <ToastProvider>
-        <AuthProvider>
-          <FavoritesProvider>
-            <ConfirmProvider>
-              <App />
-            </ConfirmProvider>
-          </FavoritesProvider>
-        </AuthProvider>
-      </ToastProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <ToastProvider>
+          <AuthProvider>
+            <FavoritesProvider>
+              <ConfirmProvider>
+                <App />
+              </ConfirmProvider>
+            </FavoritesProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 );

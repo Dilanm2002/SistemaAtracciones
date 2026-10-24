@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
+import { escribir } from '../logging/json-logger';
+import { msDesde, registrarConsulta } from '../observabilidad/contexto';
 
 /** Ejecuta SQL parametrizado (nunca se concatenan valores del usuario en el texto). */
 export interface Sql {
@@ -19,10 +21,23 @@ export function filas<T>(resultado: unknown): T[] {
   return resultado as T[];
 }
 
+/** Una consulta más lenta que esto se registra como advertencia (con su request_id). */
+export const CONSULTA_LENTA_MS = 500;
+
+/** Texto de la consulta para el log: una línea y recortado (los valores van aparte, nunca en el texto). */
+export const resumenSql = (sql: string) => sql.replace(/\s+/g, ' ').trim().slice(0, 160);
+
 class ManagerSql implements Sql {
   constructor(private readonly m: EntityManager) {}
   async query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
-    return filas<T>(await this.m.query(sql, params));
+    const inicio = process.hrtime.bigint();
+    try {
+      return filas<T>(await this.m.query(sql, params));
+    } finally {
+      const ms = msDesde(inicio);
+      registrarConsulta(ms);
+      if (ms > CONSULTA_LENTA_MS) escribir('warn', 'consulta lenta', { duration_ms: Math.round(ms), sql: resumenSql(sql) });
+    }
   }
   async one<T>(sql: string, params: unknown[] = []): Promise<T | null> {
     return (await this.query<T>(sql, params))[0] ?? null;

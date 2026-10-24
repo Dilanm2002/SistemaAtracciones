@@ -1,6 +1,8 @@
 name: Mantener servicios activos
 
-# Cada 5 minutos consulta la API en producción:
+# Monitor sintético (docs/OBSERVABILIDAD.md). Cada 5 minutos consulta la API en producción:
+# - comprueba salud, readiness (base y migraciones) y la latencia real contra el SLO;
+#   si falla, GitHub avisa por correo (notificaciones de Actions) — ver el runbook;
 # - mantiene "caliente" la función serverless de Vercel (evita arranques en frío lentos);
 # - el endpoint de salud consulta la base, así Supabase (plan gratuito) no pausa el
 #   proyecto por inactividad (lo hace tras 7 días sin peticiones).
@@ -28,5 +30,27 @@ jobs:
           grep -q '"database":{"status":"UP"' salud.json || { echo '::error::La base de datos no responde'; exit 1; }
           # SEG-010: Storage solo responde UP si la clave configurada es la de servidor (la pública no puede leer el bucket)
           grep -q '"storage":{"status":"UP"' salud.json || { echo '::error::Supabase Storage no responde con la clave de servidor'; exit 1; }
+      - name: Lista para recibir tráfico (base y migraciones al día)
+        run: |
+          code=$(curl -s -o listo.json -w '%{http_code}' --max-time 30 https://sistemaatracciones-backend.vercel.app/api/v1/ops/health/ready)
+          cat listo.json; echo
+          [ "$code" = 200 ] || { echo "::error::Readiness respondió $code (base caída o migraciones pendientes)"; exit 1; }
+      - name: Latencia real contra el objetivo (p95 ≤ 1 s)
+        # Monitor sintético: el catálogo y el detalle, como los pide un visitante. Una medición lenta
+        # aislada solo avisa (arranque en frío); dos de tres por encima del objetivo fallan el monitor.
+        run: |
+          API=https://sistemaatracciones-backend.vercel.app/api/v1
+          lentas=0
+          echo '| Intento | Catálogo (s) | Detalle (s) |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|---|---|---|' >> "$GITHUB_STEP_SUMMARY"
+          for i in 1 2 3; do
+            t1=$(curl -s -o lista.json -w '%{time_total}' --max-time 20 "$API/atracciones?limit=12")
+            id=$(grep -o '"id":"[0-9a-f-]\{36\}"' lista.json | head -1 | cut -d'"' -f4)
+            t2=$(curl -s -o /dev/null -w '%{time_total}' --max-time 20 "$API/atracciones/$id")
+            echo "| $i | $t1 | $t2 |" >> "$GITHUB_STEP_SUMMARY"
+            if awk "BEGIN{exit !($t1 > 1 || $t2 > 1)}"; then lentas=$((lentas+1)); fi
+          done
+          [ "$lentas" -le 1 ] || { echo "::error::$lentas de 3 mediciones superaron 1 s (SLO de latencia)"; exit 1; }
+          [ "$lentas" -eq 0 ] || echo "::warning::Una medición superó 1 s (probable arranque en frío)"
       - name: Sitio web
         run: curl -sf -o /dev/null --max-time 30 https://descubre-ec.vercel.app/
