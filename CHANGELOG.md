@@ -23,6 +23,7 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ### Seguridad
 - Vite 8.3.4 (avisos GHSA-9jrq-w75r-8gcw y otros de Vite 8.3.0–8.3.2 y `launch-editor`, solo del servidor de desarrollo).
+- Backend: `body-parser` 2.4.0 (GHSA-27r3-jxmh-p828), `multer` 2.5.0 (GHSA-q7qp-rjg7-q26m, forzado con `overrides` porque `@nestjs/platform-express` fija 2.4.0) y `fast-uri` 3.1.9. Avisos publicados el 22 de octubre: denegación de servicio con cuerpos comprimidos y subidas de archivos.
 - La telemetría no guarda datos personales: rutas como plantilla y la API depura correos, tokens y números largos antes de guardar.
 
 ## [2.6.0] - 2026-10-19
