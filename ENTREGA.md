@@ -25,7 +25,7 @@ Las cuentas de administrador y de operador se entregan aparte.
 | `frontend/` | Sitio web y panel de administración (React + Vite) |
 | `backend/` | API REST (NestJS): `src/modules/*/*.controller.ts` son las APIs; los `*.service.ts`, la lógica |
 | `backend/contracts/` | Contratos de integración: OpenAPI, AsyncAPI (eventos), GraphQL y gRPC (proto) |
-| `database/` | **Base de datos**: esquema (`01_esquema.sql`), verificación (`02_verificacion.sql`) y migraciones `03` a `09` |
+| `database/` | **Base de datos**: esquema (`01_esquema.sql`), verificación (`02_verificacion.sql`) y migraciones `03` a `10` |
 | `backend/src/seed/` | Datos iniciales del sistema: 22 atracciones, destinos, categorías, operadores y usuarios demo |
 | `docs/` | Documentación técnica: arquitectura, modelo de datos, APIs, integración (`ARQUITECTURA.md`), guía de defensa y correcciones de auditorías |
 | `README.md` | Cómo instalar y ejecutar el proyecto |
@@ -48,7 +48,7 @@ Con una base PostgreSQL vacía (15 o superior) y su conexión en `backend/.env` 
 ```bash
 npm ci
 npm run build
-node dist/database/run-migrations.js   # aplica database/01_esquema.sql y las migraciones 002 a 009
+node dist/database/run-migrations.js   # aplica database/01_esquema.sql y las migraciones 002 a 010
 node dist/seed/run-seed.js             # carga los datos de ejemplo (destinos, atracciones, usuarios demo)
 npm run db:verify                      # ejecuta database/02_verificacion.sql (restricciones y reglas)
 ```

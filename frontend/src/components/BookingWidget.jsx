@@ -114,27 +114,32 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
   const [ajuste, setAjuste] = useState(null);
   // Adultos mayores (65+) e infantes (0–4 años, gratis pero ocupan cupo): contrato v2 con Booking
   const [seniors, setSeniors] = useState(0);
+  const [students, setStudents] = useState(0);
   const [infants, setInfants] = useState(0);
   useEffect(() => {
-    if (!slot || adults + children + seniors + infants <= slot.available) { setAjuste(null); return; }
+    if (!slot || adults + children + seniors + students + infants <= slot.available) { setAjuste(null); return; }
     let libres = slot.available;
     const inf = Math.min(infants, Math.max(0, libres - 1));
     libres -= inf;
     const sen = Math.min(seniors, Math.max(0, libres - 1));
     libres -= sen;
+    const est = Math.min(students, Math.max(0, libres - 1));
+    libres -= est;
     const ninos = Math.min(children, Math.max(0, libres - 1));
     const adultos = Math.max(1, libres - ninos);
     setInfants(inf);
     setSeniors(sen);
+    setStudents(est);
     setChildren(ninos);
     setAdults(adultos);
-    const n = adultos + ninos + sen + inf;
+    const n = adultos + ninos + sen + est + inf;
     setAjuste(`Ajustamos a ${n} participante${n > 1 ? 's' : ''}: es el cupo disponible a las ${slot.time}.`);
   }, [slot]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pax = adults + children + seniors + infants;
+  const pax = adults + children + seniors + students + infants;
   const childPrice = a.child_price?.total ?? a.price.total;
   const seniorPrice = a.senior_price?.total ?? a.price.total;
-  const total = adults * a.price.total + children * childPrice + seniors * seniorPrice;
+  const studentPrice = a.student_price?.total ?? a.price.total;
+  const total = adults * a.price.total + children * childPrice + seniors * seniorPrice + students * studentPrice;
   /** Máximo para un tipo de boleto: lo que queda del límite por reserva y del cupo del horario. */
   const maxDe = (propio, minimo = 0) => Math.max(minimo, Math.min(MAX_TICKETS - (pax - propio), slot ? slot.available - (pax - propio) : MAX_TICKETS));
   const overCapacity = slot && pax > slot.available;
@@ -144,7 +149,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
     setTouched(true);
     if (!ready) return;
     navigate(`/reservar/${a.id}?${new URLSearchParams({
-      fecha: date, hora: time, adultos: adults, ninos: children, ...(seniors ? { mayores: seniors } : {}), ...(infants ? { infantes: infants } : {}),
+      fecha: date, hora: time, adultos: adults, ninos: children, ...(seniors ? { mayores: seniors } : {}), ...(students ? { estudiantes: students } : {}), ...(infants ? { infantes: infants } : {}),
     })}`);
   };
 
@@ -208,6 +213,10 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           <Qty value={seniors} onChange={setSeniors} min={0} max={maxDe(seniors)} label="adultos mayores" />
         </div>
         <div className="pax-row">
+          <div><strong>Estudiantes</strong><span>con carnet vigente · {fmtMoney(studentPrice)}</span></div>
+          <Qty value={students} onChange={setStudents} min={0} max={maxDe(students)} label="estudiantes" />
+        </div>
+        <div className="pax-row">
           <div><strong>Infantes</strong><span>0 a 4 años · gratis (ocupan cupo)</span></div>
           <Qty value={infants} onChange={setInfants} min={0} max={maxDe(infants)} label="infantes" />
         </div>
@@ -218,6 +227,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           <div><span>{adults} adulto{adults > 1 ? 's' : ''} × {fmtMoney(a.price.total)}</span><span>{fmtMoney(adults * a.price.total)}</span></div>
           {children > 0 && <div><span>{children} niño{children > 1 ? 's' : ''} × {fmtMoney(childPrice)}</span><span>{fmtMoney(children * childPrice)}</span></div>}
           {seniors > 0 && <div><span>{seniors} adulto{seniors > 1 ? 's' : ''} mayor{seniors > 1 ? 'es' : ''} × {fmtMoney(seniorPrice)}</span><span>{fmtMoney(seniors * seniorPrice)}</span></div>}
+          {students > 0 && <div><span>{students} estudiante{students > 1 ? 's' : ''} × {fmtMoney(studentPrice)}</span><span>{fmtMoney(students * studentPrice)}</span></div>}
           {infants > 0 && <div><span>{infants} infante{infants > 1 ? 's' : ''}</span><span>Gratis</span></div>}
         </div>
         <div className="summary-total">

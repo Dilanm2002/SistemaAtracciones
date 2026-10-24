@@ -19,7 +19,7 @@ export type MetodoCompra = PaymentMethod | 'SOA_BOOKING_GATEWAY';
 export interface Acompanante {
   nombre: string;
   documento?: string | null;
-  tipoBoleto: 'ADULT' | 'CHILD' | 'SENIOR' | 'INFANT';
+  tipoBoleto: 'ADULT' | 'CHILD' | 'SENIOR' | 'STUDENT' | 'INFANT';
 }
 
 export interface DatosCompra {
@@ -34,9 +34,12 @@ export interface DatosCompra {
   /** Adultos mayores (tarifa MAYOR) e infantes (tarifa $0, pero ocupan cupo) — contrato v2 */
   seniors?: number;
   infantes?: number;
+  /** Estudiantes con carnet (tarifa ESTUDIANTE) — contrato v2 final */
+  estudiantes?: number;
   precioAdulto: number;
   precioNino: number;
   precioSenior?: number;
+  precioEstudiante?: number;
   moneda: string;
   metodo: MetodoCompra;
   /** WEB (este sitio) o BOOKING (contrato v2) */
@@ -74,10 +77,12 @@ export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCo
   const seniors = d.seniors ?? 0;
   const infantes = d.infantes ?? 0;
   const precioSenior = d.precioSenior ?? d.precioAdulto;
+  const estudiantes = d.estudiantes ?? 0;
+  const precioEstudiante = d.precioEstudiante ?? d.precioAdulto;
   // Cada producto ya tiene 2 decimales: la suma redondeada coincide con las líneas de la factura
   const cents = (n: number, p: number) => Math.round(n * p * 100);
-  const total = (cents(d.adultos, d.precioAdulto) + cents(d.ninos, d.precioNino) + cents(seniors, precioSenior)) / 100;
-  const tickets = d.adultos + d.ninos + seniors + infantes;
+  const total = (cents(d.adultos, d.precioAdulto) + cents(d.ninos, d.precioNino) + cents(seniors, precioSenior) + cents(estudiantes, precioEstudiante)) / 100;
+  const tickets = d.adultos + d.ninos + seniors + infantes + estudiantes;
   const pagada = d.metodo === PaymentMethod.TARJETA || d.metodo === 'SOA_BOOKING_GATEWAY';
   const confirmada = pagada || !!d.confirmarSiempre;
   const creado = d.creadoEn ?? new Date();
@@ -106,13 +111,15 @@ export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCo
       const res = await tx.one<{ res_id: string; res_uuid: string }>(
         `INSERT INTO reserva (res_codigo, det_id, dis_id, est_id, res_fecha, res_hora, res_adultos, res_ninos, res_numero_tickets,
                               res_precio_unitario, res_subtotal, res_observaciones, res_creado_en, res_confirmado_en,
-                              res_seniors, res_infantes, res_precio_nino, res_precio_senior, res_origen, res_saga_id)
-         VALUES ($1, $2, $3, $4, $5, $6::time, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+                              res_seniors, res_infantes, res_precio_nino, res_precio_senior, res_origen, res_saga_id,
+                              res_estudiantes, res_precio_estudiante)
+         VALUES ($1, $2, $3, $4, $5, $6::time, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
          RETURNING res_id::text, res_uuid::text`,
         [
           `DEC-${sufijo}`, det!.det_id, d.disId, estReserva, d.fecha, d.hora, d.adultos, d.ninos, tickets,
           d.precioAdulto, total, d.notas ?? null, creado, confirmada ? creado : null,
           seniors, infantes, d.precioNino, seniors ? precioSenior : null, d.origen ?? 'WEB', d.sagaId ?? null,
+          estudiantes, estudiantes ? precioEstudiante : null,
         ],
       );
       await tx.query(

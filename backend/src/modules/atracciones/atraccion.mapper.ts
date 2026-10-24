@@ -102,6 +102,7 @@ export class AtraccionMapper {
       meeting_point: a.punto_encuentro ?? undefined,
       // Datos del contrato v2 con Booking (también los muestra la web)
       senior_price: a.precio_mayor != null ? { currency: a.moneda, total: a.precio_mayor } : undefined,
+      student_price: a.precio_estudiante != null ? { currency: a.moneda, total: a.precio_estudiante } : undefined,
       includes_food: a.incluye_comida,
       includes_transport: a.incluye_transporte,
       includes_guide: a.incluye_guia,
@@ -234,6 +235,7 @@ export class AtraccionMapper {
       // Contrato v2 con Booking: adultos mayores, infantes, origen y check-in presencial
       seniors: r.seniors,
       infants: r.infantes,
+      students: r.estudiantes,
       origin: r.origen,
       ...(r.checkin_en ? { checked_in_at: new Date(r.checkin_en).toISOString() } : {}),
       _links: {

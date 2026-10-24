@@ -35,6 +35,7 @@ export interface NuevaReserva {
   ninos: number;
   seniors?: number;
   infantes?: number;
+  estudiantes?: number;
   metodo: MetodoCompra;
   tarjeta?: CardInfoDto;
   /** Teléfono de contacto (la web aplica las reglas de la cuenta del cliente) */
@@ -117,8 +118,9 @@ export class ReservasService {
       const ninos = dto.children ?? 0;
       const seniors = dto.seniors ?? 0;
       const infantes = dto.infants ?? 0;
+      const estudiantes = dto.students ?? 0;
       if (ninos > dto.ticket_count) throw new BadRequestException('children no puede ser mayor que ticket_count.');
-      if (dto.ticket_count - ninos - seniors - infantes < 1) throw new BadRequestException('Cada reserva debe incluir al menos un adulto.');
+      if (dto.ticket_count - ninos - seniors - infantes - estudiantes < 1) throw new BadRequestException('Cada reserva debe incluir al menos un adulto.');
       const metodo = dto.payment_method ?? PaymentMethod.TARJETA;
       if (dto.card && metodo !== PaymentMethod.TARJETA) throw new BadRequestException('card solo aplica al pago con TARJETA.');
       const { uuid, disId } = await this.db.tx((tx) =>
@@ -127,10 +129,11 @@ export class ReservasService {
           atrUuid,
           fecha: dto.date.slice(0, 10),
           hora: dto.time,
-          adultos: dto.ticket_count - ninos - seniors - infantes,
+          adultos: dto.ticket_count - ninos - seniors - infantes - estudiantes,
           ninos,
           seniors,
           infantes,
+          estudiantes,
           metodo,
           tarjeta: dto.card,
           telefono: (t) => this.telefonoDeContacto(t, user, dto.customer_phone),
@@ -154,9 +157,12 @@ export class ReservasService {
   async crearEnTransaccion(tx: Sql, n: NuevaReserva): Promise<{ uuid: string; disId: string; resId: string }> {
     await this.catalogos.precargar();
     // 1) La atracción no puede cambiar de precio ni desactivarse mientras se reserva (FOR SHARE)
-    const a = await tx.one<{ atr_id: string; nombre: string; moneda: string; adulto: number | null; nino: number | null; mayor: number | null }>(
+    const a = await tx.one<{
+      atr_id: string; nombre: string; moneda: string; adulto: number | null; nino: number | null; mayor: number | null; estudiante: number | null;
+    }>(
       `SELECT a.atr_id::text, a.atr_nombre AS nombre, a.atr_moneda AS moneda,
-              ${sqlTarifa('ADULTO')} AS adulto, ${sqlTarifa('NINO')} AS nino, ${sqlTarifa('MAYOR')} AS mayor
+              ${sqlTarifa('ADULTO')} AS adulto, ${sqlTarifa('NINO')} AS nino, ${sqlTarifa('MAYOR')} AS mayor,
+              ${sqlTarifa('ESTUDIANTE')} AS estudiante
          FROM atraccion a WHERE a.atr_uuid = $1 AND a.atr_eliminado_en IS NULL AND a.atr_estado = 'PUBLICADA' FOR SHARE`,
       [n.atrUuid],
     );
@@ -185,7 +191,7 @@ export class ReservasService {
     if (!horario) throw new BadRequestException(`El horario ${hora} no existe. Horarios disponibles: ${lista}`);
     if (fecha === hoy && hora <= horaActualEc()) throw new BadRequestException('Esa salida ya partió hoy. Elige otro horario.');
     if (n.adultos < 1) throw new BadRequestException('Cada reserva debe incluir al menos un adulto.');
-    const tickets = n.adultos + n.ninos + (n.seniors ?? 0) + (n.infantes ?? 0);
+    const tickets = n.adultos + n.ninos + (n.seniors ?? 0) + (n.infantes ?? 0) + (n.estudiantes ?? 0);
 
     // 2) Inventario del día y horario: se crea si no existe y se BLOQUEA la fila.
     //    Dos reservas simultáneas del mismo horario se ejecutan una detrás de otra.
@@ -229,9 +235,11 @@ export class ReservasService {
       ninos: n.ninos,
       seniors: n.seniors ?? 0,
       infantes: n.infantes ?? 0,
+      estudiantes: n.estudiantes ?? 0,
       precioAdulto: a.adulto,
       precioNino: a.nino ?? a.adulto,
       precioSenior: a.mayor ?? a.adulto,
+      precioEstudiante: a.estudiante ?? a.adulto,
       moneda: a.moneda,
       metodo: n.metodo,
       origen: n.origen ?? 'WEB',

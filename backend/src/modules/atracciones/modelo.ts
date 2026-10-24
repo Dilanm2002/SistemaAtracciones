@@ -55,7 +55,7 @@ export const STATUS_A_ESTADOS: Record<ReservationStatus, string[]> = {
 export const METODOS: PaymentMethod[] = [PaymentMethod.TARJETA, PaymentMethod.TRANSFERENCIA, PaymentMethod.EN_SITIO];
 
 /** Tarifa vigente de un tipo (ADULTO/NINO) para la atracción `alias`. */
-export const sqlTarifa = (tipo: 'ADULTO' | 'NINO' | 'MAYOR', alias = 'a') => `(
+export const sqlTarifa = (tipo: 'ADULTO' | 'NINO' | 'MAYOR' | 'ESTUDIANTE', alias = 'a') => `(
   SELECT t.tar_precio::float8 FROM tarifa t
    WHERE t.atr_id = ${alias}.atr_id AND t.tar_tipo = '${tipo}'
      AND t.tar_vigente_desde <= ${HOY_EC}
@@ -97,6 +97,7 @@ export interface FilaAtraccion {
   precio_adulto: number | null;
   precio_nino: number | null;
   precio_mayor: number | null;
+  precio_estudiante: number | null;
   incluye_comida: boolean;
   incluye_transporte: boolean;
   incluye_guia: boolean;
@@ -142,6 +143,7 @@ export const SELECT_ATRACCION = `
          ${sqlTarifa('ADULTO')} AS precio_adulto,
          ${sqlTarifa('NINO')} AS precio_nino,
          ${sqlTarifa('MAYOR')} AS precio_mayor,
+         ${sqlTarifa('ESTUDIANTE')} AS precio_estudiante,
          a.atr_incluye_comida AS incluye_comida, a.atr_incluye_transporte AS incluye_transporte, a.atr_incluye_guia AS incluye_guia,
          a.atr_accesible_silla AS accesible_silla, a.atr_accesible_coche AS accesible_coche, a.atr_animales_servicio AS animales_servicio,
          a.atr_guia AS guia, a.atr_instrucciones_llegada AS instrucciones_llegada,
@@ -217,6 +219,8 @@ export interface FilaReserva {
   dis_id: string;
   seniors: number;
   infantes: number;
+  estudiantes: number;
+  precio_estudiante: number | null;
   precio_adulto: number;
   precio_nino: number | null;
   precio_senior: number | null;
@@ -231,7 +235,8 @@ export interface FilaReserva {
   instrucciones_llegada: string | null;
   pax_tipo_documento: 'CEDULA' | 'PASAPORTE' | 'RUC' | null;
   pago_estado: string | null;
-  acompanantes: { nombre: string; documento: string | null; tipo: 'ADULT' | 'CHILD' | 'SENIOR' | 'INFANT' | null }[];
+  reembolso: { numero: string; monto: number } | null;
+  acompanantes: { nombre: string; documento: string | null; tipo: 'ADULT' | 'CHILD' | 'SENIOR' | 'STUDENT' | 'INFANT' | null }[];
 }
 
 /** Factura de la orden (encabezado + factura_detalle), armada como JSON por SELECT_RESERVA. */
@@ -271,13 +276,17 @@ export const SELECT_RESERVA = `
          op.ope_codigo, o.usu_id::text AS usu_id, u.usu_correo AS correo, u.usu_telefono AS telefono,
          pax.pax_nombre, pax.pax_documento, pax.pax_correo, pax.pax_telefono, mp.mpa_codigo AS metodo,
          fac.factura,
-         r.dis_id::text AS dis_id, r.res_seniors AS seniors, r.res_infantes AS infantes,
+         r.dis_id::text AS dis_id, r.res_seniors AS seniors, r.res_infantes AS infantes, r.res_estudiantes AS estudiantes,
+         r.res_precio_estudiante::float8 AS precio_estudiante,
          r.res_precio_unitario::float8 AS precio_adulto, r.res_precio_nino::float8 AS precio_nino, r.res_precio_senior::float8 AS precio_senior,
          r.res_origen AS origen, r.res_saga_id AS saga_id, r.res_checkin_en AS checkin_en, r.res_checkin_guia AS checkin_guia,
          r.res_confirmado_en AS confirmado_en, o.ord_numero AS orden_numero, a.atr_slug AS atr_slug, a.atr_guia AS guia,
          a.atr_instrucciones_llegada AS instrucciones_llegada, pax.pax_tipo_documento,
          (SELECT ep.est_codigo FROM pago pg JOIN estado ep ON ep.est_id = pg.est_id
            WHERE pg.ord_id = o.ord_id ORDER BY pg.pag_id DESC LIMIT 1) AS pago_estado,
+         (SELECT json_build_object('numero', rm.rem_numero, 'monto', rm.rem_monto::float8)
+            FROM reembolso rm JOIN pago pg ON pg.pag_id = rm.pag_id
+           WHERE pg.ord_id = o.ord_id ORDER BY rm.rem_id DESC LIMIT 1) AS reembolso,
          COALESCE((SELECT json_agg(json_build_object('nombre', x.pax_nombre, 'documento', x.pax_documento, 'tipo', x.pax_tipo_boleto) ORDER BY x.pax_id)
                      FROM reserva_pasajero x WHERE x.res_id = r.res_id AND NOT x.pax_es_titular), '[]') AS acompanantes
     FROM reserva r

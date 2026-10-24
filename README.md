@@ -7,7 +7,7 @@ Plataforma web para buscar, reservar y administrar tours, entradas y paquetes tu
 ```
 Proyecto Ecommerce/
 ├── docs/       Documentación técnica (ARQUITECTURA.md) y guía de la defensa (GUIA-DEFENSA.md)
-├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN), 02_verificacion.sql, 03_eventos.sql y los cambios 04 (cédula/teléfono EC), 05 (contacto del pasajero), 06 (empresas proveedoras), 07 (detalle de la factura), 08 (observabilidad) y 09 (integración con Booking v2)
+├── database/   Modelo relacional: 01_esquema.sql (43 tablas, 3FN), 02_verificacion.sql, 03_eventos.sql y los cambios 04 (cédula/teléfono EC), 05 (contacto del pasajero), 06 (empresas proveedoras), 07 (detalle de la factura), 08 (observabilidad), 09 (integración con Booking v2) y 10 (boleto de estudiante)
 ├── backend/    NestJS 10 + PostgreSQL + Swagger · solo el dominio de Atracciones
 │   └── contracts/   OpenAPI (REST), AsyncAPI (eventos), GraphQL (Federation) y gRPC
 └── frontend/   React 18 + Vite + CSS propio (sitio público + panel de administración)
@@ -28,7 +28,7 @@ Cada `git push` a `main` pasa por CI (`.github/workflows/ci.yml`: lint, tipos, t
 
 Variables de la API en Vercel: `DATABASE_URL`, `DB_SSL=true`, `DB_POOL_MAX=1`, `SEED_ON_START=false` (obligatorio), `ENABLE_DOCS=true`, `NODE_ENV=production`, `JWT_SECRET` (≥ 32 caracteres aleatorios), `JWT_EXPIRES_IN=2h`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_BUCKET=uploads`, `PUBLIC_URL`, `FRONTEND_URL`. Variable del frontend: `VITE_API_URL`. `TRUST_PROXY` solo hace falta si la API está detrás de otro proxy (en Vercel se confía en `X-Forwarded-For` automáticamente; sin proxy, el límite de peticiones usa la IP de la conexión). La API **no arranca** si falta `JWT_SECRET`, si es un valor de ejemplo, si `DATABASE_URL` apunta a `localhost` en producción, si se intenta `DB_SYNC=true` o si `SEED_ON_START` no es `false` en producción (`src/config/env.validation.ts`). En producción se ignora cualquier archivo `.env`.
 
-**Integración con Booking Prototipo (contrato v2, RDA2):** `/api/v2` con las 20 operaciones del contrato (catálogo, turnos, reservas con 409 `OUT_OF_STOCK` para la saga, check-in presencial con voucher QR, promociones B2B, eventos y salud del nodo) y sincronización de stock por **gRPC** (`PushStockUpdate`). Guía: [docs/INTEGRACION-BOOKING-V2.md](docs/INTEGRACION-BOOKING-V2.md).
+**Integración con Booking Prototipo (contrato v2, RDA2):** `/api/v2` con las 16 operaciones del contrato final (catálogo, turnos, reservas con `slot_id` y 409 `OUT_OF_STOCK` para la saga, check-in presencial con voucher QR, promociones B2B, eventos CloudEvents y salud del nodo), protegidas con `X-API-Key` o el JWT de un administrador según el contrato y sincronización de stock por **gRPC** (`PushStockUpdate`). Guía: [docs/INTEGRACION-BOOKING-V2.md](docs/INTEGRACION-BOOKING-V2.md).
 
 **Observabilidad:** métricas HTTP persistentes (p50/p95/p99, errores, tiempo en la base), incidentes de la API y de la web con su código de soporte (`request_id`), Core Web Vitals de usuarios reales, trazas W3C (`traceparent`), `Server-Timing`, sondas `/ops/health/live|ready`, monitor sintético cada 5 min y panel en `/admin/observabilidad`. Detalle, SLO y runbook de incidentes: [docs/OBSERVABILIDAD.md](docs/OBSERVABILIDAD.md).
 
@@ -92,7 +92,7 @@ Tarjeta de prueba para el pago simulado: `4111 1111 1111 1111`, cualquier fecha 
 
 ## Control de versiones
 
-Versión actual: **2.8.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
+Versión actual: **2.9.0** · historial en [CHANGELOG.md](CHANGELOG.md) · la versión desplegada se ve en `GET /api/v1/atracciones/health` (campo `version`) y en Swagger.
 
 Se usa [Versionado Semántico](https://semver.org/lang/es/) `MAYOR.MENOR.PARCHE`:
 

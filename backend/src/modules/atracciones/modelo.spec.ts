@@ -47,7 +47,7 @@ describe('AtraccionMapper', () => {
     moneda: 'USD', cancelacion_gratuita: true, horas_cancelacion: 72, destacada: false, rating: 4.8, numero_resenas: 10,
     creado_en: new Date('2025-01-01'), ciu_id: 3, ciudad: 'Quito', prov_id: 19, provincia: 'Pichincha', region: Region.SIERRA,
     ope_id: '1', ope_codigo: 101, operador: 'Andes', precio_adulto: 420, precio_nino: null, vendidos_60d: 25, ocupacion_14d: 0.8,
-    precio_mayor: null, incluye_comida: false, incluye_transporte: true, incluye_guia: true, accesible_silla: false, accesible_coche: false,
+    precio_mayor: null, precio_estudiante: null, incluye_comida: false, incluye_transporte: true, incluye_guia: true, accesible_silla: false, accesible_coche: false,
     animales_servicio: true, guia: null, instrucciones_llegada: null, permite_paquete: true, descuento_paquete: 10,
     ope_ruc: null, ope_telefono: null, ope_correo: null, itinerario: [], pilares: null,
     fotos: [{ url: '/img/a.jpg', alt: 'Foto' }], horarios: [{ hora: '08:00', cupo: 12 }, { hora: '14:00', cupo: 16 }],

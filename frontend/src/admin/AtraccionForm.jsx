@@ -24,6 +24,7 @@ const MASCARA = {
   price: { enteros: 5, decimales: 2 },
   child_price: { enteros: 5, decimales: 2 },
   senior_price: { enteros: 5, decimales: 2 },
+  student_price: { enteros: 5, decimales: 2 },
   package_discount: { enteros: 2, decimales: 2 },
   duration_hours: { enteros: 3, decimales: 2 },
   capacity_per_slot: { enteros: 3, decimales: 0 },
@@ -41,7 +42,7 @@ const EMPTY = {
   includes: [''], not_includes: [], recommendations: [], photos: [],
   featured: false, is_active: true,
   // Datos del contrato v2 con Booking
-  senior_price: '', includes_food: false, includes_transport: false, includes_guide: true,
+  senior_price: '', student_price: '', includes_food: false, includes_transport: false, includes_guide: true,
   wheelchair_accessible: false, stroller_accessible: false, service_animals_allowed: true,
   guide_name: '', arrival_instructions: '', allows_package: true, package_discount: 10, itinerary: [],
 };
@@ -55,7 +56,7 @@ const fromApi = (a) => ({
   latitude: a.locations[0]?.coordinates.latitude ?? '', longitude: a.locations[0]?.coordinates.longitude ?? '',
   operator: a.operator?.id ?? '', includes: a.includes.length ? a.includes : [''], not_includes: a.not_includes ?? [],
   recommendations: a.recommendations ?? [], photos: a.photos.map((p) => p.url), featured: a.featured, is_active: a.is_active,
-  senior_price: a.senior_price?.total ?? '', includes_food: !!a.includes_food, includes_transport: !!a.includes_transport,
+  senior_price: a.senior_price?.total ?? '', student_price: a.student_price?.total ?? '', includes_food: !!a.includes_food, includes_transport: !!a.includes_transport,
   includes_guide: !!a.includes_guide, wheelchair_accessible: !!a.wheelchair_accessible, stroller_accessible: !!a.stroller_accessible,
   service_animals_allowed: a.service_animals_allowed ?? true, guide_name: a.guide_name ?? '', arrival_instructions: a.arrival_instructions ?? '',
   allows_package: a.allows_package ?? true, package_discount: a.package_discount ?? 0,
@@ -91,6 +92,7 @@ const toApi = (f, destinos, operadores, { esAdmin = true, aprobada = true } = {}
     meeting_point: f.meeting_point.trim() || undefined,
     // Contrato v2 con Booking
     senior_price: f.senior_price === '' ? null : Number(f.senior_price),
+    student_price: f.student_price === '' ? null : Number(f.student_price),
     includes_food: f.includes_food,
     includes_transport: f.includes_transport,
     includes_guide: f.includes_guide,
@@ -338,6 +340,9 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     const seniorErr =
       numero(f.senior_price, { min: 0, max: PRECIO_MAX, requerido: false, que: 'El precio de adulto mayor' }) ??
       (f.senior_price !== '' && !precioErr && Number(f.senior_price) > Number(f.price) ? 'No puede ser mayor que el precio de adulto' : null);
+    const studentErr =
+      numero(f.student_price, { min: 0, max: PRECIO_MAX, requerido: false, que: 'El precio de estudiante' }) ??
+      (f.student_price !== '' && !precioErr && Number(f.student_price) > Number(f.price) ? 'No puede ser mayor que el precio de adulto' : null);
     const erroresItinerario = f.itinerary.map((x) =>
       !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.time) ? 'Indica la hora (HH:MM)'
         : texto(x.title, { min: 3, max: 150, que: 'El título' })
@@ -346,6 +351,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     );
     const e = limpiar({
       senior_price: seniorErr,
+      student_price: studentErr,
       package_discount: f.allows_package ? numero(f.package_discount, { min: 0, max: 50, decimales: 2, que: 'El descuento' }) : null,
       guide_name: texto(f.guide_name, { min: 3, max: 150, requerido: false, que: 'El guía', maxDigitos: 6 }),
       arrival_instructions: texto(f.arrival_instructions, { min: 10, max: 300, requerido: false, que: 'Las instrucciones de llegada', maxDigitos: 5 }),
@@ -488,6 +494,7 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
             <Field label="Precio adulto (USD)" required error={errors.price} hint={`Entre 0.50 y ${PRECIO_MAX.toLocaleString('es-EC')}, hasta 2 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. 45.00" value={f.price} onChange={setNum('price')} />}</Field>
             <Field label="Precio niño 5–12 (USD)" error={errors.child_price} hint="Vacío = mismo precio que adulto; no puede superarlo">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={f.child_price} onChange={setNum('child_price')} />}</Field>
             <Field label="Precio adulto mayor 65+ (USD)" error={errors.senior_price} hint="Vacío = precio de adulto. Infantes (0–4 años): gratis, pero ocupan cupo">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={f.senior_price} onChange={setNum('senior_price')} />}</Field>
+            <Field label="Precio estudiante (USD)" error={errors.student_price} hint="Con carnet vigente. Vacío = precio de adulto">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={f.student_price} onChange={setNum('student_price')} />}</Field>
             <Field label="Duración (horas)" required error={errors.duration_hours} hint={`Entre 0.5 y ${MAX_HORAS} h. Ej. 2.5 = 2 h 30 min · 96 = 4 días`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. 8" value={f.duration_hours} onChange={setNum('duration_hours')} />}</Field>
             <Field label="Cupo por horario" required error={errors.capacity_per_slot} hint="Entre 1 y 500 personas por salida">{(p) => <input {...p} className="input" type="text" inputMode="numeric" autoComplete="off" value={f.capacity_per_slot} onChange={setNum('capacity_per_slot')} />}</Field>
             <div className="field span-2">

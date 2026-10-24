@@ -295,6 +295,7 @@ export default function AttractionDetail() {
                 <li><span>Adulto <span className="muted small">(13 a 64 años)</span></span><strong>{fmtMoney(a.price.total)}</strong></li>
                 <li><span>Niño <span className="muted small">(5 a 12 años)</span></span><strong>{fmtMoney(a.child_price?.total ?? a.price.total)}</strong></li>
                 <li><span>Adulto mayor <span className="muted small">(65 años o más)</span></span><strong>{fmtMoney(a.senior_price?.total ?? a.price.total)}</strong></li>
+                <li><span>Estudiante <span className="muted small">(con carnet vigente)</span></span><strong>{fmtMoney(a.student_price?.total ?? a.price.total)}</strong></li>
                 <li><span>Infante <span className="muted small">(0 a 4 años, ocupa cupo)</span></span><strong>Gratis</strong></li>
               </ul>
               <ul className="list-icons" style={{ marginTop: 14 }}>

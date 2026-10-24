@@ -53,7 +53,8 @@ export default function Checkout() {
   const adultos = entero(params.get('adultos'), 1, 30);
   const ninos = entero(params.get('ninos'), 0, 30 - adultos);
   const mayores = entero(params.get('mayores'), 0, 30 - adultos - ninos);
-  const infantes = entero(params.get('infantes'), 0, 30 - adultos - ninos - mayores);
+  const estudiantes = entero(params.get('estudiantes'), 0, 30 - adultos - ninos - mayores);
+  const infantes = entero(params.get('infantes'), 0, 30 - adultos - ninos - mayores - estudiantes);
 
   const [a, setA] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -95,8 +96,9 @@ export default function Checkout() {
 
   const childPrice = a.child_price?.total ?? a.price.total;
   const seniorPrice = a.senior_price?.total ?? a.price.total;
-  const total = adultos * a.price.total + ninos * childPrice + mayores * seniorPrice;
-  const pax = adultos + ninos + mayores + infantes;
+  const studentPrice = a.student_price?.total ?? a.price.total;
+  const total = adultos * a.price.total + ninos * childPrice + mayores * seniorPrice + estudiantes * studentPrice;
+  const pax = adultos + ninos + mayores + estudiantes + infantes;
   const sinCupo = slot && slot.available < pax;
   const back = `/atraccion/${id}?fecha=${fecha}&personas=${adultos}`;
 
@@ -182,6 +184,7 @@ export default function Checkout() {
           ticket_count: pax,
           children: ninos,
           ...(mayores ? { seniors: mayores } : {}),
+          ...(estudiantes ? { students: estudiantes } : {}),
           ...(infantes ? { infants: infantes } : {}),
           customer_name: form.nombre.trim(),
           customer_email: form.email.trim(),
@@ -255,13 +258,14 @@ export default function Checkout() {
         <h2 style={{ fontSize: '1.08rem' }}>{a.name}</h2>
         <div className="os-row"><CalendarDays size={16} aria-hidden="true" /> <span>{fmtDateLong(fecha)}</span></div>
         <div className="os-row"><Clock size={16} aria-hidden="true" /> Salida {hora}</div>
-        <div className="os-row"><Users size={16} aria-hidden="true" /> {adultos} adulto{adultos > 1 ? 's' : ''}{ninos ? `, ${ninos} niño${ninos > 1 ? 's' : ''}` : ''}{mayores ? `, ${mayores} adulto${mayores > 1 ? 's' : ''} mayor${mayores > 1 ? 'es' : ''}` : ''}{infantes ? `, ${infantes} infante${infantes > 1 ? 's' : ''}` : ''}</div>
+        <div className="os-row"><Users size={16} aria-hidden="true" /> {adultos} adulto{adultos > 1 ? 's' : ''}{ninos ? `, ${ninos} niño${ninos > 1 ? 's' : ''}` : ''}{mayores ? `, ${mayores} adulto${mayores > 1 ? 's' : ''} mayor${mayores > 1 ? 'es' : ''}` : ''}{estudiantes ? `, ${estudiantes} estudiante${estudiantes > 1 ? 's' : ''}` : ''}{infantes ? `, ${infantes} infante${infantes > 1 ? 's' : ''}` : ''}</div>
         <div className="os-row"><MapPin size={16} aria-hidden="true" /> {a.meeting_point}</div>
         <Link to={back} className="small">Cambiar fecha u horario</Link>
         <div className="summary-lines">
           <div><span>{adultos} × Adulto</span><span>{fmtMoney(adultos * a.price.total)}</span></div>
           {ninos > 0 && <div><span>{ninos} × Niño</span><span>{fmtMoney(ninos * childPrice)}</span></div>}
           {mayores > 0 && <div><span>{mayores} × Adulto mayor</span><span>{fmtMoney(mayores * seniorPrice)}</span></div>}
+          {estudiantes > 0 && <div><span>{estudiantes} × Estudiante</span><span>{fmtMoney(estudiantes * studentPrice)}</span></div>}
           {infantes > 0 && <div><span>{infantes} × Infante</span><span>Gratis</span></div>}
         </div>
         <div className="summary-total"><span>Total a pagar</span><span className="price">{fmtMoney(total)}</span></div>

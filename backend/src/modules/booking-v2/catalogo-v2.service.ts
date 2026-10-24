@@ -254,7 +254,9 @@ export class CatalogoV2Service {
       return {
         slot_id: `slot-${dia.replace(/-/g, '')}-${t.hora.replace(':', '')}`,
         time: hora12(t.hora),
+        hora: hora12(t.hora),
         time_24h: `${t.hora}:00`,
+        hora_24h: `${t.hora}:00`,
         cupos_totales: t.total,
         cupos_disponibles: libres,
         estado: libres === 0 ? 'AGOTADO' : libres <= 3 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE',
@@ -262,11 +264,15 @@ export class CatalogoV2Service {
         precio_nino_slot: f.precio_nino ?? f.precio_adulto ?? 0,
       };
     });
+    const total = slots.reduce((s, x) => s + x.cupos_disponibles, 0);
     return {
       atraccion_id: f.uuid,
       date: dia,
-      total_available_slots: slots.reduce((s, x) => s + x.cupos_disponibles, 0),
+      fecha: dia,
+      total_available_slots: total,
+      total_cupos_disponibles: total,
       time_slots: slots,
+      turnos: slots,
     };
   }
 }

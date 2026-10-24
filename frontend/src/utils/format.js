@@ -94,7 +94,7 @@ export const fmtMonth = (y, m) => {
 
 /** «2 adultos, 1 niño, 1 adulto mayor, 1 infante» a partir de una reserva de la API. */
 export const participantes = (r) => {
-  const partes = [[r.adults, 'adulto', 'adultos'], [r.children, 'niño', 'niños'], [r.seniors, 'adulto mayor', 'adultos mayores'], [r.infants, 'infante', 'infantes']]
+  const partes = [[r.adults, 'adulto', 'adultos'], [r.children, 'niño', 'niños'], [r.seniors, 'adulto mayor', 'adultos mayores'], [r.students, 'estudiante', 'estudiantes'], [r.infants, 'infante', 'infantes']]
     .filter(([n]) => n > 0)
     .map(([n, uno, varios]) => `${n} ${n === 1 ? uno : varios}`);
   return partes.join(', ');

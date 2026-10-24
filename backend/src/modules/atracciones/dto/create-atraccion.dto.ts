@@ -274,6 +274,13 @@ export class CreateAtraccionDto {
   @Max(PRECIO_MAX)
   senior_price?: number | null;
 
+  @ApiPropertyOptional({ description: 'Precio estudiante con carnet; si no se indica se cobra como adulto', example: 22.5 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'student_price debe ser un número con máximo 2 decimales' })
+  @Min(0)
+  @Max(PRECIO_MAX)
+  student_price?: number | null;
+
   @ApiPropertyOptional() @IsOptional() @IsBoolean() includes_food?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() includes_transport?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() includes_guide?: boolean;

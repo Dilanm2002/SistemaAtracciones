@@ -312,7 +312,7 @@ export class AtraccionesService {
    * Tarifa versionada: si el precio cambia, se cierra la vigente (hasta ayer) y se abre
    * otra desde hoy. Así las compras anteriores conservan el precio con el que se hicieron.
    */
-  private async fijarTarifa(tx: Sql, atrId: string, tipo: 'ADULTO' | 'NINO' | 'MAYOR', precio: number | null, moneda: string) {
+  private async fijarTarifa(tx: Sql, atrId: string, tipo: 'ADULTO' | 'NINO' | 'MAYOR' | 'ESTUDIANTE', precio: number | null, moneda: string) {
     const vigente = await tx.one<{ tar_id: string; precio: number; hoy: boolean }>(
       `SELECT tar_id::text, tar_precio::float8 AS precio, tar_vigente_desde = ${HOY_EC} AS hoy FROM tarifa
         WHERE atr_id = $1 AND tar_tipo = $2 AND tar_vigente_desde <= ${HOY_EC}
@@ -476,6 +476,13 @@ export class AtraccionesService {
         throw new BadRequestException('senior_price no puede ser mayor que el precio de adulto.');
       }
       await this.fijarTarifa(tx, id, 'MAYOR', dto.senior_price, moneda);
+    }
+    if (dto.student_price !== undefined) {
+      const adulto = dto.price?.total ?? (await tx.one<{ p: number | null }>(`SELECT ${sqlTarifa('ADULTO')} AS p FROM atraccion a WHERE a.atr_id = $1`, [id]))?.p;
+      if (adulto != null && dto.student_price != null && dto.student_price > adulto) {
+        throw new BadRequestException('student_price no puede ser mayor que el precio de adulto.');
+      }
+      await this.fijarTarifa(tx, id, 'ESTUDIANTE', dto.student_price, moneda);
     }
     if (dto.itinerary !== undefined) {
       await tx.query('DELETE FROM atraccion_itinerario WHERE atr_id = $1', [id]);

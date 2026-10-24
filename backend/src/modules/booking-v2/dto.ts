@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  Allow,
   ArrayMaxSize,
   IsArray,
   IsBoolean,
@@ -26,13 +27,26 @@ import { ContieneLetras, RE_NOMBRE_PERSONA } from '../../common/utils/validators
  * Los nombres de campos, enums y límites son los del contrato: no se cambian sin acordarlo.
  */
 
+/**
+ * Alias en español del contrato final (`cantidad_adultos`, `nombre_completo`, `metodo_pago`…): si el
+ * campo principal no llega, toma el valor del alias ANTES de validar. Así se acepta cualquiera de los dos.
+ */
+const alias = (nombre: string, despues?: (v: unknown) => unknown) => ({ value, obj }: { value: unknown; obj: Record<string, unknown> }) => {
+  const v = value ?? obj[nombre];
+  return despues ? despues(v) : v;
+};
+const recortar = (v: unknown) => (typeof v === 'string' ? v.trim() : v);
+const mayusculas = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : v);
+const minusculas = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v);
+const sinSeparadores = (v: unknown) => (typeof v === 'string' ? v.replace(/[\s()-]/g, '') : v);
+
 /** Booleanos en query string: «true»/«false» (y 1/0). */
 const bool = ({ value }: { value: unknown }) => (value === 'true' || value === '1' || value === true ? true : value === 'false' || value === '0' || value === false ? false : value);
 
 export const SORTS_V2 = ['PRICE_ASC', 'PRICE_DESC', 'RATING_DESC', 'POPULARITY'] as const;
 export const METODOS_V2 = ['TARJETA_CREDITO', 'TRANSFERENCIA', 'SOA_BOOKING_GATEWAY', 'PAGO_EN_SITIO'] as const;
 export const TIPOS_DOCUMENTO = ['CEDULA', 'PASAPORTE', 'RUC'] as const;
-export const TIPOS_BOLETO = ['ADULT', 'CHILD', 'SENIOR', 'INFANT'] as const;
+export const TIPOS_BOLETO = ['ADULT', 'CHILD', 'SENIOR', 'INFANT', 'STUDENT'] as const;
 export const TIPOS_EVENTO_V2 = ['RESERVA_CREADA', 'RESERVA_CONFIRMADA', 'STOCK_ACTUALIZADO', 'RESERVA_CANCELADA'] as const;
 
 // ── Catálogo ──────────────────────────────────────────────────────────────
@@ -100,22 +114,29 @@ export class SearchAtraccionesRequestV2 {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() accesible_silla_ruedas?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() animales_asistencia?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() cancelacion_gratuita?: boolean;
-  @ApiPropertyOptional({ default: 1, minimum: 1 }) @IsOptional() @IsInt() @Min(1) @Max(50) adult_count?: number = 1;
+  @ApiPropertyOptional({ default: 1, minimum: 1 }) @IsOptional() @Transform(alias('cantidad_adultos')) @IsInt() @Min(1) @Max(50) adult_count?: number = 1;
+  @ApiPropertyOptional({ description: 'Alias de adult_count' }) @IsOptional() @Allow() cantidad_adultos?: number;
   @ApiPropertyOptional({ default: 1, minimum: 1 }) @IsOptional() @IsInt() @Min(1) page?: number = 1;
   @ApiPropertyOptional({ default: 10, maximum: 50 }) @IsOptional() @IsInt() @Min(1) @Max(50) limit?: number = 10;
 }
 
 export class DisponibilidadQueryV2 {
-  @ApiProperty({ example: '2026-10-25', format: 'date' })
+  @ApiProperty({ example: '2026-10-25', format: 'date', description: 'También se acepta `fecha`' })
+  @IsOptional()
   @IsDateString({ strict: true }, { message: 'date debe ser una fecha válida (YYYY-MM-DD)' })
-  date: string;
+  date?: string;
+
+  @ApiPropertyOptional({ description: 'Alias de date', format: 'date' })
+  @IsOptional()
+  @IsDateString({ strict: true }, { message: 'fecha debe ser una fecha válida (YYYY-MM-DD)' })
+  fecha?: string;
 }
 
 // ── Reservas ──────────────────────────────────────────────────────────────
 
 export class CustomerContactV2 {
-  @ApiProperty({ example: 'Paúl Rosero' })
-  @Transform(trim)
+  @ApiProperty({ example: 'Paúl Rosero', description: 'También se acepta `nombre_completo`' })
+  @Transform(alias('nombre_completo', recortar))
   @IsString()
   @MinLength(3)
   @MaxLength(120)
@@ -123,30 +144,38 @@ export class CustomerContactV2 {
   @Matches(/\S+\s+\S+/, { message: 'full_name debe tener nombre y apellido' })
   full_name: string;
 
-  @ApiProperty({ example: 'paul.rosero@epn.edu.ec' })
-  @Transform(lower)
+  @ApiProperty({ example: 'paul.rosero@epn.edu.ec', description: 'También se acepta `correo`' })
+  @Transform(alias('correo', minusculas))
   @IsEmail({}, { message: 'email no tiene un formato válido' })
   @MaxLength(160)
   email: string;
 
-  @ApiProperty({ example: '+593991234567', description: 'E.164 o celular ecuatoriano 09XXXXXXXX' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.replace(/[\s()-]/g, '') : value))
+  @ApiProperty({ example: '+593991234567', description: 'E.164 o celular ecuatoriano 09XXXXXXXX. También se acepta `telefono`' })
+  @Transform(alias('telefono', sinSeparadores))
   @IsString()
   @Matches(/^(\+[1-9]\d{7,14}|09\d{8}|0[2-7]\d{7})$/, {
     message: 'phone debe tener formato internacional E.164 (+593991234567) o ser un celular válido de Ecuador (09XXXXXXXX)',
   })
   phone: string;
 
-  @ApiProperty({ enum: TIPOS_DOCUMENTO, example: 'CEDULA' })
+  @ApiProperty({ enum: TIPOS_DOCUMENTO, example: 'CEDULA', description: 'También se acepta `tipo_documento`' })
+  @Transform(alias('tipo_documento', mayusculas))
   @IsIn(TIPOS_DOCUMENTO, { message: 'document_type debe ser CEDULA, PASAPORTE o RUC' })
   document_type: (typeof TIPOS_DOCUMENTO)[number];
 
-  @ApiProperty({ example: '1723456789' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @ApiProperty({ example: '1723456789', description: 'También se acepta `numero_documento`' })
+  @Transform(alias('numero_documento', mayusculas))
   @IsString()
   @MinLength(6)
   @MaxLength(13)
   document_id: string;
+
+  // Alias en español (contrato final)
+  @ApiPropertyOptional() @IsOptional() @Allow() nombre_completo?: string;
+  @ApiPropertyOptional() @IsOptional() @Allow() correo?: string;
+  @ApiPropertyOptional() @IsOptional() @Allow() telefono?: string;
+  @ApiPropertyOptional() @IsOptional() @Allow() tipo_documento?: string;
+  @ApiPropertyOptional() @IsOptional() @Allow() numero_documento?: string;
 }
 
 export class PassengerItemV2 {
@@ -171,25 +200,42 @@ export class PassengerItemV2 {
 }
 
 export class CreateReservaRequestV2 {
-  @ApiPropertyOptional({ description: 'Obligatorio en POST /atracciones/reservas', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
-  @IsOptional()
-  @IsString()
+  @ApiProperty({ example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479', description: 'UUID o slug de la atracción' })
+  @IsString({ message: 'atraccion_id es obligatorio' })
   @MaxLength(220)
-  atraccion_id?: string;
+  atraccion_id: string;
 
   @ApiProperty({ example: '2026-10-25', format: 'date' })
   @IsDateString({ strict: true }, { message: 'fecha debe ser una fecha válida (YYYY-MM-DD)' })
   fecha: string;
 
-  @ApiProperty({ example: '10:30 a.m.' })
-  @IsString()
+  @ApiProperty({ example: 'slot-20261025-1030', description: 'Turno obtenido en GET /atracciones/{id}/disponibilidad' })
+  @IsString({ message: 'slot_id es obligatorio' })
+  @Matches(/^slot-\d{8}-\d{4}$/, { message: 'slot_id debe tener el formato slot-AAAAMMDD-HHMM (el de la consulta de disponibilidad)' })
+  slot_id: string;
+
+  @ApiProperty({ example: '10:30:00', description: 'HH:mm:ss (24 h) o «10:30 a.m.»; también se acepta `time_24h`' })
+  @Transform(alias('time_24h'))
+  @IsString({ message: 'hora es obligatoria' })
   @MaxLength(12)
   hora: string;
 
-  @ApiProperty({ example: 2, minimum: 1 }) @IsInt() @Min(1, { message: 'adult_count debe ser al menos 1' }) @Max(50) adult_count: number;
-  @ApiPropertyOptional({ example: 1, default: 0 }) @IsOptional() @IsInt() @Min(0) @Max(50) child_count?: number = 0;
-  @ApiPropertyOptional({ example: 0, default: 0 }) @IsOptional() @IsInt() @Min(0) @Max(50) senior_count?: number = 0;
-  @ApiPropertyOptional({ example: 0, default: 0 }) @IsOptional() @IsInt() @Min(0) @Max(50) infant_count?: number = 0;
+  @ApiPropertyOptional({ example: '10:30:00' })
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, { message: 'time_24h debe tener formato HH:mm o HH:mm:ss' })
+  time_24h?: string;
+
+  @ApiProperty({ example: 2, minimum: 1 })
+  @Transform(alias('cantidad_adultos'))
+  @IsInt({ message: 'adult_count es obligatorio' })
+  @Min(1, { message: 'adult_count debe ser al menos 1' })
+  @Max(50)
+  adult_count: number;
+
+  @ApiPropertyOptional({ example: 1, default: 0 }) @IsOptional() @Transform(alias('cantidad_ninos')) @IsInt() @Min(0) @Max(50) child_count?: number;
+  @ApiPropertyOptional({ example: 0, default: 0 }) @IsOptional() @Transform(alias('cantidad_seniors')) @IsInt() @Min(0) @Max(50) senior_count?: number;
+  @ApiPropertyOptional({ example: 0, default: 0 }) @IsOptional() @Transform(alias('cantidad_estudiantes')) @IsInt() @Min(0) @Max(50) student_count?: number;
+  @ApiPropertyOptional({ example: 0, default: 0 }) @IsOptional() @Transform(alias('cantidad_infantes')) @IsInt() @Min(0) @Max(50) infant_count?: number;
 
   @ApiProperty({ type: CustomerContactV2 })
   @ValidateNested()
@@ -205,19 +251,33 @@ export class CreateReservaRequestV2 {
   passengers?: PassengerItemV2[];
 
   @ApiPropertyOptional({ example: 'SAGA-7K2X9M' }) @IsOptional() @IsString() @MaxLength(60) @Matches(/^[\w.:-]+$/) saga_id?: string;
-  @ApiPropertyOptional({ example: '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d' }) @IsOptional() @IsString() @MaxLength(64) idempotency_key?: string;
+  @ApiPropertyOptional({ deprecated: true, description: 'Obsoleto: debe coincidir con la cabecera Idempotency-Key' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  idempotency_key?: string;
 
-  @ApiProperty({ enum: METODOS_V2, example: 'SOA_BOOKING_GATEWAY' })
+  @ApiProperty({ enum: METODOS_V2, example: 'SOA_BOOKING_GATEWAY', description: 'También se acepta `metodo_pago`' })
+  @Transform(alias('metodo_pago'))
   @IsIn(METODOS_V2, { message: 'payment_method debe ser TARJETA_CREDITO, TRANSFERENCIA, SOA_BOOKING_GATEWAY o PAGO_EN_SITIO' })
   payment_method: (typeof METODOS_V2)[number];
 
-  @ApiPropertyOptional({ example: 'Un pasajero requiere asistencia para subir al bus.' })
+  @ApiPropertyOptional({ example: 'Un pasajero requiere asistencia para subir al bus.', description: 'También se acepta `observaciones`' })
   @IsOptional()
-  @Transform(trim)
+  @Transform(alias('observaciones', recortar))
   @IsString()
   @MaxLength(500)
   @ContieneLetras()
   special_requirements?: string;
+
+  // Alias en español (contrato final)
+  @ApiPropertyOptional() @IsOptional() @Allow() cantidad_adultos?: number;
+  @ApiPropertyOptional() @IsOptional() @Allow() cantidad_ninos?: number;
+  @ApiPropertyOptional() @IsOptional() @Allow() cantidad_seniors?: number;
+  @ApiPropertyOptional() @IsOptional() @Allow() cantidad_estudiantes?: number;
+  @ApiPropertyOptional() @IsOptional() @Allow() cantidad_infantes?: number;
+  @ApiPropertyOptional() @IsOptional() @Allow() metodo_pago?: string;
+  @ApiPropertyOptional() @IsOptional() @Allow() observaciones?: string;
 }
 
 export class CancelReservationRequestV2 {

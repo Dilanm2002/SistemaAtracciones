@@ -110,6 +110,13 @@ export class ReservationRequestDto {
   @Max(30, { message: 'seniors no puede superar 30' })
   seniors?: number;
 
+  @ApiPropertyOptional({ description: 'Cuántos de los tickets son de estudiante con carnet (tarifa de estudiante)', example: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(30, { message: 'students no puede superar 30' })
+  students?: number;
+
   @ApiPropertyOptional({ description: 'Cuántos de los tickets son de infante (0–4 años): no pagan, pero ocupan cupo', example: 0 })
   @IsOptional()
   @IsInt()
@@ -218,6 +225,7 @@ export class ReservationResponseDto {
   @ApiPropertyOptional({ type: InvoiceDto, description: 'Factura de la reserva (solo cuando el pago está aprobado)' }) invoice?: InvoiceDto;
   @ApiPropertyOptional({ description: 'Adultos mayores (65+)' }) seniors?: number;
   @ApiPropertyOptional({ description: 'Infantes (0–4 años): no pagan, pero ocupan cupo' }) infants?: number;
+  @ApiPropertyOptional({ description: 'Estudiantes con carnet' }) students?: number;
   @ApiPropertyOptional({ enum: ['WEB', 'BOOKING'], description: 'Dónde se hizo la reserva' }) origin?: 'WEB' | 'BOOKING';
   @ApiPropertyOptional({ description: 'Cuándo se registró el check-in presencial (ISO 8601)' }) checked_in_at?: string;
   @ApiPropertyOptional() _links?: Record<string, Link>;

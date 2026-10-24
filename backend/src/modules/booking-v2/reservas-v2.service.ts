@@ -98,23 +98,25 @@ export class ReservasV2Service {
     }
   }
 
-  /** POST /atracciones/reservas y /atracciones/{id}/reservations: 201 o 409 OUT_OF_STOCK. */
-  async crear(atrRef: string | undefined, dto: CreateReservaRequestV2, key: string) {
-    const ref = atrRef ?? dto.atraccion_id;
-    if (!ref) throw new BadRequestException('atraccion_id es obligatorio en POST /atracciones/reservas.');
-    if (atrRef && dto.atraccion_id && dto.atraccion_id !== atrRef) {
-      throw new BadRequestException('atraccion_id del cuerpo no coincide con el de la URL.');
-    }
+  /** POST /atracciones/reservas: 201 confirmada o 409 OUT_OF_STOCK (activa la compensación de la saga). */
+  async crear(dto: CreateReservaRequestV2, key: string) {
+    const ref = dto.atraccion_id;
     if (dto.idempotency_key && dto.idempotency_key !== key) {
       throw new BadRequestException('idempotency_key del cuerpo no coincide con la cabecera Idempotency-Key.');
     }
     const hora = parseHora(dto.hora);
-    if (!hora) throw new BadRequestException('hora no es válida: usa el formato del turno, por ejemplo «10:30 a.m.» o «10:30».');
+    if (!hora) throw new BadRequestException('hora no es válida: usa HH:mm:ss (24 h) o el formato del turno, p. ej. «10:30 a.m.».');
+    // El turno (slot_id) manda: debe ser el mismo día y hora que fecha y hora
+    const [, diaSlot, horaSlot] = /^slot-(\d{8})-(\d{4})$/.exec(dto.slot_id)!;
+    if (diaSlot !== dto.fecha.slice(0, 10).replace(/-/g, '') || horaSlot !== hora.replace(':', '')) {
+      throw new BadRequestException(`slot_id ${dto.slot_id} no corresponde a la fecha ${dto.fecha.slice(0, 10)} y hora ${hora}.`);
+    }
     this.validarDocumento(dto.customer.document_type, dto.customer.document_id);
     const ninos = dto.child_count ?? 0;
     const seniors = dto.senior_count ?? 0;
     const infantes = dto.infant_count ?? 0;
-    const tickets = dto.adult_count + ninos + seniors + infantes;
+    const estudiantes = dto.student_count ?? 0;
+    const tickets = dto.adult_count + ninos + seniors + infantes + estudiantes;
     if (tickets > 50) throw new BadRequestException('Una reserva admite como máximo 50 boletos.');
     if ((dto.passengers?.length ?? 0) > tickets - 1) {
       throw new BadRequestException('passengers tiene más acompañantes que boletos (el titular ya ocupa uno).');
@@ -138,6 +140,7 @@ export class ReservasV2Service {
             ninos,
             seniors,
             infantes,
+            estudiantes,
             metodo: METODO[dto.payment_method],
             confirmarSiempre: true,
             origen: 'BOOKING',
@@ -177,8 +180,11 @@ export class ReservasV2Service {
           await tx.query('SELECT 1 FROM reserva WHERE res_uuid = $1 FOR UPDATE', [r0.id]);
           const r = await this.filaOr404(r0.id, tx);
           if (r.estado === 'CANCELADA_RES') return null; // ya compensada: mismo resultado
-          if (r.estado === 'CHECKED_IN') throw new BadRequestException('El titular ya hizo el check-in: la experiencia está en curso y no puede cancelarse.');
-          if (r.estado === 'COMPLETADA') throw new BadRequestException('La experiencia ya se realizó; no puede cancelarse.');
+          // Conflicto de estado (409): ya no hay nada que compensar
+          if (r.estado === 'CHECKED_IN') {
+            throw new ConflictException({ message: 'El titular ya hizo el check-in: la experiencia está en curso y no puede cancelarse.', code: 'INVALID_STATE' });
+          }
+          if (r.estado === 'COMPLETADA') throw new ConflictException({ message: 'La experiencia ya se realizó; no puede cancelarse.', code: 'INVALID_STATE' });
           const solicitante = dto.solicitante ?? 'CLIENTE';
           if (solicitante === 'CLIENTE') {
             const pol = this.base.politicaCancelacion(r);
@@ -202,7 +208,35 @@ export class ReservasV2Service {
    * Check-in presencial: el guía valida el documento del titular (y/o el QR del voucher) en el
    * punto de encuentro. La reserva pasa a CHECKED_IN con la hora exacta, el guía y el dispositivo.
    */
-  async checkin(ref: string, dto: CheckinRequestV2) {
+  /** Respuesta del check-in a partir de la reserva (también para repetir la de una Idempotency-Key ya usada). */
+  private respuestaCheckin(r: FilaReserva) {
+    return {
+      reserva_id: r.id,
+      reservation_code: r.codigo,
+      estado: 'CHECKED_IN' as const,
+      titular_nombre: r.pax_nombre ?? '',
+      titular_documento: r.pax_documento ?? '',
+      guia_asignado: r.guia ?? 'Guía oficial asignado por Descubre EC',
+      punto_encuentro: r.punto_encuentro ?? r.direccion ?? r.ciudad,
+      hora_checkin: new Date(r.checkin_en!).toISOString(),
+      pase_abordar_qr: this.mapper.qrUrl(r.codigo, true),
+    };
+  }
+
+  /**
+   * Check-in con Idempotency-Key (contrato final): la misma clave repite el pase ya emitido (200), por
+   * ejemplo si el escáner reintenta por mala señal; otra clave sobre una reserva ya registrada es 409.
+   */
+  async checkin(ref: string, dto: CheckinRequestV2, key: string) {
+    const r0 = await this.filaOr404(ref);
+    const sujeto = await this.usuarioBooking();
+    return this.idempotency.execute(key, `v2:checkin:${r0.id}`, sujeto, dto, () => this.registrarCheckin(r0.id, dto), {
+      referencia: (r) => r.reserva_id,
+      reconstruir: async (uuid) => this.respuestaCheckin(await this.filaOr404(uuid)),
+    });
+  }
+
+  private async registrarCheckin(ref: string, dto: CheckinRequestV2) {
     await this.catalogos.precargar();
     const secreto = this.config.getOrThrow<string>('JWT_SECRET');
     const r = await this.db.tx(async (tx) => {
@@ -232,17 +266,7 @@ export class ReservasV2Service {
       await emitirEventoReserva(tx, EVENTOS.RESERVA_CHECKIN, f.res_id, { guide_code: dto.guia_codigo ?? null });
       return this.filaOr404(f.id, tx);
     });
-    return {
-      reserva_id: r.id,
-      reservation_code: r.codigo,
-      estado: 'CHECKED_IN' as const,
-      titular_nombre: r.pax_nombre ?? '',
-      titular_documento: r.pax_documento ?? dto.documento_identidad,
-      guia_asignado: r.guia ?? 'Guía oficial asignado por Descubre EC',
-      punto_encuentro: r.punto_encuentro ?? r.direccion ?? r.ciudad,
-      hora_checkin: new Date(r.checkin_en!).toISOString(),
-      pase_abordar_qr: this.mapper.qrUrl(r.codigo, true),
-    };
+    return { ...this.respuestaCheckin(r), titular_documento: r.pax_documento ?? dto.documento_identidad };
   }
 
   /** Contenido del QR: voucher (siempre) o pase de abordar (solo después del check-in). */

@@ -7,6 +7,22 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.9.0] - 2026-10-24
+
+### Cambiado
+- **Contrato v2 final con Booking Prototipo** (`contracts/atracciones-openapi-v2.yaml`, tal como lo envió Booking; valida sin errores):
+  - **Seguridad del contrato:** reservas, consulta de reservas, cancelación, check-in, promociones y eventos exigen **`X-API-Key`** (variable `BOOKING_API_KEY`, comparada en tiempo constante) **o** el JWT de un administrador. Sin credenciales: 401; con un JWT sin permisos: 403. El catálogo, la disponibilidad y la salud siguen públicos.
+  - Se quitan las rutas que el contrato final ya no tiene: `/{id}/availability` (queda `/{id}/disponibilidad`, con `date` o `fecha`), `/{id}/reservations` y los alias `/reservations/{id}`, `/cancel` y `/checkin`.
+  - **`slot_id` obligatorio** al reservar; debe coincidir con `fecha` y `hora` (`HH:mm:ss` o «10:30 a.m.»).
+  - **Alias en español** en peticiones y respuestas (`cantidad_adultos`, `nombre_completo`, `metodo_pago`, `precio`, `itinerario`, `punto_encuentro_geo`…).
+  - **Estados de 6 fases:** `PENDING`, `CONFIRMED`, `CHECKED_IN`, `COMPLETED`, `CANCELLED` y `EXPIRED`.
+  - **Check-in idempotente:** la misma `Idempotency-Key` devuelve el pase ya emitido (200); otra clave, 409.
+  - **Cancelación:** 409 ante un conflicto de estado; informa `reembolso_id` y `monto_reembolsado`.
+  - **Eventos en formato CloudEvents 1.0** (`specversion`, `source`, `data`).
+
+### Agregado
+- **Boleto de estudiante** (migración `010_boleto_estudiante.sql`): tarifa `ESTUDIANTE` (75 % del adulto en los datos de demostración), cantidad y precio en la reserva, línea propia en la factura, y selector en la web y en el panel.
+
 ## [2.8.0] - 2026-10-24
 
 ### Agregado

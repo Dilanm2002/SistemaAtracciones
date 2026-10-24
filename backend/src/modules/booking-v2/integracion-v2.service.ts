@@ -103,7 +103,10 @@ export class IntegracionV2Service {
          FROM evento WHERE evt_id > $1 AND evt_tipo = ANY($2::text[]) ORDER BY evt_id LIMIT $3`,
       [q.after ?? 0, tipos, q.limit ?? 50],
     );
+    // CloudEvents v1.0 (contrato final): specversion, source, y `data` como alias de `payload`
     return filas.map((e) => ({
+      specversion: '1.0',
+      source: '/api/v2/atracciones',
       event_id: e.uuid,
       sequence_number: Number(e.id),
       event_type: A_V2[e.tipo],
@@ -112,6 +115,7 @@ export class IntegracionV2Service {
       correlation_id: e.correlacion ?? `evt-${e.id}`,
       timestamp: new Date(e.creado).toISOString(),
       payload: e.datos,
+      data: e.datos,
     }));
   }
 

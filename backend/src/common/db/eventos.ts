@@ -52,6 +52,7 @@ export async function emitirEventoReserva(tx: Sql, tipo: TipoEvento, resId: stri
               'attraction_id', a.atr_uuid, 'operator_id', op.ope_codigo, 'city_id', a.ciu_id,
               'date', to_char(r.res_fecha, 'YYYY-MM-DD'), 'time', to_char(r.res_hora, 'HH24:MI'),
               'adults', r.res_adultos, 'children', r.res_ninos, 'seniors', r.res_seniors, 'infants', r.res_infantes,
+              'students', r.res_estudiantes,
               'ticket_count', r.res_numero_tickets, 'origin', r.res_origen, 'saga_id', r.res_saga_id,
               'total', jsonb_build_object('currency', o.ord_moneda, 'total', r.res_subtotal),
               'payment_method', mp.mpa_codigo, 'order_number', o.ord_numero

@@ -74,6 +74,7 @@ export class AtraccionResponseDto extends BaseResponseDto {
   @ApiPropertyOptional() cancellation_hours?: number;
   @ApiPropertyOptional() meeting_point?: string;
   @ApiPropertyOptional({ type: PriceDto, description: 'Adulto mayor (65+)' }) senior_price?: PriceDto;
+  @ApiPropertyOptional({ type: PriceDto, description: 'Estudiante con carnet' }) student_price?: PriceDto;
   @ApiPropertyOptional() includes_food?: boolean;
   @ApiPropertyOptional() includes_transport?: boolean;
   @ApiPropertyOptional() includes_guide?: boolean;
