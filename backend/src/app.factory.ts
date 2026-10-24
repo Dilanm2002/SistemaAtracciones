@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { DataSource } from 'typeorm';
@@ -69,7 +69,10 @@ export async function createApp(): Promise<NestExpressApplication> {
     }),
   );
 
-  app.setGlobalPrefix('api/v1');
+  // Versionado por URI: todo lo existente sigue en /api/v1 (versión por defecto) y el contrato v2
+  // con Booking Prototipo (contracts/atracciones-openapi-v2.yaml) vive en /api/v2.
+  app.setGlobalPrefix('api');
+  app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
   const origins = (process.env.FRONTEND_URL ?? 'http://localhost:5173')
     .split(',')
@@ -78,9 +81,9 @@ export async function createApp(): Promise<NestExpressApplication> {
   app.enableCors({
     origin: origins,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'DPoP', 'Idempotency-Key', 'X-Request-Id', 'traceparent'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'DPoP', 'Idempotency-Key', 'X-Request-Id', 'X-Correlation-Id', 'X-Node-Id', 'X-API-Key', 'traceparent'],
     // Date: el navegador sincroniza su reloj con el del servidor para firmar las pruebas DPoP
-    exposedHeaders: ['Location', 'X-API-Deprecation-Date', 'X-Total-Count', 'X-Request-Id', 'traceparent', 'Retry-After', 'Date', 'Server-Timing'],
+    exposedHeaders: ['Location', 'X-API-Deprecation-Date', 'X-Total-Count', 'X-Request-Id', 'X-Correlation-Id', 'traceparent', 'Retry-After', 'Date', 'Server-Timing'],
     maxAge: 86400,
   });
   // La web (otro dominio) puede leer Server-Timing en PerformanceResourceTiming

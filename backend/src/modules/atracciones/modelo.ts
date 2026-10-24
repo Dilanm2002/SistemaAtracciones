@@ -41,12 +41,13 @@ export const TIPOS_DE: Record<ProductType, string[]> = {
 export const ESTADO_A_STATUS: Record<string, ReservationStatus> = {
   CONFIRMADA: ReservationStatus.CONFIRMED,
   COMPLETADA: ReservationStatus.CONFIRMED,
+  CHECKED_IN: ReservationStatus.CONFIRMED,
   PENDIENTE_PAGO: ReservationStatus.PENDING,
   CANCELADA_RES: ReservationStatus.CANCELLED,
 };
 
 export const STATUS_A_ESTADOS: Record<ReservationStatus, string[]> = {
-  [ReservationStatus.CONFIRMED]: ['CONFIRMADA', 'COMPLETADA'],
+  [ReservationStatus.CONFIRMED]: ['CONFIRMADA', 'COMPLETADA', 'CHECKED_IN'],
   [ReservationStatus.PENDING]: ['PENDIENTE_PAGO'],
   [ReservationStatus.CANCELLED]: ['CANCELADA_RES'],
 };
@@ -54,7 +55,7 @@ export const STATUS_A_ESTADOS: Record<ReservationStatus, string[]> = {
 export const METODOS: PaymentMethod[] = [PaymentMethod.TARJETA, PaymentMethod.TRANSFERENCIA, PaymentMethod.EN_SITIO];
 
 /** Tarifa vigente de un tipo (ADULTO/NINO) para la atracción `alias`. */
-export const sqlTarifa = (tipo: 'ADULTO' | 'NINO', alias = 'a') => `(
+export const sqlTarifa = (tipo: 'ADULTO' | 'NINO' | 'MAYOR', alias = 'a') => `(
   SELECT t.tar_precio::float8 FROM tarifa t
    WHERE t.atr_id = ${alias}.atr_id AND t.tar_tipo = '${tipo}'
      AND t.tar_vigente_desde <= ${HOY_EC}
@@ -95,6 +96,23 @@ export interface FilaAtraccion {
   operador: string;
   precio_adulto: number | null;
   precio_nino: number | null;
+  precio_mayor: number | null;
+  incluye_comida: boolean;
+  incluye_transporte: boolean;
+  incluye_guia: boolean;
+  accesible_silla: boolean;
+  accesible_coche: boolean;
+  animales_servicio: boolean;
+  guia: string | null;
+  instrucciones_llegada: string | null;
+  permite_paquete: boolean;
+  descuento_paquete: number;
+  ope_ruc: string | null;
+  ope_telefono: string | null;
+  ope_correo: string | null;
+  itinerario: { orden: number; hora: string; titulo: string; descripcion: string | null; duracion_min: number; lugar: string | null }[];
+  /** Promedio por pilar (1–5); las reseñas sin nota por pilar aportan su nota general */
+  pilares: { limpieza: number | null; servicio: number | null; calidad_precio: number | null; puntualidad: number | null } | null;
   vendidos_60d: number;
   ocupacion_14d: number | null;
   fotos: { url: string; alt: string }[];
@@ -123,6 +141,22 @@ export const SELECT_ATRACCION = `
          o.ope_id::text AS ope_id, o.ope_codigo, o.ope_nombre AS operador,
          ${sqlTarifa('ADULTO')} AS precio_adulto,
          ${sqlTarifa('NINO')} AS precio_nino,
+         ${sqlTarifa('MAYOR')} AS precio_mayor,
+         a.atr_incluye_comida AS incluye_comida, a.atr_incluye_transporte AS incluye_transporte, a.atr_incluye_guia AS incluye_guia,
+         a.atr_accesible_silla AS accesible_silla, a.atr_accesible_coche AS accesible_coche, a.atr_animales_servicio AS animales_servicio,
+         a.atr_guia AS guia, a.atr_instrucciones_llegada AS instrucciones_llegada,
+         a.atr_permite_paquete AS permite_paquete, a.atr_descuento_paquete::float8 AS descuento_paquete,
+         o.ope_ruc AS ope_ruc, o.ope_telefono AS ope_telefono, o.ope_correo AS ope_correo,
+         COALESCE((SELECT json_agg(json_build_object('orden', it.iti_orden, 'hora', to_char(it.iti_hora, 'HH24:MI'), 'titulo', it.iti_titulo,
+                                                     'descripcion', it.iti_descripcion, 'duracion_min', it.iti_duracion_min, 'lugar', it.iti_lugar)
+                            ORDER BY it.iti_orden)
+                     FROM atraccion_itinerario it WHERE it.atr_id = a.atr_id), '[]') AS itinerario,
+         (SELECT json_build_object(
+                   'limpieza', AVG(COALESCE(re.ren_limpieza, re.ren_puntuacion))::float8,
+                   'servicio', AVG(COALESCE(re.ren_servicio, re.ren_puntuacion))::float8,
+                   'calidad_precio', AVG(COALESCE(re.ren_relacion_valor, re.ren_puntuacion))::float8,
+                   'puntualidad', AVG(COALESCE(re.ren_puntualidad, re.ren_puntuacion))::float8)
+            FROM resena re WHERE re.atr_id = a.atr_id AND re.ren_visible) AS pilares,
          (SELECT COALESCE(SUM(r.res_numero_tickets), 0)::int FROM reserva r
             JOIN disponibilidad d ON d.dis_id = r.dis_id JOIN estado e ON e.est_id = r.est_id
            WHERE d.atr_id = a.atr_id AND e.est_codigo <> 'CANCELADA_RES'
@@ -180,6 +214,24 @@ export interface FilaReserva {
   pax_telefono: string | null;
   metodo: PaymentMethod | null;
   factura: FilaFactura | null;
+  dis_id: string;
+  seniors: number;
+  infantes: number;
+  precio_adulto: number;
+  precio_nino: number | null;
+  precio_senior: number | null;
+  origen: 'WEB' | 'BOOKING';
+  saga_id: string | null;
+  checkin_en: Date | null;
+  checkin_guia: string | null;
+  confirmado_en: Date | null;
+  orden_numero: string;
+  atr_slug: string;
+  guia: string | null;
+  instrucciones_llegada: string | null;
+  pax_tipo_documento: 'CEDULA' | 'PASAPORTE' | 'RUC' | null;
+  pago_estado: string | null;
+  acompanantes: { nombre: string; documento: string | null; tipo: 'ADULT' | 'CHILD' | 'SENIOR' | 'INFANT' | null }[];
 }
 
 /** Factura de la orden (encabezado + factura_detalle), armada como JSON por SELECT_RESERVA. */
@@ -218,7 +270,16 @@ export const SELECT_RESERVA = `
          (SELECT f.fot_url FROM atraccion_foto f WHERE f.atr_id = a.atr_id ORDER BY f.fot_orden, f.fot_id LIMIT 1) AS foto,
          op.ope_codigo, o.usu_id::text AS usu_id, u.usu_correo AS correo, u.usu_telefono AS telefono,
          pax.pax_nombre, pax.pax_documento, pax.pax_correo, pax.pax_telefono, mp.mpa_codigo AS metodo,
-         fac.factura
+         fac.factura,
+         r.dis_id::text AS dis_id, r.res_seniors AS seniors, r.res_infantes AS infantes,
+         r.res_precio_unitario::float8 AS precio_adulto, r.res_precio_nino::float8 AS precio_nino, r.res_precio_senior::float8 AS precio_senior,
+         r.res_origen AS origen, r.res_saga_id AS saga_id, r.res_checkin_en AS checkin_en, r.res_checkin_guia AS checkin_guia,
+         r.res_confirmado_en AS confirmado_en, o.ord_numero AS orden_numero, a.atr_slug AS atr_slug, a.atr_guia AS guia,
+         a.atr_instrucciones_llegada AS instrucciones_llegada, pax.pax_tipo_documento,
+         (SELECT ep.est_codigo FROM pago pg JOIN estado ep ON ep.est_id = pg.est_id
+           WHERE pg.ord_id = o.ord_id ORDER BY pg.pag_id DESC LIMIT 1) AS pago_estado,
+         COALESCE((SELECT json_agg(json_build_object('nombre', x.pax_nombre, 'documento', x.pax_documento, 'tipo', x.pax_tipo_boleto) ORDER BY x.pax_id)
+                     FROM reserva_pasajero x WHERE x.res_id = r.res_id AND NOT x.pax_es_titular), '[]') AS acompanantes
     FROM reserva r
     JOIN estado e         ON e.est_id = r.est_id
     JOIN orden_detalle dt ON dt.det_id = r.det_id
@@ -228,7 +289,7 @@ export const SELECT_RESERVA = `
     JOIN ciudad c         ON c.ciu_id = a.ciu_id
     JOIN operador op      ON op.ope_id = a.ope_id
     LEFT JOIN metodo_pago mp ON mp.mpa_id = o.mpa_id
-    LEFT JOIN LATERAL (SELECT x.pax_nombre, x.pax_documento, x.pax_correo, x.pax_telefono FROM reserva_pasajero x
+    LEFT JOIN LATERAL (SELECT x.pax_nombre, x.pax_documento, x.pax_correo, x.pax_telefono, x.pax_tipo_documento FROM reserva_pasajero x
                         WHERE x.res_id = r.res_id ORDER BY x.pax_es_titular DESC, x.pax_id LIMIT 1) pax ON TRUE
     LEFT JOIN LATERAL (
       SELECT json_build_object(

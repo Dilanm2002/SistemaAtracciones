@@ -124,3 +124,32 @@ test('la confirmación muestra la factura con su detalle, sin scroll horizontal 
   const { violations } = await new AxeBuilder({ page }).include('.factura').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
   expect(violations.filter((v) => v.impact === 'critical' || v.impact === 'serious').map((v) => v.id)).toEqual([]);
 });
+
+test('el pago muestra su progreso paso a paso (círculos de carga) y termina en la confirmación', async ({ page }) => {
+  await simularApi(page, { usuario: CLIENTE });
+  await abrir(page, `/reservar/${ATRACCION.id}?fecha=${enDias(10)}&hora=09:00&adultos=2`);
+  const llenar = async (l, v) => { const i = page.getByLabel(l); if (!(await i.inputValue())) await i.fill(v); };
+  await llenar('Nombre completo', 'María Guamán');
+  await llenar('Correo electrónico', 'cliente@descubre-ec.com');
+  await llenar('Teléfono / WhatsApp', '0991234567');
+  await llenar('Cédula', '1710034065');
+  await page.getByRole('button', { name: 'Continuar al pago' }).click();
+  await page.getByLabel('Número de tarjeta').fill('4111111111111111');
+  await page.getByLabel('Vencimiento').fill('12/30');
+  await page.getByLabel('CVV').fill('123');
+  await page.getByLabel('Titular de la tarjeta').fill('Maria Guaman');
+  await page.locator('#form-pago input[type=checkbox]').check();
+  await page.locator('#form-pago button.btn-cta').click();
+
+  const dialogo = page.getByRole('dialog', { name: 'Procesando tu pago' });
+  await expect(dialogo).toBeVisible();
+  await expect(dialogo.locator('.pp-paso')).toHaveCount(3);
+  await expect(dialogo.locator('.pp-paso.is-activo .spinner')).toBeVisible();
+  expect(await desbordeHorizontal(page)).toBeLessThanOrEqual(0);
+  const { violations } = await new AxeBuilder({ page }).include('.pp-caja').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze();
+  expect(violations.filter((v) => v.impact === 'critical' || v.impact === 'serious').map((v) => v.id)).toEqual([]);
+  // Al terminar, los tres pasos quedan con check y se abre la confirmación
+  await expect(page.locator('.pp-paso.is-ok')).toHaveCount(3);
+  await page.waitForURL(/\/confirmada$/);
+});
+

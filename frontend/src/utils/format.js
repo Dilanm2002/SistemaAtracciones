@@ -78,7 +78,11 @@ export const STATUS = {
   CONFIRMED: { label: 'Confirmada', tone: 'success' },
   PENDING: { label: 'Pendiente de pago', tone: 'warning' },
   CANCELLED: { label: 'Cancelada', tone: 'danger' },
+  CHECKED_IN: { label: 'Check-in hecho', tone: 'success' },
 };
+
+/** Estado que se muestra: «Check-in hecho» cuando el titular ya se presentó (la API lo informa en checked_in_at). */
+export const estadoVisible = (r) => (r?.checked_in_at && r.status === 'CONFIRMED' ? 'CHECKED_IN' : r?.status);
 
 export const pluralize = (n, one, many) => `${fmtNumber(n)} ${n === 1 ? one : many}`;
 
@@ -87,3 +91,12 @@ export const fmtMonth = (y, m) => {
   const t = new Date(y, m - 1, 1).toLocaleDateString('es-EC', { month: 'long', year: 'numeric' });
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
+
+/** «2 adultos, 1 niño, 1 adulto mayor, 1 infante» a partir de una reserva de la API. */
+export const participantes = (r) => {
+  const partes = [[r.adults, 'adulto', 'adultos'], [r.children, 'niño', 'niños'], [r.seniors, 'adulto mayor', 'adultos mayores'], [r.infants, 'infante', 'infantes']]
+    .filter(([n]) => n > 0)
+    .map(([n, uno, varios]) => `${n} ${n === 1 ? uno : varios}`);
+  return partes.join(', ');
+};
+

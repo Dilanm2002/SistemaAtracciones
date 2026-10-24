@@ -6,6 +6,8 @@ import { Scopes } from '../../common/auth/auth.decorators';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { SCOPES } from '../../common/auth/scopes';
 import { volcarMetricas } from '../../common/observabilidad/metricas-http';
+import { AtraccionesModule } from '../atracciones/atracciones.module';
+import { StockSyncService } from '../atracciones/stock-sync.service';
 import { ResumenQueryDto, TelemetriaDto } from './dto/telemetria.dto';
 import { ObservabilidadService } from './observabilidad.service';
 
@@ -16,7 +18,10 @@ import { ObservabilidadService } from './observabilidad.service';
 @ApiTags('Observabilidad')
 @Controller('ops')
 export class ObservabilidadController {
-  constructor(private readonly svc: ObservabilidadService) {}
+  constructor(
+    private readonly svc: ObservabilidadService,
+    private readonly stock: StockSyncService,
+  ) {}
 
   @Get('health/live')
   @Header('Cache-Control', 'no-store')
@@ -52,9 +57,20 @@ export class ObservabilidadController {
   resumen(@Query() q: ResumenQueryDto) {
     return this.svc.resumen(q.rango);
   }
+
+  @Post('stock-sync/reintentar')
+  @HttpCode(200)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Scopes(SCOPES.ADMIN)
+  @ApiOperation({ summary: 'Reintenta ahora los envíos gRPC de stock a Booking que quedaron pendientes o con error' })
+  async reintentarStock() {
+    return { sent: await this.stock.reintentarPendientes(100) };
+  }
 }
 
 @Module({
+  imports: [AtraccionesModule],
   controllers: [ObservabilidadController],
   providers: [ObservabilidadService],
 })

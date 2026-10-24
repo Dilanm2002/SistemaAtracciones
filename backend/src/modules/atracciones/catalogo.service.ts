@@ -40,6 +40,7 @@ export class CatalogoService {
   private readonly SELECT_CATEGORIA = `
     SELECT c.cat_id AS id, c.cat_padre_id AS padre_id, c.cat_slug AS slug, c.cat_nombre AS nombre, c.cat_icono AS icono,
            c.cat_descripcion AS descripcion, c.cat_orden AS orden, c.cat_activa AS activa,
+           c.cat_incluye_comida AS incluye_comida, c.cat_incluye_transporte AS incluye_transporte, c.cat_incluye_guia AS incluye_guia,
            (SELECT COUNT(*)::int FROM atraccion_categoria ac JOIN atraccion a ON a.atr_id = ac.atr_id
              WHERE ac.cat_id = c.cat_id AND ${PUBLICADA}) AS total_atracciones
       FROM categoria c`;
@@ -75,9 +76,13 @@ export class CatalogoService {
     if (await this.db.one('SELECT 1 FROM categoria WHERE cat_slug = $1', [slug])) throw new ConflictException(`Ya existe una categoría con el slug "${slug}".`);
     await this.validarPadre(this.db, null, dto.padre_id);
     const r = await this.db.one<{ id: number }>(
-      `INSERT INTO categoria (cat_padre_id, cat_nombre, cat_slug, cat_descripcion, cat_icono, cat_orden, cat_activa)
-       VALUES ($1, $2, $3, $4, COALESCE($5, 'map-pin'), COALESCE($6, 0), COALESCE($7, TRUE)) RETURNING cat_id AS id`,
-      [dto.padre_id ?? null, dto.nombre, slug, dto.descripcion ?? null, dto.icono ?? null, dto.orden ?? null, dto.activa ?? null],
+      `INSERT INTO categoria (cat_padre_id, cat_nombre, cat_slug, cat_descripcion, cat_icono, cat_orden, cat_activa,
+                              cat_incluye_comida, cat_incluye_transporte, cat_incluye_guia)
+       VALUES ($1, $2, $3, $4, COALESCE($5, 'map-pin'), COALESCE($6, 0), COALESCE($7, TRUE), $8, $9, $10) RETURNING cat_id AS id`,
+      [
+        dto.padre_id ?? null, dto.nombre, slug, dto.descripcion ?? null, dto.icono ?? null, dto.orden ?? null, dto.activa ?? null,
+        dto.incluye_comida ?? false, dto.incluye_transporte ?? false, dto.incluye_guia ?? false,
+      ],
     );
     await this.bitacora.registrar(user.sub, 'CREAR', 'categoria', r!.id, { slug });
     return this.categoria(r!.id);
@@ -98,6 +103,9 @@ export class CatalogoService {
       orden: ['cat_orden', dto.orden],
       activa: ['cat_activa', dto.activa],
       padre: ['cat_padre_id', dto.padre_id],
+      comida: ['cat_incluye_comida', dto.incluye_comida],
+      transporte: ['cat_incluye_transporte', dto.incluye_transporte],
+      guia: ['cat_incluye_guia', dto.incluye_guia],
     });
     if (s.length) await this.db.query(`UPDATE categoria SET ${s.join(', ')} WHERE cat_id = ${p.add(id)}`, p.values);
     await this.bitacora.registrar(user.sub, 'ACTUALIZAR', 'categoria', id, { campos: Object.keys(dto) });

@@ -104,8 +104,13 @@ export class ResenasService {
     }
     const id = await this.db.tx(async (tx) => {
       const r = await tx.one<{ id: string }>(
-        `INSERT INTO resena (atr_id, usu_id, ren_autor_nombre, ren_puntuacion, ren_comentario) VALUES ($1, $2, $3, $4, $5) RETURNING ren_id::text AS id`,
-        [a.id, user.sub, user.nombre.slice(0, 120), dto.rating, dto.comment],
+        `INSERT INTO resena (atr_id, usu_id, ren_autor_nombre, ren_puntuacion, ren_comentario,
+                             ren_limpieza, ren_servicio, ren_relacion_valor, ren_puntualidad)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING ren_id::text AS id`,
+        [
+          a.id, user.sub, user.nombre.slice(0, 120), dto.rating, dto.comment,
+          dto.cleanliness ?? null, dto.service ?? null, dto.value ?? null, dto.punctuality ?? null,
+        ],
       );
       await this.recalcular(a.id, tx);
       return r!.id;

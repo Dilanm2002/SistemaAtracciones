@@ -32,6 +32,7 @@ const RE_TRACEPARENT = /^00-(?!0{32})([0-9a-f]{32})-(?!0{16})[0-9a-f]{16}-[0-9a-
  * Booking); si no vienen, genera ids nuevos.
  */
 export function nuevoContexto(requestId?: string | null, traceparent?: string | null): ContextoPeticion {
+  // Booking envía X-Correlation-Id (contrato v2): se usa como request_id si es válido
   const traza = traceparent ? RE_TRACEPARENT.exec(traceparent.trim().toLowerCase()) : null;
   return {
     requestId: requestId && RE_REQUEST_ID.test(requestId) ? requestId : randomUUID(),

@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { ContactoModule } from './modules/contacto/contacto.module';
 import { IntegracionModule } from './modules/integracion/integracion.module';
 import { ObservabilidadModule } from './modules/observabilidad/observabilidad.module';
+import { BookingV2Module } from './modules/booking-v2/booking-v2.module';
 import { ProveedoresModule } from './modules/proveedores/proveedores.module';
 import { SeedService } from './seed/seed.service';
 
@@ -73,6 +74,9 @@ import { SeedService } from './seed/seed.service';
 
     // Observabilidad: sondas de salud, telemetría de la web y panel (docs/OBSERVABILIDAD.md)
     ObservabilidadModule,
+
+    // Contrato v2 con Booking Prototipo (RDA2) en /api/v2 + sincronización de stock por gRPC
+    BookingV2Module,
   ],
   controllers: [],
   providers: [MigracionesService, SeedService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

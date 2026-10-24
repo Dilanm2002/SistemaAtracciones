@@ -11,6 +11,7 @@ import { FavoritosController } from './favoritos.controller';
 import { ReportesService } from './reportes.service';
 import { ResenasService } from './resenas.service';
 import { ReservasService } from './reservas.service';
+import { StockSyncService } from './stock-sync.service';
 
 /**
  * Dominio de Atracciones sobre el modelo relacional de database/01_esquema.sql:
@@ -20,7 +21,7 @@ import { ReservasService } from './reservas.service';
 @Module({
   imports: [CommonModule],
   controllers: [AtraccionesController, CatalogoController, AdminAtraccionesController, FavoritosController, MediaController, CalendarioController],
-  providers: [AtraccionesService, ReservasService, ResenasService, CatalogoService, ReportesService, AtraccionMapper],
-  exports: [AtraccionesService, AtraccionMapper],
+  providers: [AtraccionesService, ReservasService, ResenasService, CatalogoService, ReportesService, AtraccionMapper, StockSyncService],
+  exports: [AtraccionesService, AtraccionMapper, ReservasService, StockSyncService, ResenasService],
 })
 export class AtraccionesModule {}

@@ -100,6 +100,33 @@ export class AtraccionMapper {
       times: a.horarios.map((h) => h.hora),
       capacity_per_slot: a.horarios.reduce((m, h) => Math.max(m, h.cupo), 0),
       meeting_point: a.punto_encuentro ?? undefined,
+      // Datos del contrato v2 con Booking (también los muestra la web)
+      senior_price: a.precio_mayor != null ? { currency: a.moneda, total: a.precio_mayor } : undefined,
+      includes_food: a.incluye_comida,
+      includes_transport: a.incluye_transporte,
+      includes_guide: a.incluye_guia,
+      wheelchair_accessible: a.accesible_silla,
+      stroller_accessible: a.accesible_coche,
+      service_animals_allowed: a.animales_servicio,
+      guide_name: a.guia ?? undefined,
+      arrival_instructions: a.instrucciones_llegada ?? undefined,
+      allows_package: a.permite_paquete,
+      package_discount: a.descuento_paquete,
+      itinerary: a.itinerario.map((s) => ({
+        time: s.hora,
+        title: s.titulo,
+        description: s.descripcion ?? undefined,
+        duration_minutes: s.duracion_min,
+        location: s.lugar ?? undefined,
+      })),
+      rating_breakdown: a.pilares
+        ? {
+            cleanliness: a.pilares.limpieza ?? undefined,
+            service: a.pilares.servicio ?? undefined,
+            value: a.pilares.calidad_precio ?? undefined,
+            punctuality: a.pilares.puntualidad ?? undefined,
+          }
+        : undefined,
       featured: a.destacada,
       is_active: a.estado === 'PUBLICADA',
       status: a.estado,
@@ -136,6 +163,7 @@ export class AtraccionMapper {
   ): PoliticaCancelacion {
     if (ESTADO_A_STATUS[r.estado] === ReservationStatus.CANCELLED) return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'Esta reserva ya estaba cancelada.' };
     if (r.estado === 'COMPLETADA') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya se realizó; no puede cancelarse.' };
+    if (r.estado === 'CHECKED_IN') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'El titular ya hizo el check-in: la experiencia está en curso.' };
     const salida = fechaHoraEc(r.fecha, r.hora).getTime();
     if (ahora >= salida) return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya comenzó; ya no puede cancelarse.' };
     if (r.estado === 'PENDIENTE_PAGO') {
@@ -203,6 +231,11 @@ export class AtraccionMapper {
         ...(pol.freeUntil ? { free_cancellation_until: pol.freeUntil.toISOString() } : {}),
       }))(this.politicaCancelacion(r)),
       ...(r.factura ? { invoice: this.toInvoice(r.factura, r.moneda) } : {}),
+      // Contrato v2 con Booking: adultos mayores, infantes, origen y check-in presencial
+      seniors: r.seniors,
+      infants: r.infantes,
+      origin: r.origen,
+      ...(r.checkin_en ? { checked_in_at: new Date(r.checkin_en).toISOString() } : {}),
       _links: {
         self: link(self),
         attraction: link(`/atracciones/${r.atr_uuid}`),

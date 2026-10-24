@@ -112,24 +112,40 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
   // Al elegir un horario con menos cupos que los participantes ya elegidos, se ajustan solos al cupo
   // (antes se podía quedar en 30 con solo 10 cupos) y se avisa del cambio
   const [ajuste, setAjuste] = useState(null);
+  // Adultos mayores (65+) e infantes (0–4 años, gratis pero ocupan cupo): contrato v2 con Booking
+  const [seniors, setSeniors] = useState(0);
+  const [infants, setInfants] = useState(0);
   useEffect(() => {
-    if (!slot || adults + children <= slot.available) { setAjuste(null); return; }
-    const ninos = Math.min(children, Math.max(0, slot.available - 1));
-    const adultos = Math.max(1, slot.available - ninos);
+    if (!slot || adults + children + seniors + infants <= slot.available) { setAjuste(null); return; }
+    let libres = slot.available;
+    const inf = Math.min(infants, Math.max(0, libres - 1));
+    libres -= inf;
+    const sen = Math.min(seniors, Math.max(0, libres - 1));
+    libres -= sen;
+    const ninos = Math.min(children, Math.max(0, libres - 1));
+    const adultos = Math.max(1, libres - ninos);
+    setInfants(inf);
+    setSeniors(sen);
     setChildren(ninos);
     setAdults(adultos);
-    setAjuste(`Ajustamos a ${adultos + ninos} participante${adultos + ninos > 1 ? 's' : ''}: es el cupo disponible a las ${slot.time}.`);
+    const n = adultos + ninos + sen + inf;
+    setAjuste(`Ajustamos a ${n} participante${n > 1 ? 's' : ''}: es el cupo disponible a las ${slot.time}.`);
   }, [slot]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pax = adults + children;
+  const pax = adults + children + seniors + infants;
   const childPrice = a.child_price?.total ?? a.price.total;
-  const total = adults * a.price.total + children * childPrice;
+  const seniorPrice = a.senior_price?.total ?? a.price.total;
+  const total = adults * a.price.total + children * childPrice + seniors * seniorPrice;
+  /** Máximo para un tipo de boleto: lo que queda del límite por reserva y del cupo del horario. */
+  const maxDe = (propio, minimo = 0) => Math.max(minimo, Math.min(MAX_TICKETS - (pax - propio), slot ? slot.available - (pax - propio) : MAX_TICKETS));
   const overCapacity = slot && pax > slot.available;
   const ready = date && time && !overCapacity;
 
   const go = () => {
     setTouched(true);
     if (!ready) return;
-    navigate(`/reservar/${a.id}?${new URLSearchParams({ fecha: date, hora: time, adultos: adults, ninos: children })}`);
+    navigate(`/reservar/${a.id}?${new URLSearchParams({
+      fecha: date, hora: time, adultos: adults, ninos: children, ...(seniors ? { mayores: seniors } : {}), ...(infants ? { infantes: infants } : {}),
+    })}`);
   };
 
   const missing = useMemo(() => (!date ? 'Elige una fecha en el calendario' : !time ? 'Elige un horario de salida' : null), [date, time]);
@@ -180,12 +196,20 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
 
         <h3>{date ? '3.' : '2.'} Participantes</h3>
         <div className="pax-row">
-          <div><strong>Adultos</strong><span>12 años o más · {fmtMoney(a.price.total)}</span></div>
-          <Qty value={adults} onChange={setAdults} min={1} max={Math.max(1, Math.min(MAX_TICKETS - children, slot ? slot.available - children : MAX_TICKETS))} label="adultos" />
+          <div><strong>Adultos</strong><span>13 a 64 años · {fmtMoney(a.price.total)}</span></div>
+          <Qty value={adults} onChange={setAdults} min={1} max={maxDe(adults, 1)} label="adultos" />
         </div>
         <div className="pax-row">
-          <div><strong>Niños</strong><span>3 a 11 años · {fmtMoney(childPrice)}</span></div>
-          <Qty value={children} onChange={setChildren} min={0} max={Math.max(0, Math.min(MAX_TICKETS - adults, slot ? slot.available - adults : MAX_TICKETS))} label="niños" />
+          <div><strong>Niños</strong><span>5 a 12 años · {fmtMoney(childPrice)}</span></div>
+          <Qty value={children} onChange={setChildren} min={0} max={maxDe(children)} label="niños" />
+        </div>
+        <div className="pax-row">
+          <div><strong>Adultos mayores</strong><span>65 años o más · {fmtMoney(seniorPrice)}</span></div>
+          <Qty value={seniors} onChange={setSeniors} min={0} max={maxDe(seniors)} label="adultos mayores" />
+        </div>
+        <div className="pax-row">
+          <div><strong>Infantes</strong><span>0 a 4 años · gratis (ocupan cupo)</span></div>
+          <Qty value={infants} onChange={setInfants} min={0} max={maxDe(infants)} label="infantes" />
         </div>
         {overCapacity && <Alert tone="warning">Solo quedan {slot.available} cupos a las {time}. Reduce participantes o elige otro horario.</Alert>}
         {ajuste && !overCapacity && <Alert tone="info">{ajuste}</Alert>}
@@ -193,6 +217,8 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
         <div className="summary-lines">
           <div><span>{adults} adulto{adults > 1 ? 's' : ''} × {fmtMoney(a.price.total)}</span><span>{fmtMoney(adults * a.price.total)}</span></div>
           {children > 0 && <div><span>{children} niño{children > 1 ? 's' : ''} × {fmtMoney(childPrice)}</span><span>{fmtMoney(children * childPrice)}</span></div>}
+          {seniors > 0 && <div><span>{seniors} adulto{seniors > 1 ? 's' : ''} mayor{seniors > 1 ? 'es' : ''} × {fmtMoney(seniorPrice)}</span><span>{fmtMoney(seniors * seniorPrice)}</span></div>}
+          {infants > 0 && <div><span>{infants} infante{infants > 1 ? 's' : ''}</span><span>Gratis</span></div>}
         </div>
         <div className="summary-total">
           <span>Total</span>

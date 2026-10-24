@@ -2,6 +2,8 @@ import { pruebaDpop, reiniciarLlaves } from './dpop';
 import { ahoraServidor, sincronizarReloj } from './reloj';
 import { reportarError, rutaPlantilla } from './telemetria';
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
+/** Contrato v2 con Booking Prototipo (mismo servidor, /api/v2) */
+export const API_URL_V2 = API_URL.replace(/\/v1$/, '/v2');
 const TOKEN_KEY = 'dec_token';
 
 /**
@@ -59,7 +61,8 @@ const wait = (ms, signal) =>
  * @param {string} path  ruta relativa a /api/v1
  * @param {{method?:string, body?:any, idempotencyKey?:string, signal?:AbortSignal, form?:FormData}} opts
  */
-export async function api(path, { method = 'GET', body, idempotencyKey, signal, form, _reintentoDpop = false } = {}) {
+export async function api(path, { method = 'GET', body, idempotencyKey, signal, form, v2 = false, _reintentoDpop = false } = {}) {
+  const BASE = v2 ? API_URL_V2 : API_URL;
   const token = tokenStore.get();
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -81,10 +84,10 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
     try {
       // Una prueba nueva en cada intento (id único, anti-repetición)
       if (conPrueba) {
-        const prueba = await pruebaDpop(method, `${API_URL}${path}`, ligado ? token : undefined).catch(() => null);
+        const prueba = await pruebaDpop(method, `${BASE}${path}`, ligado ? token : undefined).catch(() => null);
         if (prueba) headers.DPoP = prueba;
       }
-      res = await fetch(`${API_URL}${path}`, {
+      res = await fetch(`${BASE}${path}`, {
         method,
         headers,
         body: form ?? (body !== undefined ? JSON.stringify(body) : undefined),
@@ -110,7 +113,7 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   // se reintenta UNA vez antes de mostrar el error o cerrar la sesión
   if (res.status === 401 && conPrueba && !_reintentoDpop && /Prueba DPoP inválida/.test(data?.detail ?? '')) {
     if (!/hora/.test(data.detail)) await reiniciarLlaves();
-    return api(path, { method, body, idempotencyKey, signal, form, _reintentoDpop: true });
+    return api(path, { method, body, idempotencyKey, signal, form, v2, _reintentoDpop: true });
   }
   if (!res.ok) {
     if (res.status === 401 && token) window.dispatchEvent(new CustomEvent('auth:expired'));
@@ -186,7 +189,8 @@ export const Atracciones = {
   unblock: (id, blockId) => api(`/atracciones/${id}/blocked-dates/${blockId}`, { method: 'DELETE' }),
   reviews: (id, params = {}) => api(`/atracciones/${id}/reviews${qs(params)}`),
   reviewEligibility: (id) => api(`/atracciones/${id}/reviews/eligibility`),
-  createReview: (id, rating, comment) => api(`/atracciones/${id}/reviews`, { method: 'POST', body: { rating, comment } }),
+  /** pilares (opcional): { cleanliness, service, value, punctuality } de 1 a 5 */
+  createReview: (id, rating, comment, pilares = {}) => api(`/atracciones/${id}/reviews`, { method: 'POST', body: { rating, comment, ...pilares } }),
 };
 
 export const Reservas = {
@@ -199,6 +203,16 @@ export const Reservas = {
   cancel: (id, reason, idempotencyKey, acceptNoRefund = false) =>
     api(`/atracciones/reservations/${id}/cancel`, { method: 'POST', body: { reason, ...(acceptNoRefund ? { accept_no_refund: true } : {}) }, idempotencyKey }),
   confirm: (id, idempotencyKey) => api(`/atracciones/reservations/${id}/confirm`, { method: 'POST', idempotencyKey }),
+  /** Check-in presencial desde el panel (operador o admin) */
+  checkin: (id, documento) => api(`/atracciones/reservations/${id}/checkin`, { method: 'POST', body: { documento_identidad: documento } }),
+  /** Imagen del QR del voucher (contrato v2) */
+  qrUrl: (codigo) => `${API_URL_V2}/atracciones/vouchers/${codigo}/qr.png`,
+};
+
+/** Acuerdo B2B de promociones y combos con Booking Prototipo (contrato v2) */
+export const Promociones = {
+  get: () => api('/atracciones/promociones/contrato', { v2: true }),
+  update: (body) => api('/atracciones/promociones/contrato', { method: 'PUT', body, v2: true }),
 };
 
 const crud = (base) => ({
@@ -287,4 +301,5 @@ sesionInicial?.catch(() => {}); // el error lo maneja AuthContext
 export const Ops = {
   resumen: (rango = '24h') => api(`/ops/resumen${qs({ rango })}`),
   listo: () => api('/ops/health/ready'),
+  reintentarStock: () => api('/ops/stock-sync/reintentar', { method: 'POST' }),
 };

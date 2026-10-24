@@ -56,6 +56,11 @@ export class CreateCategoriaDto {
   @IsInt()
   @Min(1)
   padre_id?: number | null;
+
+  // Banderas de inclusión del contrato v2 con Booking (árbol de categorías)
+  @ApiPropertyOptional({ description: 'Las experiencias de esta categoría incluyen comida' }) @IsOptional() @IsBoolean() incluye_comida?: boolean;
+  @ApiPropertyOptional({ description: 'Incluyen transporte' }) @IsOptional() @IsBoolean() incluye_transporte?: boolean;
+  @ApiPropertyOptional({ description: 'Incluyen guía' }) @IsOptional() @IsBoolean() incluye_guia?: boolean;
 }
 export class UpdateCategoriaDto extends PartialType(CreateCategoriaDto) {}
 

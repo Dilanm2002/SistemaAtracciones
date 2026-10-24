@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DbService } from '../../common/db/db.service';
+import { StockSyncService } from '../atracciones/stock-sync.service';
 import { limpiar, percentil, registrarIncidente, volcarMetricas } from '../../common/observabilidad/metricas-http';
 import { API_VERSION } from '../../config/version';
 import { leerMigraciones } from '../../database/migrator';
@@ -73,7 +74,10 @@ const inicioInstancia = new Date();
 
 @Injectable()
 export class ObservabilidadService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly stock: StockSyncService,
+  ) {}
 
   /** Liveness: el proceso responde (no toca la base). */
   vivo() {
@@ -142,7 +146,7 @@ export class ObservabilidadService {
     const { ventana, paso } = RANGOS[rango];
     const filtro = `m.mh_minuto >= now() - $1::interval AND m.mh_ruta NOT LIKE '/ops/%'`;
 
-    const [totales, serie, rutas, estados, incidentes, vitales, porDispositivo, negocio] = await Promise.all([
+    const [totales, serie, rutas, estados, incidentes, vitales, porDispositivo, negocio, stockSync] = await Promise.all([
       this.db.one<FilaHistograma>(`SELECT ${COLUMNAS_HISTOGRAMA} FROM ops.metrica_http m WHERE ${filtro}`, [ventana]),
       this.db.query<FilaHistograma & { desde: Date }>(
         `WITH b AS (
@@ -193,6 +197,7 @@ export class ObservabilidadService {
         `SELECT evt_tipo AS tipo, COUNT(*)::int AS total FROM evento WHERE evt_creado_en >= now() - $1::interval GROUP BY 1 ORDER BY 1`,
         [ventana],
       ),
+      this.stock.resumen(ventana),
     ]);
 
     const t = latencias(totales!);
@@ -237,6 +242,8 @@ export class ObservabilidadService {
         };
       }),
       business: negocio,
+      // Sincronización de stock con Booking por gRPC (contrato v2, CE01)
+      stock_sync: stockSync,
     };
   }
 }

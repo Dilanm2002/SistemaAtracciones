@@ -86,6 +86,20 @@ channels:
       operationId: onAtraccionRetirada
       message:
         $ref: '#/components/messages/AtraccionRetirada'
+  atracciones.stock.actualizado:
+    description: >-
+      Cambiaron los cupos de un turno (venta, cancelación o cambio de aforo). Es el STOCK_ACTUALIZADO del
+      contrato v2 con Booking; además, cada cambio se envía por gRPC (inventory.InventoryStockService/PushStockUpdate).
+    subscribe:
+      operationId: onStockActualizado
+      message:
+        $ref: '#/components/messages/StockActualizado'
+  atracciones.reserva.checkin:
+    description: El titular se presentó en el punto de encuentro y el guía registró el check-in.
+    subscribe:
+      operationId: onReservaCheckin
+      message:
+        $ref: '#/components/messages/ReservaCheckin'
 
 components:
   messages:
@@ -166,6 +180,47 @@ components:
                   attraction_id:
                     type: string
                     format: uuid
+
+    StockActualizado:
+      name: atracciones.stock.actualizado
+      title: Stock de un turno actualizado
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Sobre'
+          - type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  attraction_id:
+                    type: string
+                    format: uuid
+                  date:
+                    type: string
+                    format: date
+                  time:
+                    type: string
+                    example: '10:30'
+                  available_units:
+                    type: integer
+                  total_units:
+                    type: integer
+                  reason:
+                    type: string
+                    enum: [VENTA, CANCELACION, AFORO]
+    ReservaCheckin:
+      name: atracciones.reserva.checkin
+      title: Check-in presencial realizado
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/SobreReserva'
+          - type: object
+            properties:
+              data:
+                type: object
+                properties:
+                  guide_code:
+                    type: string
 
   schemas:
     Sobre:

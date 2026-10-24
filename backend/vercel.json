@@ -10,7 +10,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "{contracts/**,dist/database/sql/*.sql}"
+      "includeFiles": "{contracts/**,dist/database/sql/*.sql,dist/proto/*.proto}"
     }
   },
   "rewrites": [

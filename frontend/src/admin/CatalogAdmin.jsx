@@ -104,7 +104,10 @@ function PadreSelect({ categorias, excluir, value, onChange, ...p }) {
 
 function CategoriaModal({ item, categorias, onClose, onSaved }) {
   const toast = useToast();
-  const [f, setF] = useState({ nombre: item.nombre, slug: item.slug, icono: item.icono, descripcion: item.descripcion ?? '', orden: item.orden, padre_id: item.padre_id ?? null });
+  const [f, setF] = useState({
+    nombre: item.nombre, slug: item.slug, icono: item.icono, descripcion: item.descripcion ?? '', orden: item.orden, padre_id: item.padre_id ?? null,
+    incluye_comida: !!item.incluye_comida, incluye_transporte: !!item.incluye_transporte, incluye_guia: !!item.incluye_guia,
+  });
   const [err, setErr] = useState({});
   const [saving, setSaving] = useState(false);
   const save = async (e) => {
@@ -136,6 +139,15 @@ function CategoriaModal({ item, categorias, onClose, onSaved }) {
         <Field label="Categoría padre" hint="Las subcategorías se agrupan bajo su categoría principal" error={err.padre_id}>
           {(p) => <PadreSelect {...p} categorias={categorias} excluir={item.id} value={f.padre_id} onChange={(padre_id) => setF({ ...f, padre_id })} />}
         </Field>
+        <div className="field">
+          <span className="label">Qué suelen incluir sus experiencias</span>
+          <span className="muted tiny" style={{ display: 'block', marginBottom: 6 }}>Lo usa el árbol de categorías del contrato con Booking.</span>
+          <div className="switch-grid">
+            <Switch checked={f.incluye_comida} onChange={(v) => setF({ ...f, incluye_comida: v })} label="Comida" />
+            <Switch checked={f.incluye_transporte} onChange={(v) => setF({ ...f, incluye_transporte: v })} label="Transporte" />
+            <Switch checked={f.incluye_guia} onChange={(v) => setF({ ...f, incluye_guia: v })} label="Guía" />
+          </div>
+        </div>
         <Field label="Orden de aparición" required error={err.orden} hint="Entre 0 y 999; menor número = aparece primero">{(p) => <input {...p} className="input" type="number" min="0" max="999" step="1" inputMode="numeric" value={f.orden} onChange={(e) => setF({ ...f, orden: e.target.value })} />}</Field>
       </form>
     </Modal>
@@ -187,6 +199,9 @@ export function CategoriasAdmin() {
                     <strong>{c.nombre}</strong>
                     {c.padre_id && <span className="badge" style={{ marginLeft: 6 }}>en {data.find((x) => x.id === c.padre_id)?.nombre}</span>}
                     {c.descripcion && <div className="muted tiny">{c.descripcion}</div>}
+                    {(c.incluye_comida || c.incluye_transporte || c.incluye_guia) && (
+                      <div className="muted tiny">Incluye: {[c.incluye_comida && 'comida', c.incluye_transporte && 'transporte', c.incluye_guia && 'guía'].filter(Boolean).join(', ')}</div>
+                    )}
                   </td>
                   <td><code>{c.slug}</code></td>
                   <td className="num">{c.total_atracciones}</td>

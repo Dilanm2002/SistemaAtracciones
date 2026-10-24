@@ -408,3 +408,20 @@ a.adm-kpi:hover { transform: translateY(-5px); }
 .obs-chips { display: flex; flex-wrap: wrap; gap: 10px; }
 .obs-chip { border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 0.85rem; background: var(--surface); }
 
+/* ── Formulario: integración con Booking (contrato v2) ─────────────────── */
+.switch-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px 18px; }
+.iti-editor { display: grid; gap: 10px; }
+.iti-fila { position: relative; display: grid; grid-template-columns: 28px 110px minmax(0, 1fr) 90px minmax(0, 1fr) 36px; gap: 8px; align-items: end;
+  margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.iti-num { align-self: center; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 0.8rem;
+  background: var(--brand-50, #ecfdf5); color: var(--brand, #0f766e); }
+.iti-campo { display: grid; gap: 2px; min-width: 0; }
+.iti-desc { grid-column: 2 / -2; }
+.iti-quitar { align-self: center; }
+.iti-error { grid-column: 2 / -1; }
+@media (max-width: 760px) {
+  .iti-fila { grid-template-columns: 28px 1fr 1fr 36px; }
+  .iti-titulo, .iti-lugar, .iti-desc { grid-column: 2 / -2; }
+  .iti-quitar { grid-column: -2 / -1; grid-row: 1; }
+}
+

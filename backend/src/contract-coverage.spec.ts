@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { RequestMethod } from '@nestjs/common';
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import { METHOD_METADATA, PATH_METADATA, VERSION_METADATA } from '@nestjs/common/constants';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { load } from 'js-yaml';
 import { join } from 'path';
@@ -13,6 +13,8 @@ import { join } from 'path';
  *     administración, autenticación, catálogos…) en contracts/operaciones-internas.json.
  *  3. La lista de internas no tiene entradas obsoletas.
  * Así una ruta nueva sin documentar, o una promesa del contrato sin implementar, rompe CI.
+ * Lo mismo para el contrato v2 con Booking (atracciones-openapi-v2.yaml): sus rutas se comparan con
+ * los controladores de la versión 2 (/api/v2) y se distinguen con el prefijo «/v2».
  */
 const RAIZ = join(__dirname, '..');
 const norm = (p: string) => ('/' + p).replace(/\/+/g, '/').replace(/\/$/, '').replace(/:[\w]+/g, '{}').replace(/\{[\w]+\}/g, '{}') || '/';
@@ -32,13 +34,14 @@ function implementadas(): Set<string> {
     for (const cls of Object.values(mod)) {
       if (typeof cls !== 'function' || !Reflect.getMetadata('__controller__', cls)) continue;
       const bases = ([] as string[]).concat(Reflect.getMetadata(PATH_METADATA, cls) ?? '');
+      const v2 = ([] as string[]).concat(Reflect.getMetadata(VERSION_METADATA, cls) ?? []).includes('2') ? '/v2' : '';
       const proto = (cls as { prototype: object }).prototype;
       for (const nombre of Object.getOwnPropertyNames(proto)) {
         const handler = (proto as Record<string, unknown>)[nombre];
         if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
         const metodo = RequestMethod[Reflect.getMetadata(METHOD_METADATA, handler) as number];
         const rutas = ([] as string[]).concat(Reflect.getMetadata(PATH_METADATA, handler) ?? '');
-        for (const b of bases) for (const r of rutas) ops.add(`${metodo} ${norm(`${b}/${r}`)}`);
+        for (const b of bases) for (const r of rutas) ops.add(`${metodo} ${v2}${norm(`${b}/${r}`)}`);
       }
     }
   }
@@ -46,10 +49,12 @@ function implementadas(): Set<string> {
 }
 
 function delContrato(): Set<string> {
-  const doc = load(readFileSync(join(RAIZ, 'contracts', 'atracciones-openapi.yaml'), 'utf8')) as { paths: Record<string, Record<string, unknown>> };
   const ops = new Set<string>();
-  for (const [ruta, item] of Object.entries(doc.paths)) {
-    for (const m of METODOS) if (item[m]) ops.add(`${m.toUpperCase()} ${norm(ruta)}`);
+  for (const [archivo, prefijo] of [['atracciones-openapi.yaml', ''], ['atracciones-openapi-v2.yaml', '/v2']]) {
+    const doc = load(readFileSync(join(RAIZ, 'contracts', archivo), 'utf8')) as { paths: Record<string, Record<string, unknown>> };
+    for (const [ruta, item] of Object.entries(doc.paths)) {
+      for (const m of METODOS) if (item[m]) ops.add(`${m.toUpperCase()} ${prefijo}${norm(ruta)}`);
+    }
   }
   return ops;
 }
@@ -60,7 +65,7 @@ describe('Cobertura del contrato OpenAPI frente a la implementación (API-015)',
   const internas = new Set(
     Object.values((JSON.parse(readFileSync(join(RAIZ, 'contracts', 'operaciones-internas.json'), 'utf8')) as { grupos: Record<string, string[]> }).grupos).flat().map((o) => {
       const [m, r] = o.split(' ');
-      return `${m} ${norm(r)}`;
+      return r.startsWith('/v2/') ? `${m} /v2${norm(r.slice(3))}` : `${m} ${norm(r)}`;
     }),
   );
 

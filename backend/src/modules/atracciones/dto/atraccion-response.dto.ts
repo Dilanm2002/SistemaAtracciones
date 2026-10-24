@@ -73,6 +73,21 @@ export class AtraccionResponseDto extends BaseResponseDto {
   @ApiPropertyOptional() capacity_per_slot?: number;
   @ApiPropertyOptional() cancellation_hours?: number;
   @ApiPropertyOptional() meeting_point?: string;
+  @ApiPropertyOptional({ type: PriceDto, description: 'Adulto mayor (65+)' }) senior_price?: PriceDto;
+  @ApiPropertyOptional() includes_food?: boolean;
+  @ApiPropertyOptional() includes_transport?: boolean;
+  @ApiPropertyOptional() includes_guide?: boolean;
+  @ApiPropertyOptional() wheelchair_accessible?: boolean;
+  @ApiPropertyOptional() stroller_accessible?: boolean;
+  @ApiPropertyOptional() service_animals_allowed?: boolean;
+  @ApiPropertyOptional() guide_name?: string;
+  @ApiPropertyOptional() arrival_instructions?: string;
+  @ApiPropertyOptional() allows_package?: boolean;
+  @ApiPropertyOptional({ description: 'Descuento en paquetes de Booking (%)' }) package_discount?: number;
+  @ApiPropertyOptional({ description: 'Itinerario en orden (HH:mm)' })
+  itinerary?: { time: string; title: string; description?: string; duration_minutes: number; location?: string }[];
+  @ApiPropertyOptional({ description: 'Promedio por pilar (1 a 5)' })
+  rating_breakdown?: { cleanliness?: number; service?: number; value?: number; punctuality?: number };
   @ApiPropertyOptional() featured?: boolean;
   @ApiPropertyOptional() is_active?: boolean;
   @ApiPropertyOptional({ type: DestinationSummaryDto }) destination?: DestinationSummaryDto;

@@ -96,12 +96,26 @@ export class ReservationRequestDto {
   customer_email?: string;
 
   // ── Extensiones ───────────────────────────────────────────────────────
-  @ApiPropertyOptional({ description: 'Cuántos de los tickets son de niño (3-11 años)', example: 0 })
+  @ApiPropertyOptional({ description: 'Cuántos de los tickets son de niño (5-12 años)', example: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(30, { message: 'children no puede superar 30' })
   children?: number;
+
+  @ApiPropertyOptional({ description: 'Cuántos de los tickets son de adulto mayor (65+), con su tarifa', example: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(30, { message: 'seniors no puede superar 30' })
+  seniors?: number;
+
+  @ApiPropertyOptional({ description: 'Cuántos de los tickets son de infante (0–4 años): no pagan, pero ocupan cupo', example: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(30, { message: 'infants no puede superar 30' })
+  infants?: number;
 
   @ApiPropertyOptional({ example: '0991234567' })
   @IsOptional()
@@ -202,6 +216,10 @@ export class ReservationResponseDto {
   @ApiPropertyOptional({ description: 'Si cancelar ahora no tiene costo para el cliente' }) refundable?: boolean;
   @ApiPropertyOptional({ description: 'Hasta cuándo es gratis cancelar (ISO 8601)' }) free_cancellation_until?: string;
   @ApiPropertyOptional({ type: InvoiceDto, description: 'Factura de la reserva (solo cuando el pago está aprobado)' }) invoice?: InvoiceDto;
+  @ApiPropertyOptional({ description: 'Adultos mayores (65+)' }) seniors?: number;
+  @ApiPropertyOptional({ description: 'Infantes (0–4 años): no pagan, pero ocupan cupo' }) infants?: number;
+  @ApiPropertyOptional({ enum: ['WEB', 'BOOKING'], description: 'Dónde se hizo la reserva' }) origin?: 'WEB' | 'BOOKING';
+  @ApiPropertyOptional({ description: 'Cuándo se registró el check-in presencial (ISO 8601)' }) checked_in_at?: string;
   @ApiPropertyOptional() _links?: Record<string, Link>;
 }
 

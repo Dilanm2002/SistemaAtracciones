@@ -6,8 +6,10 @@ import { DbService, HOY_EC, Params, Sql } from '../../common/db/db.service';
 import { IdempotencyService, Referencia } from '../../common/idempotency/idempotency.service';
 import { escapeLike } from '../../common/utils/sql';
 import { AtraccionMapper } from './atraccion.mapper';
-import { cancelarCompra, confirmarCompra, registrarCompra } from './compras';
+import { Acompanante, cancelarCompra, confirmarCompra, MetodoCompra, registrarCompra } from './compras';
+import { StockSyncService } from './stock-sync.service';
 import {
+  CardInfoDto,
   CancelReservationRequestDto,
   PaymentMethod,
   ReservationRequestDto,
@@ -20,6 +22,34 @@ import { horaActualEc, hoyEc, sumarDias } from './utils/fechas';
 
 const LIMITE_LISTADO = 500;
 
+/** 409 por falta de cupos: Booking lo usa para compensar su saga (contrato v2, code OUT_OF_STOCK). */
+export const sinCupos = (detalle: string) => new ConflictException({ message: detalle, code: 'OUT_OF_STOCK' });
+
+/** Datos de una reserva nueva, en el formato interno (v1 y v2 se traducen a esto). */
+export interface NuevaReserva {
+  usuId: string;
+  atrUuid: string;
+  fecha: string;
+  hora?: string;
+  adultos: number;
+  ninos: number;
+  seniors?: number;
+  infantes?: number;
+  metodo: MetodoCompra;
+  tarjeta?: CardInfoDto;
+  /** Teléfono de contacto (la web aplica las reglas de la cuenta del cliente) */
+  telefono?: (tx: Sql) => Promise<string | null>;
+  paxNombre: string;
+  paxDocumento?: string | null;
+  paxTipoDocumento?: 'CEDULA' | 'PASAPORTE' | 'RUC';
+  paxCorreo?: string | null;
+  acompanantes?: Acompanante[];
+  notas?: string | null;
+  origen?: 'WEB' | 'BOOKING';
+  sagaId?: string | null;
+  confirmarSiempre?: boolean;
+}
+
 type Alcance = { tipo: 'todas' } | { tipo: 'operador'; codigo: number } | { tipo: 'propias' };
 
 @Injectable()
@@ -30,6 +60,7 @@ export class ReservasService {
     private readonly idempotency: IdempotencyService,
     private readonly bitacora: BitacoraService,
     private readonly mapper: AtraccionMapper,
+    private readonly stock: StockSyncService,
   ) {}
 
   /**
@@ -83,102 +114,139 @@ export class ReservasService {
   reserve(atrUuid: string, dto: ReservationRequestDto, key: string, user: AuthUser): Promise<ReservationResponseDto> {
     return this.idempotency.execute(key, `reserve:${atrUuid}`, user.sub, dto, async () => {
       await this.catalogos.precargar();
-      const uuid = await this.db.tx(async (tx) => {
-        // 1) La atracción no puede cambiar de precio ni desactivarse mientras se reserva (FOR SHARE)
-        const a = await tx.one<{ atr_id: string; nombre: string; moneda: string; adulto: number | null; nino: number | null }>(
-          `SELECT a.atr_id::text, a.atr_nombre AS nombre, a.atr_moneda AS moneda,
-                  ${sqlTarifa('ADULTO')} AS adulto, ${sqlTarifa('NINO')} AS nino
-             FROM atraccion a WHERE a.atr_uuid = $1 AND a.atr_eliminado_en IS NULL AND a.atr_estado = 'PUBLICADA' FOR SHARE`,
-          [atrUuid],
-        );
-        if (!a) throw new NotFoundException('La atracción no existe o ya no está disponible.');
-        if (a.adulto == null) throw new ConflictException('Esta atracción no tiene una tarifa vigente. Intenta más tarde.');
-
-        const fecha = dto.date.slice(0, 10);
-        const hoy = hoyEc();
-        if (fecha < hoy) throw new BadRequestException('No puedes reservar una fecha que ya pasó.');
-        if (fecha > sumarDias(hoy, 365)) throw new BadRequestException('Solo se aceptan reservas con hasta un año de anticipación.');
-        const bloqueo = await tx.one<{ motivo: string }>('SELECT fb_motivo AS motivo FROM fecha_bloqueada WHERE atr_id = $1 AND fb_fecha = $2', [a.atr_id, fecha]);
-        if (bloqueo) throw new ConflictException(`La atracción no opera el ${fecha}: ${bloqueo.motivo}`);
-
-        const horarios = await tx.query<{ hor_id: string; hora: string; cupo: number }>(
-          `SELECT hor_id::text, to_char(hor_hora, 'HH24:MI') AS hora, hor_cupo AS cupo FROM horario
-            WHERE atr_id = $1 AND hor_activo ORDER BY hor_hora`,
-          [a.atr_id],
-        );
-        const lista = horarios.map((h) => h.hora).join(', ');
-        let hora = dto.time;
-        if (!hora) {
-          if (horarios.length !== 1) throw new BadRequestException(`Selecciona un horario: ${lista}`);
-          hora = horarios[0].hora;
-        }
-        const horario = horarios.find((h) => h.hora === hora);
-        if (!horario) throw new BadRequestException(`El horario ${hora} no existe. Horarios disponibles: ${lista}`);
-        if (fecha === hoy && hora <= horaActualEc()) throw new BadRequestException('Esa salida ya partió hoy. Elige otro horario.');
-
-        const ninos = dto.children ?? 0;
-        if (ninos > dto.ticket_count) throw new BadRequestException('children no puede ser mayor que ticket_count.');
-        const adultos = dto.ticket_count - ninos;
-        if (adultos < 1) throw new BadRequestException('Cada reserva debe incluir al menos un adulto.');
-
-        // 2) Inventario del día y horario: se crea si no existe y se BLOQUEA la fila.
-        //    Dos reservas simultáneas del mismo horario se ejecutan una detrás de otra.
-        await tx.query(
-          `INSERT INTO disponibilidad (atr_id, hor_id, dis_fecha, dis_cupo_total) VALUES ($1, $2, $3, $4)
-           ON CONFLICT (atr_id, dis_fecha, hor_id) DO NOTHING`,
-          [a.atr_id, horario.hor_id, fecha, horario.cupo],
-        );
-        const inv = await tx.one<{ dis_id: string; total: number; reservado: number; cerrada: boolean }>(
-          `SELECT dis_id::text, dis_cupo_total AS total, dis_cupo_reservado AS reservado, dis_cerrada AS cerrada
-             FROM disponibilidad WHERE atr_id = $1 AND dis_fecha = $2 AND hor_id = $3 FOR UPDATE`,
-          [a.atr_id, fecha, horario.hor_id],
-        );
-        if (inv!.cerrada) throw new ConflictException(`La salida de las ${hora} está cerrada para esa fecha.`);
-        const libres = inv!.total - inv!.reservado;
-        if (dto.ticket_count > libres) {
-          throw new ConflictException(
-            libres > 0
-              ? `Solo quedan ${libres} cupo(s) para las ${hora}. Reduce la cantidad o elige otro horario.`
-              : `El horario de las ${hora} está agotado. Elige otro horario o fecha.`,
-          );
-        }
-        await tx.query('UPDATE disponibilidad SET dis_cupo_reservado = dis_cupo_reservado + $2 WHERE dis_id = $1', [inv!.dis_id, dto.ticket_count]);
-
-        const metodo = dto.payment_method ?? PaymentMethod.TARJETA;
-        if (dto.card && metodo !== PaymentMethod.TARJETA) throw new BadRequestException('card solo aplica al pago con TARJETA.');
-        if (dto.card) {
-          const [anio, mes] = hoy.split('-').map(Number);
-          if (dto.card.exp_year < anio || (dto.card.exp_year === anio && dto.card.exp_month < mes)) {
-            throw new BadRequestException('La tarjeta está vencida.');
-          }
-          if (dto.card.exp_year > anio + 20) throw new BadRequestException('La fecha de vencimiento de la tarjeta no es válida.');
-        }
-        const paxTelefono = await this.telefonoDeContacto(tx, user, dto.customer_phone);
-        const compra = await registrarCompra(tx, this.catalogos, {
+      const ninos = dto.children ?? 0;
+      const seniors = dto.seniors ?? 0;
+      const infantes = dto.infants ?? 0;
+      if (ninos > dto.ticket_count) throw new BadRequestException('children no puede ser mayor que ticket_count.');
+      if (dto.ticket_count - ninos - seniors - infantes < 1) throw new BadRequestException('Cada reserva debe incluir al menos un adulto.');
+      const metodo = dto.payment_method ?? PaymentMethod.TARJETA;
+      if (dto.card && metodo !== PaymentMethod.TARJETA) throw new BadRequestException('card solo aplica al pago con TARJETA.');
+      const { uuid, disId } = await this.db.tx((tx) =>
+        this.crearEnTransaccion(tx, {
           usuId: user.sub,
-          atrId: a.atr_id,
-          atrNombre: a.nombre,
-          disId: inv!.dis_id,
-          fecha,
-          hora,
-          adultos,
+          atrUuid,
+          fecha: dto.date.slice(0, 10),
+          hora: dto.time,
+          adultos: dto.ticket_count - ninos - seniors - infantes,
           ninos,
-          precioAdulto: a.adulto,
-          precioNino: a.nino ?? a.adulto,
-          moneda: a.moneda,
+          seniors,
+          infantes,
           metodo,
+          tarjeta: dto.card,
+          telefono: (t) => this.telefonoDeContacto(t, user, dto.customer_phone),
           paxNombre: dto.customer_name,
           paxDocumento: dto.customer_document ?? null,
           paxCorreo: dto.customer_email ?? null,
-          paxTelefono,
           notas: dto.notes ?? null,
-          tarjeta: dto.card,
-        });
-        return compra.uuid;
-      });
+        }),
+      );
+      this.stock.publicar(disId, 'VENTA');
       await this.bitacora.registrar(user.sub, 'CREAR', 'reserva', uuid, { atraccion: atrUuid });
       return this.mapper.toReservation((await this.fila(uuid))!);
     }, this.porReferencia);
+  }
+
+  /**
+   * Núcleo de una reserva, igual para la web (v1) y para Booking (v2): valida la fecha y el horario,
+   * BLOQUEA la fila de inventario del turno (sin sobreventa), descuenta los cupos y registra la compra.
+   * Sin cupos, turno cerrado o fecha bloqueada → 409 con code OUT_OF_STOCK (activa la saga de Booking).
+   */
+  async crearEnTransaccion(tx: Sql, n: NuevaReserva): Promise<{ uuid: string; disId: string; resId: string }> {
+    await this.catalogos.precargar();
+    // 1) La atracción no puede cambiar de precio ni desactivarse mientras se reserva (FOR SHARE)
+    const a = await tx.one<{ atr_id: string; nombre: string; moneda: string; adulto: number | null; nino: number | null; mayor: number | null }>(
+      `SELECT a.atr_id::text, a.atr_nombre AS nombre, a.atr_moneda AS moneda,
+              ${sqlTarifa('ADULTO')} AS adulto, ${sqlTarifa('NINO')} AS nino, ${sqlTarifa('MAYOR')} AS mayor
+         FROM atraccion a WHERE a.atr_uuid = $1 AND a.atr_eliminado_en IS NULL AND a.atr_estado = 'PUBLICADA' FOR SHARE`,
+      [n.atrUuid],
+    );
+    if (!a) throw new NotFoundException('La atracción no existe o ya no está disponible.');
+    if (a.adulto == null) throw new ConflictException('Esta atracción no tiene una tarifa vigente. Intenta más tarde.');
+
+    const fecha = n.fecha;
+    const hoy = hoyEc();
+    if (fecha < hoy) throw new BadRequestException('No puedes reservar una fecha que ya pasó.');
+    if (fecha > sumarDias(hoy, 365)) throw new BadRequestException('Solo se aceptan reservas con hasta un año de anticipación.');
+    const bloqueo = await tx.one<{ motivo: string }>('SELECT fb_motivo AS motivo FROM fecha_bloqueada WHERE atr_id = $1 AND fb_fecha = $2', [a.atr_id, fecha]);
+    if (bloqueo) throw sinCupos(`La atracción no opera el ${fecha}: ${bloqueo.motivo}`);
+
+    const horarios = await tx.query<{ hor_id: string; hora: string; cupo: number }>(
+      `SELECT hor_id::text, to_char(hor_hora, 'HH24:MI') AS hora, hor_cupo AS cupo FROM horario
+        WHERE atr_id = $1 AND hor_activo ORDER BY hor_hora`,
+      [a.atr_id],
+    );
+    const lista = horarios.map((h) => h.hora).join(', ');
+    let hora = n.hora;
+    if (!hora) {
+      if (horarios.length !== 1) throw new BadRequestException(`Selecciona un horario: ${lista}`);
+      hora = horarios[0].hora;
+    }
+    const horario = horarios.find((h) => h.hora === hora);
+    if (!horario) throw new BadRequestException(`El horario ${hora} no existe. Horarios disponibles: ${lista}`);
+    if (fecha === hoy && hora <= horaActualEc()) throw new BadRequestException('Esa salida ya partió hoy. Elige otro horario.');
+    if (n.adultos < 1) throw new BadRequestException('Cada reserva debe incluir al menos un adulto.');
+    const tickets = n.adultos + n.ninos + (n.seniors ?? 0) + (n.infantes ?? 0);
+
+    // 2) Inventario del día y horario: se crea si no existe y se BLOQUEA la fila.
+    //    Dos reservas simultáneas del mismo horario se ejecutan una detrás de otra.
+    await tx.query(
+      `INSERT INTO disponibilidad (atr_id, hor_id, dis_fecha, dis_cupo_total) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (atr_id, dis_fecha, hor_id) DO NOTHING`,
+      [a.atr_id, horario.hor_id, fecha, horario.cupo],
+    );
+    const inv = await tx.one<{ dis_id: string; total: number; reservado: number; cerrada: boolean }>(
+      `SELECT dis_id::text, dis_cupo_total AS total, dis_cupo_reservado AS reservado, dis_cerrada AS cerrada
+         FROM disponibilidad WHERE atr_id = $1 AND dis_fecha = $2 AND hor_id = $3 FOR UPDATE`,
+      [a.atr_id, fecha, horario.hor_id],
+    );
+    if (inv!.cerrada) throw sinCupos(`La salida de las ${hora} está cerrada para esa fecha.`);
+    const libres = inv!.total - inv!.reservado;
+    if (tickets > libres) {
+      throw sinCupos(
+        libres > 0
+          ? `Solo quedan ${libres} cupo(s) para las ${hora}; se pidieron ${tickets}. Reduce la cantidad o elige otro horario.`
+          : `El horario de las ${hora} está agotado. Elige otro horario o fecha.`,
+      );
+    }
+    await tx.query('UPDATE disponibilidad SET dis_cupo_reservado = dis_cupo_reservado + $2 WHERE dis_id = $1', [inv!.dis_id, tickets]);
+
+    if (n.tarjeta) {
+      const [anio, mes] = hoy.split('-').map(Number);
+      if (n.tarjeta.exp_year < anio || (n.tarjeta.exp_year === anio && n.tarjeta.exp_month < mes)) {
+        throw new BadRequestException('La tarjeta está vencida.');
+      }
+      if (n.tarjeta.exp_year > anio + 20) throw new BadRequestException('La fecha de vencimiento de la tarjeta no es válida.');
+    }
+    const paxTelefono = n.telefono ? await n.telefono(tx) : null;
+    const compra = await registrarCompra(tx, this.catalogos, {
+      usuId: n.usuId,
+      atrId: a.atr_id,
+      atrNombre: a.nombre,
+      disId: inv!.dis_id,
+      fecha,
+      hora,
+      adultos: n.adultos,
+      ninos: n.ninos,
+      seniors: n.seniors ?? 0,
+      infantes: n.infantes ?? 0,
+      precioAdulto: a.adulto,
+      precioNino: a.nino ?? a.adulto,
+      precioSenior: a.mayor ?? a.adulto,
+      moneda: a.moneda,
+      metodo: n.metodo,
+      origen: n.origen ?? 'WEB',
+      sagaId: n.sagaId ?? null,
+      confirmarSiempre: n.confirmarSiempre,
+      paxNombre: n.paxNombre,
+      paxDocumento: n.paxDocumento ?? null,
+      paxTipoDocumento: n.paxTipoDocumento,
+      paxCorreo: n.paxCorreo ?? null,
+      paxTelefono,
+      acompanantes: n.acompanantes,
+      notas: n.notas ?? null,
+      tarjeta: n.tarjeta,
+    });
+    return { uuid: compra.uuid, resId: compra.resId, disId: inv!.dis_id };
   }
 
   // ── Consultas ─────────────────────────────────────────────────────────
@@ -227,9 +295,10 @@ export class ReservasService {
   cancel(uuid: string, dto: CancelReservationRequestDto, key: string, user: AuthUser) {
     return this.idempotency.execute(key, `cancel:${uuid}`, user.sub, dto, async () => {
       await this.catalogos.precargar();
-      await this.db.tx(async (tx) => {
+      const disId = await this.db.tx(async (tx) => {
         const r = await this.getOwned(uuid, user, tx, true);
         if (ESTADO_A_STATUS[r.estado] === ReservationStatus.CANCELLED) throw new ConflictException('Esta reserva ya estaba cancelada.');
+        if (r.estado === 'CHECKED_IN') throw new ConflictException('El titular ya hizo el check-in: la experiencia está en curso y no puede cancelarse.');
         if (r.estado === 'COMPLETADA') throw new ConflictException('La experiencia ya se realizó; no puede cancelarse.');
         const gestor = this.puedeGestionar(user, r);
         const pol = this.mapper.politicaCancelacion(r);
@@ -251,7 +320,9 @@ export class ReservasService {
         const motivo = reembolsar ? base : `${base} (sin reembolso)`;
         // Estado, cupos devueltos al inventario y reembolso, retención o anulación del pago
         await cancelarCompra(tx, this.catalogos, r.res_id, motivo, new Date(), reembolsar);
+        return r.dis_id;
       });
+      this.stock.publicar(disId, 'CANCELACION');
       await this.bitacora.registrar(user.sub, 'CANCELAR', 'reserva', uuid, { motivo: dto.reason });
       return this.mapper.toReservation((await this.fila(uuid))!);
     }, this.porReferencia);

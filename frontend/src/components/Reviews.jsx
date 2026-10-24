@@ -11,6 +11,8 @@ export function ReviewModal({ open, onClose, attraction, onDone }) {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState('');
+  // Nota opcional por aspecto (contrato v2 con Booking: limpieza, servicio, calidad-precio y puntualidad)
+  const [pilares, setPilares] = useState({ cleanliness: '', service: '', value: '', punctuality: '' });
   const [errors, setErrors] = useState({});
   const [sending, setSending] = useState(false);
   const LABELS = ['', 'Muy mala', 'Mala', 'Regular', 'Muy buena', 'Excelente'];
@@ -26,7 +28,8 @@ export function ReviewModal({ open, onClose, attraction, onDone }) {
     if (Object.keys(errs).length) return;
     setSending(true);
     try {
-      await Atracciones.createReview(attraction.id, rating, comment.trim());
+      const notas = Object.fromEntries(Object.entries(pilares).filter(([, v]) => v).map(([k, v]) => [k, Number(v)]));
+      await Atracciones.createReview(attraction.id, rating, comment.trim(), notas);
       toast('¡Gracias! Tu reseña ya está publicada.', 'success');
       onDone?.();
       onClose();
@@ -94,6 +97,18 @@ export function ReviewModal({ open, onClose, attraction, onDone }) {
           </div>
           {errors.rating && <span id="rv-stars-err" className="error-text" role="alert">{errors.rating}</span>}
         </div>
+        <fieldset className="pilares-form">
+          <legend className="label">Califica cada aspecto <span className="muted small">(opcional)</span></legend>
+          {[['cleanliness', 'Limpieza'], ['service', 'Servicio del guía'], ['value', 'Calidad-precio'], ['punctuality', 'Puntualidad']].map(([k, label]) => (
+            <label key={k} className="pilar-campo">
+              <span>{label}</span>
+              <select className="input" value={pilares[k]} onChange={(e) => setPilares({ ...pilares, [k]: e.target.value })}>
+                <option value="">Sin calificar</option>
+                {[5, 4, 3, 2, 1].map((n) => <option key={n} value={n}>{'★'.repeat(n)} {LABELS[n]}</option>)}
+              </select>
+            </label>
+          ))}
+        </fieldset>
         <Field label="Tu experiencia" required error={errors.comment} hint={`${comment.length}/1000 caracteres`}>
           {(p) => (
             <textarea {...p} className="textarea" maxLength={1000} value={comment} onChange={(e) => setComment(e.target.value)} placeholder="¿Qué fue lo que más te gustó? ¿Qué recomendarías a otros viajeros?" />

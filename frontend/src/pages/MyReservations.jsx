@@ -4,10 +4,11 @@ import { CalendarDays, CalendarPlus, CalendarX2, Clock, Eye, Info, MapPin, Messa
 import { newIdempotencyKey, Reservas } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import Factura from '../components/Factura';
+import VoucherQr from '../components/VoucherQr';
 import { ReviewModal } from '../components/Reviews';
 import { Alert, EmptyState, ErrorState, Field, Modal, Spinner, StatusBadge, useAsync, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
-import { fmtDate, fmtDateLong, fmtDateTime, fmtMoney, PAYMENT, salidaEc } from '../utils/format';
+import { estadoVisible, fmtDate, fmtDateLong, fmtDateTime, fmtMoney, participantes, PAYMENT, salidaEc } from '../utils/format';
 import { downloadIcs } from './Confirmation';
 import { fotoProps, SIZES } from '../utils/fotos';
 
@@ -122,18 +123,19 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
 export function ReservationDetailModal({ r, onClose }) {
   return (
     <Modal open onClose={onClose} title={`Reserva ${r.code}`} description={r.attraction.name} footer={<button className="btn btn-primary" onClick={onClose}>Cerrar</button>}>
-      <div className="row" style={{ marginBottom: 14 }}><StatusBadge status={r.status} /></div>
+      <div className="row" style={{ marginBottom: 14 }}><StatusBadge status={estadoVisible(r)} /></div>
       <dl className="detail-list">
         <dt>Fecha</dt><dd>{fmtDateLong(r.date)}</dd>
         <dt>Hora</dt><dd>{r.time}</dd>
         <dt>Punto de encuentro</dt><dd>{r.attraction.meeting_point}</dd>
-        <dt>Participantes</dt><dd>{r.adults} adulto(s){r.children ? `, ${r.children} niño(s)` : ''}</dd>
+        <dt>Participantes</dt><dd>{participantes(r)}</dd>
         <dt>Titular</dt><dd>{r.customer?.name}<br /><span className="muted small">{r.customer?.email} · {r.customer?.phone}</span></dd>
         <dt>Pago</dt><dd>{PAYMENT[r.payment_method]} · <strong>{fmtMoney(r.total_price.total)}</strong></dd>
         {r.notes && (<><dt>Notas</dt><dd>{r.notes}</dd></>)}
         <dt>Reservada</dt><dd>{fmtDateTime(r.created_at)}</dd>
         {r.status === 'CANCELLED' && (<><dt>Cancelada</dt><dd>{fmtDateTime(r.cancelled_at)} · {r.cancellation_reason}</dd></>)}
       </dl>
+      <VoucherQr r={r} />
       <Factura invoice={r.invoice} />
     </Modal>
   );
@@ -198,7 +200,7 @@ export default function MyReservations() {
               <img {...fotoProps(r.attraction.photo, SIZES.resumen)} alt="" loading="lazy" decoding="async" onError={onImgError} />
               <div>
                 <div className="row" style={{ gap: 8 }}>
-                  <StatusBadge status={r.status} />
+                  <StatusBadge status={estadoVisible(r)} />
                   <span className="badge">{r.code}</span>
                 </div>
                 <h2 className="res-title"><Link to={`/atraccion/${r.attraction.id}`}>{r.attraction.name}</Link></h2>

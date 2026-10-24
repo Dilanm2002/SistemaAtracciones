@@ -7,6 +7,40 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [2.8.0] - 2026-10-24
+
+### Agregado
+- **Contrato v2 con Booking Prototipo (RDA2)** en `/api/v2` ([docs/INTEGRACION-BOOKING-V2.md](docs/INTEGRACION-BOOKING-V2.md)). El contrato `contracts/atracciones-openapi-v2.yaml` se guarda tal como lo envió Booking y el test de cobertura verifica sus 20 operaciones. `/api/v1` no cambia.
+  - Catálogo: árbol de categorías con banderas de inclusión, búsqueda avanzada, listado paginado, ficha por UUID o slug y turnos con estado `DISPONIBLE`, `ULTIMOS_CUPOS` o `AGOTADO`.
+  - Reservas: 201 con `external_order_id`, código PNR y voucher QR firmado; **409 `OUT_OF_STOCK`** para la saga; 422 con un documento inválido; `Idempotency-Key` obligatoria; cancelación idempotente como compensación.
+  - **Check-in presencial** con el documento del titular y/o el QR del voucher (estado `CHECKED_IN`).
+  - **Acuerdo B2B de promociones** (`GET`/`PUT /promociones/contrato`): descuento máximo, destinos y vigencia.
+  - Feed de eventos v2 y salud del nodo para el semáforo de Booking (`UP` / `DEGRADED` / `DOWN` con 503 y kill-switch).
+  - `X-Correlation-Id` en logs, eventos y envíos gRPC; errores con `correlation_id`, `timestamp` e `invalid_params`.
+- **Sincronización de stock por gRPC (CE01):** después de cada venta, cancelación o cambio de aforo se envía `inventory.InventoryStockService/PushStockUpdate` a Booking. Cada envío queda en `ops.sync_stock`, se reintenta si falla y se ve en el panel de Observabilidad. Probado con un servidor gRPC simulado.
+- **Migración 009:**
+  - inclusiones por categoría y atracción, accesibilidad, guía, instrucciones de llegada, paquetes y descuento, e itinerario;
+  - nota por pilar en las reseñas;
+  - boletos de **adulto mayor** (tarifa `MAYOR`) e **infante** (gratis, ocupa cupo);
+  - documento del pasajero por tipo (cédula, pasaporte, RUC) y teléfono E.164;
+  - origen de la reserva, saga y check-in;
+  - acuerdo de promociones, usuario técnico de Booking y datos de demostración para las atracciones existentes.
+- La factura tiene una línea por tipo de boleto (adulto, niño, adulto mayor e infante).
+- **Web:**
+  - **progreso del pago paso a paso** con círculos de carga («Verificando tu tarjeta…», «Autorizando el pago…», «Confirmando…»), aviso si tarda y código de soporte si falla;
+  - la ficha muestra itinerario, tarifas por edad, guía, accesibilidad y calificación por aspecto;
+  - en la reserva se pueden elegir adultos mayores e infantes;
+  - el voucher QR aparece en la confirmación y en «Mis reservas»;
+  - las reseñas aceptan nota por aspecto.
+- **Panel:**
+  - campos del contrato v2 en el formulario de atracciones (con editor de itinerario) y en las categorías;
+  - **check-in** desde «Reservas»;
+  - página «Promociones Booking»;
+  - sincronización gRPC en «Observabilidad».
+
+### Cambiado
+- Edades alineadas con el contrato: niño de 5 a 12 años, adulto de 13 a 64, adulto mayor de 65 o más, infante de 0 a 4.
+
 ## [2.7.0] - 2026-10-24
 
 ### Agregado

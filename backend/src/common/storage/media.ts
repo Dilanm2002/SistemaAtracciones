@@ -18,6 +18,11 @@ export function firmarMedia(objeto: string, secreto: string, ahora = Date.now())
   return `${exp}.${firma(objeto, exp, secreto)}`;
 }
 
+/** Igual que firmarMedia, pero válido hasta `exp` (segundos Unix); p. ej. el enlace .ics de una reserva hasta el día de la actividad. */
+export function firmarHasta(objeto: string, secreto: string, exp: number): string {
+  return `${exp}.${firma(objeto, exp, secreto)}`;
+}
+
 export function firmaValida(objeto: string, token: string | undefined, secreto: string, ahora = Date.now()): boolean {
   const m = /^(\d{9,12})\.([\w-]{43})$/.exec(token ?? '');
   if (!m) return false;

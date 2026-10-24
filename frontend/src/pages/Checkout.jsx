@@ -4,6 +4,7 @@ import { ArrowLeft, Banknote, CalendarDays, ChevronDown, Clock, CreditCard, Land
 import { Atracciones, newIdempotencyKey, Reservas } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { LoginForm, RegisterForm } from '../components/AuthForms';
+import ProgresoPago from '../components/ProgresoPago';
 import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePageTitle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -51,6 +52,8 @@ export default function Checkout() {
   const entero = (v, min, max) => Math.min(max, Math.max(min, Math.trunc(Number(v)) || min));
   const adultos = entero(params.get('adultos'), 1, 30);
   const ninos = entero(params.get('ninos'), 0, 30 - adultos);
+  const mayores = entero(params.get('mayores'), 0, 30 - adultos - ninos);
+  const infantes = entero(params.get('infantes'), 0, 30 - adultos - ninos - mayores);
 
   const [a, setA] = useState(null);
   const [loadError, setLoadError] = useState(null);
@@ -63,6 +66,7 @@ export default function Checkout() {
   const [submitError, setSubmitError] = useState(null);
   const [verResumen, setVerResumen] = useState(false);
   const [sending, setSending] = useState(false);
+  const [progreso, setProgreso] = useState(null);
   // Una sola clave por intento de compra: reintentos o doble clic no crean dos reservas
   const idemKey = useRef(newIdempotencyKey());
 
@@ -90,8 +94,9 @@ export default function Checkout() {
   if (!a) return <div className="container" style={{ paddingTop: 40 }}><Spinner label="Preparando tu reserva…" /></div>;
 
   const childPrice = a.child_price?.total ?? a.price.total;
-  const total = adultos * a.price.total + ninos * childPrice;
-  const pax = adultos + ninos;
+  const seniorPrice = a.senior_price?.total ?? a.price.total;
+  const total = adultos * a.price.total + ninos * childPrice + mayores * seniorPrice;
+  const pax = adultos + ninos + mayores + infantes;
   const sinCupo = slot && slot.available < pax;
   const back = `/atraccion/${id}?fecha=${fecha}&personas=${adultos}`;
 
@@ -133,12 +138,42 @@ export default function Checkout() {
     if (validateStep1()) { setStep(2); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   };
 
-  const submit = async (e) => {
+  // Progreso visible del pago (círculos de carga por paso): ver components/ProgresoPago.jsx
+  const marcar = (id, estado, detalle) =>
+    setProgreso((pr) => pr && { ...pr, pasos: pr.pasos.map((x) => (x.id === id ? { ...x, estado, ...(detalle ? { detalle } : {}) } : x)) });
+  const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const submit = (e) => {
     e.preventDefault();
     if (!validateStep2() || sending) return;
+    pagar();
+  };
+
+  const pagar = async () => {
+    const conTarjeta = pay.metodo === 'TARJETA';
+    const ultimos4 = pay.numero.replace(/\D/g, '').slice(-4);
+    const pasos = conTarjeta
+      ? [
+          { id: 'verificar', label: `Verificando tu tarjeta ${marcaTarjeta(pay.numero)} terminada en ${ultimos4}` },
+          { id: 'pagar', label: `Autorizando el pago de ${fmtMoney(total)} y reservando tus cupos` },
+          { id: 'confirmar', label: 'Confirmando la reserva y emitiendo tu factura' },
+        ]
+      : [
+          { id: 'verificar', label: 'Verificando tus datos' },
+          { id: 'pagar', label: `Reservando ${pax} cupo${pax === 1 ? '' : 's'} para el ${fecha} a las ${hora}` },
+          { id: 'confirmar', label: 'Confirmando tu reserva' },
+        ];
     setSending(true);
     setSubmitError(null);
+    setProgreso({ titulo: conTarjeta ? 'Procesando tu pago' : 'Procesando tu reserva', pasos: pasos.map((x, i) => ({ ...x, estado: i === 0 ? 'activo' : 'pendiente' })) });
+    let enCurso = 'verificar';
     try {
+      // 1) Los datos de la tarjeta ya se validaron en el navegador (Luhn, vencimiento, CVV)
+      await espera(600);
+      marcar('verificar', 'ok', conTarjeta ? 'Tarjeta válida' : 'Datos completos');
+      marcar('pagar', 'activo');
+      enCurso = 'pagar';
+      // 2) La API bloquea el turno, descuenta los cupos y registra el pago en una sola transacción
       const r = await Reservas.create(
         a.id,
         {
@@ -146,6 +181,8 @@ export default function Checkout() {
           time: hora,
           ticket_count: pax,
           children: ninos,
+          ...(mayores ? { seniors: mayores } : {}),
+          ...(infantes ? { infants: infantes } : {}),
           customer_name: form.nombre.trim(),
           customer_email: form.email.trim(),
           customer_phone: form.telefono.replace(/\s/g, ''),
@@ -167,10 +204,27 @@ export default function Checkout() {
         },
         idemKey.current,
       );
+      marcar('pagar', 'ok', conTarjeta ? 'Pago aprobado' : 'Cupos reservados');
+      marcar('confirmar', 'activo');
+      enCurso = 'confirmar';
+      await espera(450);
+      marcar(
+        'confirmar',
+        'ok',
+        r.invoice ? `Reserva ${r.code} · factura ${r.invoice.number}` : `Reserva ${r.code} · paga antes de la salida para confirmarla`,
+      );
+      await espera(800);
       toast('¡Reserva creada con éxito!', 'success');
       if (!telefonoCuenta) refresh().catch(() => {}); // el teléfono indicado quedó guardado en la cuenta
       navigate(`/reserva/${r.reservation_id}/confirmada`, { replace: true, state: { reservation: r } });
     } catch (err) {
+      marcar(enCurso, 'error');
+      setProgreso((pr) => pr && {
+        ...pr,
+        error: err.message,
+        codigo: !err.status || err.status >= 500 ? err.requestId : null,
+        reintentable: !err.status || err.status >= 500,
+      });
       setSubmitError(err);
       // Si falló por cupos o datos, el siguiente intento es una operación distinta
       if (err.status && err.status < 500) idemKey.current = newIdempotencyKey();
@@ -201,12 +255,14 @@ export default function Checkout() {
         <h2 style={{ fontSize: '1.08rem' }}>{a.name}</h2>
         <div className="os-row"><CalendarDays size={16} aria-hidden="true" /> <span>{fmtDateLong(fecha)}</span></div>
         <div className="os-row"><Clock size={16} aria-hidden="true" /> Salida {hora}</div>
-        <div className="os-row"><Users size={16} aria-hidden="true" /> {adultos} adulto{adultos > 1 ? 's' : ''}{ninos ? `, ${ninos} niño${ninos > 1 ? 's' : ''}` : ''}</div>
+        <div className="os-row"><Users size={16} aria-hidden="true" /> {adultos} adulto{adultos > 1 ? 's' : ''}{ninos ? `, ${ninos} niño${ninos > 1 ? 's' : ''}` : ''}{mayores ? `, ${mayores} adulto${mayores > 1 ? 's' : ''} mayor${mayores > 1 ? 'es' : ''}` : ''}{infantes ? `, ${infantes} infante${infantes > 1 ? 's' : ''}` : ''}</div>
         <div className="os-row"><MapPin size={16} aria-hidden="true" /> {a.meeting_point}</div>
         <Link to={back} className="small">Cambiar fecha u horario</Link>
         <div className="summary-lines">
           <div><span>{adultos} × Adulto</span><span>{fmtMoney(adultos * a.price.total)}</span></div>
           {ninos > 0 && <div><span>{ninos} × Niño</span><span>{fmtMoney(ninos * childPrice)}</span></div>}
+          {mayores > 0 && <div><span>{mayores} × Adulto mayor</span><span>{fmtMoney(mayores * seniorPrice)}</span></div>}
+          {infantes > 0 && <div><span>{infantes} × Infante</span><span>Gratis</span></div>}
         </div>
         <div className="summary-total"><span>Total a pagar</span><span className="price">{fmtMoney(total)}</span></div>
         <p className="small" style={{ color: a.free_cancellation && !ultimoMomento ? 'var(--success)' : 'var(--warning)', margin: 0, display: 'flex', gap: 6 }}>
@@ -362,6 +418,16 @@ export default function Checkout() {
         </div>
         {Summary}
       </div>
+      {progreso && (
+        <ProgresoPago
+          titulo={progreso.titulo}
+          pasos={progreso.pasos}
+          error={progreso.error}
+          codigoSoporte={progreso.codigo}
+          onCerrar={() => setProgreso(null)}
+          onReintentar={progreso.reintentable ? () => { setProgreso(null); pagar(); } : undefined}
+        />
+      )}
       {/* MOV-006: en el celular, el total y el botón de pagar siempre a la vista en el paso de pago */}
       {isAuth && step === 2 && (
         <div className="checkout-barra" role="region" aria-label="Total y pago">

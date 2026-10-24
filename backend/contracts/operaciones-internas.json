@@ -83,7 +83,12 @@
       "GET /ops/health/live",
       "GET /ops/health/ready",
       "POST /ops/telemetria",
-      "GET /ops/resumen"
+      "GET /ops/resumen",
+      "POST /ops/stock-sync/reintentar"
+    ],
+    "integracion_booking_v2": [
+      "GET /v2/atracciones/vouchers/{codigo}/qr.png",
+      "POST /atracciones/reservations/{reservationId}/checkin"
     ]
   }
 }

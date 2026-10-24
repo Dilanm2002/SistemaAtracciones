@@ -50,6 +50,43 @@ export enum ProductType {
   PACKAGE = 'PACKAGE',
 }
 
+/** Hito del itinerario (contrato v2: ItineraryStop). */
+export class ItineraryStopDto {
+  @ApiProperty({ example: '09:00' })
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'itinerary.time debe tener formato HH:mm' })
+  time: string;
+
+  @ApiProperty({ example: 'Encuentro y bienvenida' })
+  @Transform(trim)
+  @IsString()
+  @MinLength(3, { message: 'itinerary.title debe tener al menos 3 caracteres' })
+  @MaxLength(150)
+  @ContieneLetras()
+  title: string;
+
+  @ApiPropertyOptional({ example: 'Verificación del voucher QR y charla de seguridad.' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(500)
+  @ValidateIf((o: { description?: string }) => !!o.description)
+  @ContieneLetras()
+  description?: string;
+
+  @ApiProperty({ example: 30 })
+  @IsInt({ message: 'itinerary.duration_minutes debe ser un número entero' })
+  @Min(1)
+  @Max(1440)
+  duration_minutes: number;
+
+  @ApiPropertyOptional({ example: 'Parque La Carolina' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(150)
+  location?: string;
+}
+
 export class CreateAtraccionDto {
   // ── Campos del contrato (CreateAtraccionRequest) ──────────────────────
   @ApiProperty({ description: 'Nombre de la atracción turística', example: 'Tour al Parque Nacional Cotopaxi' })
@@ -155,7 +192,7 @@ export class CreateAtraccionDto {
   @SinNumerosLargos(4)
   short_description?: string;
 
-  @ApiPropertyOptional({ description: 'Precio por niño (3-11 años)', example: 35 })
+  @ApiPropertyOptional({ description: 'Precio por niño (5-12 años)', example: 35 })
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 }, { message: 'child_price debe ser un número con máximo 2 decimales' })
   @Min(0)
@@ -228,6 +265,56 @@ export class CreateAtraccionDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  // ── Datos del contrato v2 con Booking ─────────────────────────────────
+  @ApiPropertyOptional({ description: 'Precio adulto mayor (65+); si no se indica se cobra como adulto', example: 18 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 }, { message: 'senior_price debe ser un número con máximo 2 decimales' })
+  @Min(0)
+  @Max(PRECIO_MAX)
+  senior_price?: number | null;
+
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() includes_food?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() includes_transport?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() includes_guide?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() wheelchair_accessible?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() stroller_accessible?: boolean;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() service_animals_allowed?: boolean;
+
+  @ApiPropertyOptional({ example: 'Lic. Carlos Morales (Credencial Mintur #5541)' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(150)
+  @ValidateIf((o: { guide_name?: string }) => !!o.guide_name)
+  @ContieneLetras()
+  guide_name?: string;
+
+  @ApiPropertyOptional({ example: 'Preséntate 15 minutos antes junto al tótem rojo.' })
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(300)
+  @ValidateIf((o: { arrival_instructions?: string }) => !!o.arrival_instructions)
+  @ContieneLetras()
+  arrival_instructions?: string;
+
+  @ApiPropertyOptional({ description: 'Se puede combinar en paquetes de Booking' }) @IsOptional() @IsBoolean() allows_package?: boolean;
+
+  @ApiPropertyOptional({ description: 'Descuento en paquetes (%), nunca más que el acuerdo B2B', example: 10 })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(50, { message: 'package_discount no puede superar 50 %' })
+  package_discount?: number;
+
+  @ApiPropertyOptional({ type: [ItineraryStopDto], description: 'Itinerario en orden cronológico (reemplaza el anterior)' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => ItineraryStopDto)
+  itinerary?: ItineraryStopDto[];
 }
 
 /** Decisión del administrador sobre una experiencia que subió una empresa (EN_REVISION). */

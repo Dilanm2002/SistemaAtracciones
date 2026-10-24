@@ -89,7 +89,7 @@ const FAQ = [
   ['reservar', 'Reservas', [
     ['¿Cómo hago una reserva?', 'Busca la experiencia, elige fecha en el calendario (verás en verde los días con cupo), selecciona horario y número de personas, y presiona "Reservar ahora". Completa tus datos, elige el método de pago y listo: recibirás un código tipo DEC-XXXXXX.'],
     ['¿Necesito una cuenta?', 'Sí. Te pedimos iniciar sesión o crear una cuenta en el último paso para que puedas ver, descargar y cancelar tus reservas cuando quieras. Tu selección no se pierde.'],
-    ['¿Los niños pagan?', 'Los niños de 3 a 11 años tienen tarifa reducida (se muestra en cada experiencia). Menores de 3 años no pagan pero cuentan como cupo si ocupan asiento.'],
+    ['¿Los niños pagan?', 'Los niños de 5 a 12 años tienen tarifa reducida y los adultos mayores (65+) tarifa preferencial; se muestran en cada experiencia. Los infantes de 0 a 4 años no pagan, pero ocupan un cupo.'],
     ['¿Qué significa "Pocos cupos"?', 'Quedan menos del 20 % de lugares para ese día. Te recomendamos reservar pronto.'],
   ]],
   ['pagos', 'Pagos', [

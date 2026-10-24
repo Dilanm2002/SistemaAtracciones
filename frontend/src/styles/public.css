@@ -603,3 +603,51 @@ body { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-are
   .tabs { flex-wrap: wrap; overflow-x: visible; }
   .tab { flex: 1 1 auto; justify-content: center; padding: 10px 10px; }
 }
+
+/* ── Progreso del pago (círculos de carga por paso) ───────────────────── */
+.pp-fondo { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: rgba(15, 23, 22, 0.55); }
+.pp-caja { width: min(460px, 100%); padding: 24px; outline: none; }
+.pp-caja h2 { font-size: 1.2rem; margin: 0 0 16px; }
+.pp-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.pp-paso { display: flex; gap: 12px; align-items: flex-start; color: var(--muted); }
+.pp-paso.is-activo, .pp-paso.is-ok { color: var(--text); }
+.pp-paso.is-error { color: var(--danger); }
+.pp-icono { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--border); background: var(--surface); }
+.pp-paso.is-activo .pp-icono { border-color: transparent; }
+.pp-paso.is-activo .pp-icono .spinner { width: 22px; height: 22px; }
+.pp-paso.is-ok .pp-icono { background: var(--success); border-color: var(--success); color: #fff; }
+.pp-paso.is-error .pp-icono { background: var(--danger); border-color: var(--danger); color: #fff; }
+.pp-label { display: block; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.pp-detalle { display: block; font-size: 0.85rem; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.pp-aviso { display: flex; gap: 8px; align-items: flex-start; margin: 16px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--warning-bg); color: var(--warning); font-size: 0.9rem; }
+.pp-error { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pp-error p { margin: 0; }
+
+/* ── Ficha: itinerario, tarifas y pilares (contrato v2) ───────────────── */
+.itinerario { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.itinerario li { position: relative; display: grid; grid-template-columns: 64px 1fr; gap: 12px; padding: 0 0 16px; }
+.itinerario li::before { content: ''; position: absolute; left: 70px; top: 6px; bottom: -6px; width: 2px; background: var(--border); }
+.itinerario li:last-child::before { display: none; }
+.itinerario li > div { padding-left: 16px; position: relative; min-width: 0; overflow-wrap: anywhere; }
+.itinerario li > div::before { content: ''; position: absolute; left: -9px; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--primary); border: 2px solid var(--surface); }
+.itinerario-hora { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--primary); }
+.tarifas { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tarifas li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.pilares { display: grid; gap: 10px; margin: 0; }
+.pilares > div { display: grid; grid-template-columns: minmax(120px, 160px) 1fr; gap: 12px; align-items: center; }
+.pilares dt { color: var(--muted); font-size: 0.9rem; }
+.pilares dd { margin: 0; display: flex; align-items: center; gap: 8px; }
+.pilar-barra { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.pilar-barra span { display: block; height: 100%; border-radius: 4px; background: var(--primary); }
+.pilares-form { border: 0; padding: 0; margin: 0 0 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px 14px; }
+.pilares-form legend { margin-bottom: 6px; }
+.pilar-campo { display: grid; gap: 4px; font-size: 0.9rem; }
+
+/* ── Voucher QR ───────────────────────────────────────────────────────── */
+.voucher-qr { display: flex; gap: 16px; align-items: center; margin-top: 18px; padding: 14px; border: 1px dashed var(--border); border-radius: 14px; background: var(--surface); }
+.voucher-qr img { flex: 0 0 auto; border-radius: 8px; background: #fff; }
+.voucher-qr h3 { display: inline-flex; gap: 6px; align-items: center; margin: 0 0 4px; font-size: 1rem; }
+.voucher-qr p { margin: 0; }
+.voucher-qr-ok { display: flex; gap: 6px; align-items: center; margin-top: 14px; color: var(--success); font-weight: 600; }
+@media (max-width: 480px) { .voucher-qr { flex-direction: column; text-align: center; } }
+

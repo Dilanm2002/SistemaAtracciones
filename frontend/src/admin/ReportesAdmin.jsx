@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BarChart3, CalendarRange, DollarSign, Percent, Receipt, Ticket, Download } from 'lucide-react';
 import { Reportes } from '../api/client';
 import { Alert, EmptyState, ErrorState, StatusBadge } from '../components/ui';
-import { addDays, fmtDate, fmtMoney, PAYMENT, REGION, STATUS, todayEc } from '../utils/format';
+import { addDays, estadoVisible, fmtDate, fmtMoney, PAYMENT, REGION, STATUS, todayEc } from '../utils/format';
 import { CategoryBars, ChartCard, ColumnChart, RankChart, SERIES } from './charts';
 import { exportXlsx } from './excel';
 
@@ -151,7 +151,7 @@ export default function ReportesAdmin() {
                       <td className="small nowrap">{fmtDate(r.date, { day: 'numeric', month: 'short' })} {r.time}</td>
                       <td className="small">{r.customer}</td>
                       <td className="num">{fmtMoney(r.total)}</td>
-                      <td><StatusBadge status={r.status} /></td>
+                      <td><StatusBadge status={estadoVisible(r)} /></td>
                     </tr>
                   ))}
                 </tbody>

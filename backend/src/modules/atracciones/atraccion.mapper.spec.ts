@@ -58,7 +58,10 @@ describe('AtraccionMapper: reservas', () => {
     fecha: '2030-01-01', hora: '09:00', observaciones: null, motivo_cancelacion: null, cancelado_en: null, creado_en: new Date('2026-01-01T00:00:00Z'),
     atr_uuid: 'a-uuid', atr_nombre: 'Tour', ciudad: 'Quito', punto_encuentro: null, direccion: 'Plaza Grande', cancelacion_gratuita: true,
     horas_cancelacion: 24, foto: '/img/x.jpg', ope_codigo: 101, usu_id: '9', correo: 'a@b.ec', telefono: null, pax_nombre: 'Ana',
-    pax_documento: null, pax_correo: null, pax_telefono: null, metodo: null, factura: null, ...extra,
+    pax_documento: null, pax_correo: null, pax_telefono: null, metodo: null, factura: null,
+    dis_id: '5', seniors: 0, infantes: 0, precio_adulto: 20, precio_nino: 10, precio_senior: null, origen: 'WEB', saga_id: null,
+    checkin_en: null, checkin_guia: null, confirmado_en: null, orden_numero: 'ORD-ABCDEF', atr_slug: 'tour', guia: null,
+    instrucciones_llegada: null, pax_tipo_documento: 'CEDULA', pago_estado: 'PENDIENTE', acompanantes: [], ...extra,
   });
 
   it('toReservation: sin factura no hay invoice; con factura, encabezado y detalle', () => {

@@ -87,6 +87,9 @@ const CONTRATOS: Record<string, { archivo: string; tipo: string }> = {
   'atracciones-asyncapi.yaml': { archivo: 'contracts/atracciones-asyncapi.yaml', tipo: 'application/yaml' },
   'atracciones.graphql': { archivo: 'contracts/atracciones.graphql', tipo: 'text/plain' },
   'atracciones.proto': { archivo: 'contracts/atracciones.proto', tipo: 'text/plain' },
+  // Contrato v2 con Booking Prototipo (RDA2) y el proto de sincronización de stock por gRPC
+  'atracciones-openapi-v2.yaml': { archivo: 'contracts/atracciones-openapi-v2.yaml', tipo: 'application/yaml' },
+  'inventory.proto': { archivo: 'contracts/inventory.proto', tipo: 'text/plain' },
 };
 
 /** Busca el archivo tanto en desarrollo (cwd = backend) como en Vercel (función en api/). */

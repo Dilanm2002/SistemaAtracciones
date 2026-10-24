@@ -49,10 +49,12 @@ type Req = Request & { id?: string; ctx?: ContextoPeticion };
  * traceparent y, al escribir las cabeceras, Server-Timing (tiempo total y de la base).
  */
 export function contextoPeticion(req: Req, res: Response, next: NextFunction) {
-  const ctx = nuevoContexto(req.header('x-request-id'), req.header('traceparent'));
+  // X-Correlation-Id (contrato v2 con Booking) tiene prioridad: la misma transacción se sigue en ambos sistemas
+  const ctx = nuevoContexto(req.header('x-correlation-id') || req.header('x-request-id'), req.header('traceparent'));
   req.id = ctx.requestId;
   req.ctx = ctx;
   res.setHeader('X-Request-Id', ctx.requestId);
+  res.setHeader('X-Correlation-Id', ctx.requestId);
   res.setHeader('traceparent', traceparentDe(ctx));
   // Server-Timing: visible en DevTools › Network › Timing (y en PerformanceResourceTiming)
   const writeHead = res.writeHead;

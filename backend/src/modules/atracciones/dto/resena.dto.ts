@@ -18,6 +18,12 @@ export class CreateResenaDto {
   @MaxLength(1000)
   @ContieneLetras({ message: 'comment debe contener tu opinión con texto' })
   comment: string;
+
+  // Nota por pilar (opcional, 1 a 5): el contrato v2 con Booking las muestra sobre 10
+  @ApiPropertyOptional({ minimum: 1, maximum: 5 }) @IsOptional() @IsInt() @Min(1) @Max(5) cleanliness?: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: 5 }) @IsOptional() @IsInt() @Min(1) @Max(5) service?: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: 5, description: 'Relación calidad-precio' }) @IsOptional() @IsInt() @Min(1) @Max(5) value?: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: 5 }) @IsOptional() @IsInt() @Min(1) @Max(5) punctuality?: number;
 }
 
 export class ModerarResenaDto {

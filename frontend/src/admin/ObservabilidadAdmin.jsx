@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, AlertTriangle, CheckCircle2, Gauge, RefreshCw, ServerCrash, ShieldCheck, Timer, XCircle } from 'lucide-react';
+import { Activity, AlertTriangle, ArrowLeftRight, CheckCircle2, Gauge, RefreshCw, ServerCrash, ShieldCheck, Timer, XCircle } from 'lucide-react';
 import { Ops } from '../api/client';
-import { EmptyState, ErrorState, Segmented, useAsync } from '../components/ui';
+import { EmptyState, ErrorState, Segmented, Spinner, useAsync } from '../components/ui';
+import { useToast } from '../context/ToastContext';
 import { fmtDateTime, fmtNumber } from '../utils/format';
 import { CategoryBars, ChartCard, ColumnChart, RankChart, SERIES } from './charts';
 
@@ -154,12 +155,81 @@ export default function ObservabilidadAdmin() {
         </span>
       </div>
 
-      {error ? <ErrorState error={error} onRetry={reload} /> : loading && !data ? <div className="skeleton" style={{ height: 420 }} /> : data && <Contenido d={data} rango={rango} />}
+      {error ? <ErrorState error={error} onRetry={reload} /> : loading && !data ? <div className="skeleton" style={{ height: 420 }} /> : data && <Contenido d={data} rango={rango} onRecargar={reload} />}
     </>
   );
 }
 
-function Contenido({ d, rango }) {
+const ESTADO_SYNC = {
+  ENVIADO: { label: 'Enviado', color: 'var(--success)', bg: 'var(--success-bg)', Icon: CheckCircle2 },
+  ERROR: { label: 'Error', color: 'var(--danger)', bg: 'var(--danger-bg)', Icon: XCircle },
+  PENDIENTE: { label: 'Pendiente', color: 'var(--warning)', bg: 'var(--warning-bg)', Icon: AlertTriangle },
+  DESCARTADO: { label: 'Reemplazado', color: 'var(--muted)', bg: 'var(--surface-2)', Icon: ArrowLeftRight },
+};
+
+/** Sincronización de stock con Booking por gRPC (contrato v2, CE01): cada envío y su resultado. */
+function StockSync({ s, onRecargar }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const reintentar = async () => {
+    setBusy(true);
+    try {
+      const r = await Ops.reintentarStock();
+      toast(r.sent ? `Se enviaron ${r.sent} actualización(es) pendientes` : 'No había envíos pendientes o Booking sigue sin responder', r.sent ? 'success' : 'warning');
+      onRecargar();
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!s) return null;
+  const sano = s.enabled && !s.errores && !s.pendientes;
+  return (
+    <>
+      <h3 className="adm-section-title">Sincronización de stock con Booking (gRPC)</h3>
+      <div className="card card-pad" style={{ marginBottom: 30 }}>
+        <div className="row-between" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <span className="obs-estado" style={sano ? { color: 'var(--success)', background: 'var(--success-bg)' } : { color: 'var(--warning)', background: 'var(--warning-bg)' }}>
+            {sano ? <CheckCircle2 size={14} aria-hidden="true" /> : <AlertTriangle size={14} aria-hidden="true" />}
+            {!s.enabled ? 'Deshabilitada' : sano ? 'Al día' : `${s.errores + s.pendientes} envío(s) por reintentar`}
+          </span>
+          <button className="btn btn-sm" onClick={reintentar} disabled={busy || !s.enabled}>{busy ? <Spinner /> : <RefreshCw size={14} aria-hidden="true" />} Reintentar pendientes</button>
+        </div>
+        <p className="muted small" style={{ margin: '10px 0' }}>
+          <code>inventory.InventoryStockService/PushStockUpdate</code> → <code>{s.target}</code> ({s.tls ? 'TLS' : 'h2c sin TLS'}) · tienda <code>{s.service_id}</code>.
+          En el periodo: {fmtNumber(s.enviados)} enviados, {fmtNumber(s.errores)} con error, {fmtNumber(s.pendientes)} pendientes
+          {s.latencia_p95 != null ? ` · latencia p95 ${fmtMs(s.latencia_p95)}` : ''}{s.ultimo_ok ? ` · último envío correcto ${fmtDateTime(s.ultimo_ok)}` : ''}.
+        </p>
+        {!s.recent.length ? <p className="muted small">Todavía no hubo ventas ni cancelaciones que sincronizar.</p> : (
+          <div className="table-wrap" tabIndex={0} role="region" aria-label="Últimos envíos de stock a Booking">
+            <table className="table">
+              <caption className="sr-only">Últimos envíos de stock a Booking por gRPC</caption>
+              <thead><tr><th scope="col">Fecha</th><th scope="col">Turno</th><th scope="col" className="num">Cupos</th><th scope="col">Motivo</th><th scope="col">Estado</th><th scope="col">Respuesta</th></tr></thead>
+              <tbody>
+                {s.recent.map((x) => {
+                  const e = ESTADO_SYNC[x.status] ?? ESTADO_SYNC.PENDIENTE;
+                  return (
+                    <tr key={x.id}>
+                      <td className="small">{x.date}<div className="muted tiny">{fmtDateTime(x.created_at)}</div></td>
+                      <td className="small">{x.time_slot}</td>
+                      <td className="num">{x.available_units}</td>
+                      <td className="small">{x.reason}</td>
+                      <td><span className="obs-estado" style={{ color: e.color, background: e.bg }}><e.Icon size={13} aria-hidden="true" /> {e.label}</span></td>
+                      <td className="small obs-msg">{x.response ?? '—'}{x.latency_ms != null && <span className="muted tiny"> · {x.latency_ms} ms · {x.attempts} intento(s)</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function Contenido({ d, rango, onRecargar }) {
   const t = d.totals;
   const slo = d.slo;
   const serie = d.series.map((s) => ({ ...s, label: etiqueta(s.from, rango) }));
@@ -245,6 +315,8 @@ function Contenido({ d, rango }) {
 
       <h3 className="adm-section-title">Experiencia real de los usuarios (Core Web Vitals, p75)</h3>
       <div className="obs-vitals">{d.web_vitals.map((v) => <VitalCard key={v.name} v={v} />)}</div>
+
+      <StockSync s={d.stock_sync} onRecargar={onRecargar} />
 
       <h3 className="adm-section-title">Incidentes</h3>
       {!d.incidents.length ? (

@@ -53,6 +53,7 @@ export const RESERVA = {
 function respuesta(metodo, ruta, query, usuario) {
   if (metodo !== 'GET') {
     if (ruta === '/atracciones/search' || ruta === '/atracciones/details') return { data: ATRACCIONES.data, metadata: { total_results: ATRACCIONES.data.length } };
+    if (/^\/atracciones\/[^/]+\/reservations$/.test(ruta)) return [201, RESERVA];
     return {};
   }
   if (ruta === '/auth/me') return usuario ? [200, usuario] : [401, { status: 401, title: 'No autenticado' }];

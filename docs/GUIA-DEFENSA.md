@@ -2,7 +2,7 @@
 
 ## Guion de demostración (≈10 minutos)
 
-1. **Está en la nube** — abrir `…/api/v1/atracciones/health`: muestra la API y la base de datos de Supabase (`status: UP`, 46 tablas, migraciones aplicadas, conteos reales).
+1. **Está en la nube** — abrir `…/api/v1/atracciones/health`: muestra la API y la base de datos de Supabase (`status: UP`, 49 tablas, migraciones aplicadas, conteos reales).
 2. **Marketplace** — https://descubre-ec.vercel.app: buscar por región o categoría, abrir una atracción, elegir fecha en el calendario (cupos reales), reservar con tarjeta de prueba `4111 1111 1111 1111` (cliente@descubre-ec.com / Cliente123), ver la confirmación y "Mis reservas", cancelar.
 3. **Administración** — admin@descubre-ec.com (contraseña entregada por privado): crear/editar una atracción (tarifas, horarios, fotos), categorías con subcategorías, destinos, operadores; confirmar un pago pendiente en Reservas; bloquear una fecha en Disponibilidad; ver Reportes y exportar a Excel.
 4. **Operador** — operador@descubre-ec.com (contraseña entregada por privado): solo ve las reservas y la disponibilidad de su empresa.

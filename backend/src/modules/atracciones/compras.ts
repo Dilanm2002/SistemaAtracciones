@@ -2,7 +2,7 @@ import { randomInt } from 'crypto';
 import { QueryFailedError } from 'typeorm';
 import { CatalogosService } from '../../common/db/catalogos.service';
 import { Sql } from '../../common/db/db.service';
-import { emitirEventoReserva, EVENTOS } from '../../common/db/eventos';
+import { emitirEvento, emitirEventoReserva, EVENTOS } from '../../common/db/eventos';
 import { CardInfoDto, PaymentMethod } from './dto/reservation.dto';
 
 const ALFABETO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sin 0/O ni 1/I para evitar confusiones al dictarlo
@@ -13,6 +13,15 @@ export const codigoAleatorio = (rnd: () => number = () => randomInt(ALFABETO.len
 
 const esUnica = (e: unknown) => e instanceof QueryFailedError && (e as QueryFailedError & { driverError?: { code?: string } }).driverError?.code === '23505';
 
+/** Método de pago: los de la web (v1) más la pasarela de Booking (contrato v2). */
+export type MetodoCompra = PaymentMethod | 'SOA_BOOKING_GATEWAY';
+
+export interface Acompanante {
+  nombre: string;
+  documento?: string | null;
+  tipoBoleto: 'ADULT' | 'CHILD' | 'SENIOR' | 'INFANT';
+}
+
 export interface DatosCompra {
   usuId: string;
   atrId: string;
@@ -22,12 +31,23 @@ export interface DatosCompra {
   hora: string;
   adultos: number;
   ninos: number;
+  /** Adultos mayores (tarifa MAYOR) e infantes (tarifa $0, pero ocupan cupo) — contrato v2 */
+  seniors?: number;
+  infantes?: number;
   precioAdulto: number;
   precioNino: number;
+  precioSenior?: number;
   moneda: string;
-  metodo: PaymentMethod;
+  metodo: MetodoCompra;
+  /** WEB (este sitio) o BOOKING (contrato v2) */
+  origen?: 'WEB' | 'BOOKING';
+  sagaId?: string | null;
+  /** Contrato v2: la reserva nace CONFIRMADA aunque el pago se haga en sitio o por transferencia */
+  confirmarSiempre?: boolean;
   paxNombre: string;
   paxDocumento?: string | null;
+  paxTipoDocumento?: 'CEDULA' | 'PASAPORTE' | 'RUC';
+  acompanantes?: Acompanante[];
   /** Contacto de la reserva (NULL = el de la cuenta) */
   paxCorreo?: string | null;
   paxTelefono?: string | null;
@@ -51,15 +71,21 @@ export interface DatosCompra {
  * reintenta con otro dentro de un SAVEPOINT (el índice único es el árbitro).
  */
 export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCompra): Promise<{ resId: string; uuid: string }> {
-  const total = Math.round((d.adultos * d.precioAdulto + d.ninos * d.precioNino) * 100) / 100;
-  const tickets = d.adultos + d.ninos;
-  const pagada = d.metodo === PaymentMethod.TARJETA;
+  const seniors = d.seniors ?? 0;
+  const infantes = d.infantes ?? 0;
+  const precioSenior = d.precioSenior ?? d.precioAdulto;
+  // Cada producto ya tiene 2 decimales: la suma redondeada coincide con las líneas de la factura
+  const cents = (n: number, p: number) => Math.round(n * p * 100);
+  const total = (cents(d.adultos, d.precioAdulto) + cents(d.ninos, d.precioNino) + cents(seniors, precioSenior)) / 100;
+  const tickets = d.adultos + d.ninos + seniors + infantes;
+  const pagada = d.metodo === PaymentMethod.TARJETA || d.metodo === 'SOA_BOOKING_GATEWAY';
+  const confirmada = pagada || !!d.confirmarSiempre;
   const creado = d.creadoEn ?? new Date();
   const [estOrden, estPago, estReserva, mpa] = await Promise.all([
     cat.estado(pagada ? 'PAGADA' : 'CREADA'),
     cat.estado(pagada ? 'APROBADO' : 'PENDIENTE'),
-    cat.estado(pagada ? (d.completada ? 'COMPLETADA' : 'CONFIRMADA') : 'PENDIENTE_PAGO'),
-    cat.metodoPago(d.metodo),
+    cat.estado(confirmada ? (d.completada ? 'COMPLETADA' : 'CONFIRMADA') : 'PENDIENTE_PAGO'),
+    cat.metodoPago(d.metodo as PaymentMethod),
   ]);
 
   for (let intento = 1; ; intento++) {
@@ -79,18 +105,31 @@ export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCo
       );
       const res = await tx.one<{ res_id: string; res_uuid: string }>(
         `INSERT INTO reserva (res_codigo, det_id, dis_id, est_id, res_fecha, res_hora, res_adultos, res_ninos, res_numero_tickets,
-                              res_precio_unitario, res_subtotal, res_observaciones, res_creado_en, res_confirmado_en)
-         VALUES ($1, $2, $3, $4, $5, $6::time, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING res_id::text, res_uuid::text`,
+                              res_precio_unitario, res_subtotal, res_observaciones, res_creado_en, res_confirmado_en,
+                              res_seniors, res_infantes, res_precio_nino, res_precio_senior, res_origen, res_saga_id)
+         VALUES ($1, $2, $3, $4, $5, $6::time, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+         RETURNING res_id::text, res_uuid::text`,
         [
           `DEC-${sufijo}`, det!.det_id, d.disId, estReserva, d.fecha, d.hora, d.adultos, d.ninos, tickets,
-          d.precioAdulto, total, d.notas ?? null, creado, pagada ? creado : null,
+          d.precioAdulto, total, d.notas ?? null, creado, confirmada ? creado : null,
+          seniors, infantes, d.precioNino, seniors ? precioSenior : null, d.origen ?? 'WEB', d.sagaId ?? null,
         ],
       );
       await tx.query(
-        `INSERT INTO reserva_pasajero (res_id, pax_nombre, pax_documento, pax_correo, pax_telefono, pax_es_titular)
-         VALUES ($1, $2, $3, $4, $5, TRUE)`,
-        [res!.res_id, d.paxNombre.slice(0, 120), d.paxDocumento || null, d.paxCorreo || null, d.paxTelefono || null],
+        `INSERT INTO reserva_pasajero (res_id, pax_nombre, pax_documento, pax_tipo_documento, pax_correo, pax_telefono, pax_es_titular, pax_tipo_boleto)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, 'ADULT')`,
+        [res!.res_id, d.paxNombre.slice(0, 120), d.paxDocumento || null, d.paxTipoDocumento ?? 'CEDULA', d.paxCorreo || null, d.paxTelefono || null],
       );
+      for (const p of d.acompanantes ?? []) {
+        // Documento del acompañante: solo una cédula válida o un pasaporte; si no, se guarda sin documento
+        await tx.query(
+          `INSERT INTO reserva_pasajero (res_id, pax_nombre, pax_documento, pax_tipo_documento, pax_es_titular, pax_tipo_boleto)
+           VALUES ($1, $2,
+                   CASE WHEN $3::text IS NULL THEN NULL WHEN fn_cedula_ec_valida($3) OR $3 ~ '^[A-Z0-9]{6,9}$' THEN $3 END,
+                   CASE WHEN $3::text IS NOT NULL AND fn_cedula_ec_valida($3) THEN 'CEDULA' ELSE 'PASAPORTE' END, FALSE, $4)`,
+          [res!.res_id, p.nombre.slice(0, 120), p.documento ? p.documento.toUpperCase() : null, p.tipoBoleto],
+        );
+      }
       const pago = await tx.one<{ pag_id: string }>(
         `INSERT INTO pago (pag_numero, ord_id, mpa_id, est_id, pag_monto, pag_moneda, pag_fecha, pag_aprobado_en, pag_referencia, pag_creado_en)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $7) RETURNING pag_id::text`,
@@ -106,6 +145,8 @@ export async function registrarCompra(tx: Sql, cat: CatalogosService, d: DatosCo
       // Eventos de dominio en la misma transacción (outbox)
       await emitirEventoReserva(tx, EVENTOS.RESERVA_CREADA, res!.res_id);
       if (pagada) await emitirEventoReserva(tx, EVENTOS.PAGO_APROBADO, res!.res_id, { payment_number: `PAG-${sufijo}` });
+      if (confirmada) await emitirEventoReserva(tx, EVENTOS.RESERVA_CONFIRMADA, res!.res_id);
+      await emitirEventoStock(tx, d.disId, 'VENTA');
       await tx.query('RELEASE SAVEPOINT compra');
       return { resId: res!.res_id, uuid: res!.res_uuid };
     } catch (e) {
@@ -163,6 +204,8 @@ export async function cancelarCompra(tx: Sql, cat: CatalogosService, resId: stri
     [resId],
   );
   await emitirEventoReserva(tx, EVENTOS.RESERVA_CANCELADA, resId, { reason: motivo.slice(0, 255), refunded: pago?.estado === 'APROBADO' && reembolsar });
+  const dis = await tx.one<{ dis_id: string }>('SELECT dis_id::text FROM reserva WHERE res_id = $1', [resId]);
+  if (dis) await emitirEventoStock(tx, dis.dis_id, 'CANCELACION');
   if (!pago) return;
   if (pago.estado === 'APROBADO' && !reembolsar) return; // fuera de plazo: el cobro se conserva
   if (pago.estado === 'APROBADO') {
@@ -204,4 +247,31 @@ export async function confirmarCompra(tx: Sql, cat: CatalogosService, resId: str
   await emitirFactura(tx, cat, orden!.ord_id, fecha);
   await emitirEventoReserva(tx, EVENTOS.PAGO_APROBADO, resId, { verified_manually: true });
   await emitirEventoReserva(tx, EVENTOS.RESERVA_CONFIRMADA, resId);
+}
+
+/** Cupos libres de un turno (día + horario) en este momento; 0 si está cerrado o la fecha está bloqueada. */
+export async function stockDeTurno(tx: Sql, disId: string) {
+  return tx.one<{ dis_id: string; atr_uuid: string; fecha: string; hora: string; disponibles: number; total: number }>(
+    `SELECT d.dis_id::text, a.atr_uuid::text, to_char(d.dis_fecha, 'YYYY-MM-DD') AS fecha, to_char(h.hor_hora, 'HH24:MI') AS hora,
+            CASE WHEN d.dis_cerrada OR EXISTS (SELECT 1 FROM fecha_bloqueada fb WHERE fb.atr_id = d.atr_id AND fb.fb_fecha = d.dis_fecha)
+                 THEN 0 ELSE GREATEST(d.dis_cupo_total - d.dis_cupo_reservado, 0) END AS disponibles,
+            d.dis_cupo_total AS total
+       FROM disponibilidad d JOIN horario h ON h.hor_id = d.hor_id JOIN atraccion a ON a.atr_id = d.atr_id
+      WHERE d.dis_id = $1`,
+    [disId],
+  );
+}
+
+/** Evento STOCK_ACTUALIZADO (contrato v2) con los cupos que quedan en el turno. */
+export async function emitirEventoStock(tx: Sql, disId: string, motivo: 'VENTA' | 'CANCELACION' | 'AFORO') {
+  const s = await stockDeTurno(tx, disId);
+  if (!s) return;
+  await emitirEvento(tx, EVENTOS.STOCK_ACTUALIZADO, 'atraccion', s.atr_uuid, {
+    attraction_id: s.atr_uuid,
+    date: s.fecha,
+    time: s.hora,
+    available_units: s.disponibles,
+    total_units: s.total,
+    reason: motivo,
+  });
 }

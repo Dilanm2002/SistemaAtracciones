@@ -282,6 +282,8 @@ export class SeedService implements OnApplicationBootstrap {
     for (const a of [byName('Quilotoa'), byName('Kicker')]) {
       await tx.query('INSERT INTO favorito (usu_id, atr_id) VALUES ($1, $2)', [maria.id, a.atr_id]);
     }
+    // Datos del contrato v2 (itinerario, tarifa senior, accesibilidad, guía…): misma función que la migración 009
+    await tx.query('SELECT atraccion_completar_v2()');
     for (const [i, m] of MENSAJES.entries()) {
       await tx.query(
         'INSERT INTO mensaje_contacto (men_nombre, men_correo, men_asunto, men_cuerpo, men_leido, men_creado_en) VALUES ($1, $2, $3, $4, $5, now() - make_interval(hours => $6))',

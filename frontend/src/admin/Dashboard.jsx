@@ -3,7 +3,7 @@ import { BarChart3, CalendarClock, CalendarDays, ClipboardList, DollarSign, Hour
 import { Reportes } from '../api/client';
 import { EmptyState, ErrorState, StatusBadge, useAsync } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
-import { fmtDate, fmtMoney, todayEc } from '../utils/format';
+import { estadoVisible, fmtDate, fmtMoney, todayEc } from '../utils/format';
 import { useAdmin } from './AdminLayout';
 import { ChartCard, ColumnChart } from './charts';
 
@@ -95,7 +95,7 @@ export default function Dashboard() {
                           <td className="nowrap"><strong>{fmtDate(r.date, { day: 'numeric', month: 'short' })}</strong> <span className="muted small">{r.time}</span></td>
                           <td><span style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem' }}>{r.attraction.name}</span><span className="muted tiny">{r.customer_name} · {r.code}</span></td>
                           <td className="num">{r.ticket_count}</td>
-                          <td><StatusBadge status={r.status} /></td>
+                          <td><StatusBadge status={estadoVisible(r)} /></td>
                         </tr>
                       ))}
                     </tbody>

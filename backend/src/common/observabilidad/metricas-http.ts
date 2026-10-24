@@ -43,7 +43,7 @@ export function iniciarObservabilidad(dataSource: DataSource) {
 }
 
 /** Vercel (fluid compute): mantiene viva la función hasta terminar `p`, después de responder. */
-function despuesDeResponder(p: Promise<unknown>) {
+export function despuesDeResponder(p: Promise<unknown>) {
   const ctx = (globalThis as Record<symbol, { get?: () => { waitUntil?: (p: Promise<unknown>) => void } } | undefined>)[
     Symbol.for('@vercel/request-context')
   ];
@@ -56,7 +56,7 @@ function despuesDeResponder(p: Promise<unknown>) {
  * fila por cada URL distinta.
  */
 export function rutaAgrupada(plantilla: string | undefined, path: string): string {
-  if (plantilla) return plantilla.replace(/^\/api\/v1(?=\/|$)/, '') || '/';
+  if (plantilla) return plantilla.replace(/^\/api\/v1(?=\/|$)/, '').replace(/^\/api\/(v\d+)(?=\/|$)/, '/$1') || '/';
   if (/^\/(img|uploads|vendor)\//.test(path)) return `/${path.split('/')[1]}/*`;
   return '(sin ruta)';
 }

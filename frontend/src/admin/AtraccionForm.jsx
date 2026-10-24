@@ -1,6 +1,6 @@
 import { Suspense, useMemo, useRef, useState } from 'react';
 import { lazyRecarga } from '../utils/lazyRecarga';
-import { ArrowLeft, ArrowRight, Camera, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Star, Tag, Trash2, UploadCloud, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Camera, Clock, ImagePlus, Info, ListChecks, MapPin, Plus, Route, Star, Tag, Trash2, UploadCloud, X } from 'lucide-react';
 import { Atracciones, Uploads } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { Alert, Field, Modal, RequiredLegend, Spinner, Switch, useConfirm } from '../components/ui';
@@ -23,6 +23,8 @@ const MAX_MB_ORIGINAL = 40;
 const MASCARA = {
   price: { enteros: 5, decimales: 2 },
   child_price: { enteros: 5, decimales: 2 },
+  senior_price: { enteros: 5, decimales: 2 },
+  package_discount: { enteros: 2, decimales: 2 },
   duration_hours: { enteros: 3, decimales: 2 },
   capacity_per_slot: { enteros: 3, decimales: 0 },
   cancellation_hours: { enteros: 3, decimales: 0 },
@@ -38,6 +40,10 @@ const EMPTY = {
   city: '', address: '', meeting_point: '', latitude: '', longitude: '', operator: '',
   includes: [''], not_includes: [], recommendations: [], photos: [],
   featured: false, is_active: true,
+  // Datos del contrato v2 con Booking
+  senior_price: '', includes_food: false, includes_transport: false, includes_guide: true,
+  wheelchair_accessible: false, stroller_accessible: false, service_animals_allowed: true,
+  guide_name: '', arrival_instructions: '', allows_package: true, package_discount: 10, itinerary: [],
 };
 
 const fromApi = (a) => ({
@@ -49,6 +55,11 @@ const fromApi = (a) => ({
   latitude: a.locations[0]?.coordinates.latitude ?? '', longitude: a.locations[0]?.coordinates.longitude ?? '',
   operator: a.operator?.id ?? '', includes: a.includes.length ? a.includes : [''], not_includes: a.not_includes ?? [],
   recommendations: a.recommendations ?? [], photos: a.photos.map((p) => p.url), featured: a.featured, is_active: a.is_active,
+  senior_price: a.senior_price?.total ?? '', includes_food: !!a.includes_food, includes_transport: !!a.includes_transport,
+  includes_guide: !!a.includes_guide, wheelchair_accessible: !!a.wheelchair_accessible, stroller_accessible: !!a.stroller_accessible,
+  service_animals_allowed: a.service_animals_allowed ?? true, guide_name: a.guide_name ?? '', arrival_instructions: a.arrival_instructions ?? '',
+  allows_package: a.allows_package ?? true, package_discount: a.package_discount ?? 0,
+  itinerary: (a.itinerary ?? []).map((x) => ({ time: x.time, title: x.title, description: x.description ?? '', duration_minutes: x.duration_minutes, location: x.location ?? '' })),
 });
 
 /** Convierte el formulario al esquema CreateAtraccionRequest del contrato. */
@@ -78,10 +89,87 @@ const toApi = (f, destinos, operadores, { esAdmin = true, aprobada = true } = {}
     times: [...f.times].sort(),
     capacity_per_slot: Number(f.capacity_per_slot),
     meeting_point: f.meeting_point.trim() || undefined,
+    // Contrato v2 con Booking
+    senior_price: f.senior_price === '' ? null : Number(f.senior_price),
+    includes_food: f.includes_food,
+    includes_transport: f.includes_transport,
+    includes_guide: f.includes_guide,
+    wheelchair_accessible: f.wheelchair_accessible,
+    stroller_accessible: f.stroller_accessible,
+    service_animals_allowed: f.service_animals_allowed,
+    guide_name: f.guide_name.trim(),
+    arrival_instructions: f.arrival_instructions.trim(),
+    allows_package: f.allows_package,
+    package_discount: f.allows_package ? Number(f.package_discount || 0) : 0,
+    itinerary: f.itinerary.map((x) => ({
+      time: x.time,
+      title: x.title.trim(),
+      ...(x.description.trim() ? { description: x.description.trim() } : {}),
+      duration_minutes: Number(x.duration_minutes),
+      ...(x.location.trim() ? { location: x.location.trim() } : {}),
+    })),
     ...(esAdmin ? { featured: f.featured } : {}),
     ...(esAdmin || aprobada ? { is_active: f.is_active } : {}),
   };
 };
+
+/** Error de cada hito del itinerario (null si está bien). */
+const validarItinerario = (items) =>
+  items.map((x) =>
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.time) ? 'Indica la hora (HH:MM)'
+      : texto(x.title, { min: 3, max: 150, que: 'El título' })
+        ?? numero(x.duration_minutes, { min: 1, max: 1440, decimales: 0, que: 'La duración en minutos' })
+        ?? texto(x.description, { max: 500, requerido: false, que: 'La descripción' }),
+  );
+
+/** Itinerario paso a paso (contrato v2): hora, título, duración, lugar y descripción de cada hito. */
+function ItinerarioEditor({ items, onChange, errores }) {
+  const cambiar = (i, k, v) => onChange(items.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const ultimo = items[items.length - 1];
+  const siguienteHora = () => {
+    if (!ultimo?.time) return '09:00';
+    const [h, m] = ultimo.time.split(':').map(Number);
+    const t = Math.min(h * 60 + m + Number(ultimo.duration_minutes || 0), 23 * 60 + 59);
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  };
+  return (
+    <div className="iti-editor" role="group" aria-label="Itinerario">
+      {items.map((x, i) => (
+        <fieldset key={i} className="iti-fila">
+          <legend className="sr-only">Hito {i + 1}</legend>
+          <span className="iti-num" aria-hidden="true">{i + 1}</span>
+          <label className="iti-campo">
+            <span className="tiny muted">Hora</span>
+            <input className="input" type="time" value={x.time} onChange={(e) => cambiar(i, 'time', e.target.value)} aria-label={`Hora del hito ${i + 1}`} />
+          </label>
+          <label className="iti-campo iti-titulo">
+            <span className="tiny muted">Título</span>
+            <input className="input" value={x.title} maxLength={150} onChange={(e) => cambiar(i, 'title', limitarDigitos(e.target.value))} aria-label={`Título del hito ${i + 1}`} aria-invalid={!!errores?.[i]} />
+          </label>
+          <label className="iti-campo">
+            <span className="tiny muted">Minutos</span>
+            <input className="input" inputMode="numeric" value={x.duration_minutes} maxLength={4} onChange={(e) => cambiar(i, 'duration_minutes', e.target.value.replace(/\D/g, ''))} aria-label={`Duración en minutos del hito ${i + 1}`} />
+          </label>
+          <label className="iti-campo iti-lugar">
+            <span className="tiny muted">Lugar</span>
+            <input className="input" value={x.location} maxLength={150} onChange={(e) => cambiar(i, 'location', e.target.value)} aria-label={`Lugar del hito ${i + 1}`} />
+          </label>
+          <label className="iti-campo iti-desc">
+            <span className="tiny muted">Descripción (opcional)</span>
+            <input className="input" value={x.description} maxLength={500} onChange={(e) => cambiar(i, 'description', e.target.value)} aria-label={`Descripción del hito ${i + 1}`} />
+          </label>
+          <button type="button" className="icon-btn sm iti-quitar" onClick={() => onChange(items.filter((_, j) => j !== i))} aria-label={`Quitar el hito ${i + 1}`}><X size={18} aria-hidden="true" /></button>
+          {errores?.[i] && <span className="error-text iti-error" role="alert">{errores[i]}</span>}
+        </fieldset>
+      ))}
+      {items.length < 20 && (
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange([...items, { time: siguienteHora(), title: '', description: '', duration_minutes: 30, location: '' }])}>
+          <Plus size={16} aria-hidden="true" /> Agregar hito
+        </button>
+      )}
+    </div>
+  );
+}
 
 /** `name` da nombres únicos a cada fila: «Incluye, elemento 2», «Quitar "Transporte" de Incluye» (ACC-029). */
 function ListEditor({ items, onChange, placeholder, addLabel, name }) {
@@ -247,7 +335,21 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
     const ninoErr =
       numero(f.child_price, { min: 0, max: PRECIO_MAX, requerido: false, que: 'El precio de niño' }) ??
       (f.child_price !== '' && !precioErr && Number(f.child_price) > Number(f.price) ? 'No puede ser mayor que el precio de adulto' : null);
+    const seniorErr =
+      numero(f.senior_price, { min: 0, max: PRECIO_MAX, requerido: false, que: 'El precio de adulto mayor' }) ??
+      (f.senior_price !== '' && !precioErr && Number(f.senior_price) > Number(f.price) ? 'No puede ser mayor que el precio de adulto' : null);
+    const erroresItinerario = f.itinerary.map((x) =>
+      !/^([01]\d|2[0-3]):[0-5]\d$/.test(x.time) ? 'Indica la hora (HH:MM)'
+        : texto(x.title, { min: 3, max: 150, que: 'El título' })
+          ?? numero(x.duration_minutes, { min: 1, max: 1440, decimales: 0, que: 'La duración en minutos' })
+          ?? texto(x.description, { max: 500, requerido: false, que: 'La descripción' }),
+    );
     const e = limpiar({
+      senior_price: seniorErr,
+      package_discount: f.allows_package ? numero(f.package_discount, { min: 0, max: 50, decimales: 2, que: 'El descuento' }) : null,
+      guide_name: texto(f.guide_name, { min: 3, max: 150, requerido: false, que: 'El guía', maxDigitos: 6 }),
+      arrival_instructions: texto(f.arrival_instructions, { min: 10, max: 300, requerido: false, que: 'Las instrucciones de llegada', maxDigitos: 5 }),
+      itinerary: erroresItinerario.some(Boolean) ? 'Revisa los hitos marcados del itinerario' : null,
       name: texto(f.name, { min: 3, max: LIMITES.nombreAtraccion, que: 'El nombre', maxDigitos: 4 }),
       short_description: texto(f.short_description, { min: 10, max: LIMITES.resumen, requerido: false, que: 'El resumen', maxDigitos: 4 }),
       long_description: texto(f.long_description, { min: 20, max: LIMITES.descripcion, que: 'La descripción' }),
@@ -384,7 +486,8 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
           <h3><Tag size={18} aria-hidden="true" /> Precios, horarios y cupos</h3>
           <div className="form-grid">
             <Field label="Precio adulto (USD)" required error={errors.price} hint={`Entre 0.50 y ${PRECIO_MAX.toLocaleString('es-EC')}, hasta 2 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. 45.00" value={f.price} onChange={setNum('price')} />}</Field>
-            <Field label="Precio niño 3–11 (USD)" error={errors.child_price} hint="Vacío = mismo precio que adulto; no puede superarlo">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={f.child_price} onChange={setNum('child_price')} />}</Field>
+            <Field label="Precio niño 5–12 (USD)" error={errors.child_price} hint="Vacío = mismo precio que adulto; no puede superarlo">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={f.child_price} onChange={setNum('child_price')} />}</Field>
+            <Field label="Precio adulto mayor 65+ (USD)" error={errors.senior_price} hint="Vacío = precio de adulto. Infantes (0–4 años): gratis, pero ocupan cupo">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Opcional" value={f.senior_price} onChange={setNum('senior_price')} />}</Field>
             <Field label="Duración (horas)" required error={errors.duration_hours} hint={`Entre 0.5 y ${MAX_HORAS} h. Ej. 2.5 = 2 h 30 min · 96 = 4 días`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. 8" value={f.duration_hours} onChange={setNum('duration_hours')} />}</Field>
             <Field label="Cupo por horario" required error={errors.capacity_per_slot} hint="Entre 1 y 500 personas por salida">{(p) => <input {...p} className="input" type="text" inputMode="numeric" autoComplete="off" value={f.capacity_per_slot} onChange={setNum('capacity_per_slot')} />}</Field>
             <div className="field span-2">
@@ -447,6 +550,42 @@ export default function AtraccionForm({ atraccion, categorias, destinos, operado
                 <Field label="Longitud" required error={errors.longitude} hint={`Dentro del Ecuador: entre ${ECUADOR.lngMin} y ${ECUADOR.lngMax}, hasta 6 decimales`}>{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" placeholder="Ej. -78.437" value={f.longitude} onChange={setNum('longitude')} />}</Field>
                 </div>
               </details>
+            </div>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3><Route size={18} aria-hidden="true" /> Experiencia: itinerario, inclusiones y accesibilidad</h3>
+          <p className="muted small" style={{ marginTop: -6 }}>Estos datos los ve el cliente en la ficha y los recibe Booking Prototipo en el contrato de integración (v2).</p>
+          <div className="form-grid">
+            <div className="field span-2">
+              <span className="label">Incluye</span>
+              <div className="switch-grid">
+                <Switch checked={f.includes_food} onChange={set('includes_food')} label="Comida o refrigerio" />
+                <Switch checked={f.includes_transport} onChange={set('includes_transport')} label="Transporte" />
+                <Switch checked={f.includes_guide} onChange={set('includes_guide')} label="Guía acreditado" />
+              </div>
+            </div>
+            <div className="field span-2">
+              <span className="label">Accesibilidad</span>
+              <div className="switch-grid">
+                <Switch checked={f.wheelchair_accessible} onChange={set('wheelchair_accessible')} label="Apta para silla de ruedas" />
+                <Switch checked={f.stroller_accessible} onChange={set('stroller_accessible')} label="Apta para coche de bebé" />
+                <Switch checked={f.service_animals_allowed} onChange={set('service_animals_allowed')} label="Admite animales de asistencia" />
+              </div>
+            </div>
+            <Field label="Guía asignado" error={errors.guide_name} hint="Nombre y credencial, p. ej. «Lic. Ana Pérez (Credencial Mintur #1234)»">{(p) => <input {...p} className="input" maxLength={150} value={f.guide_name} onChange={set('guide_name')} />}</Field>
+            <Field label="Instrucciones de llegada" error={errors.arrival_instructions} hint="Qué hacer al llegar al punto de encuentro">{(p) => <input {...p} className="input" maxLength={300} value={f.arrival_instructions} onChange={set('arrival_instructions')} />}</Field>
+            <div className="field">
+              <Switch checked={f.allows_package} onChange={set('allows_package')} label="Se puede combinar en paquetes de Booking" />
+            </div>
+            {f.allows_package && (
+              <Field label="Descuento en paquetes (%)" error={errors.package_discount} hint="Entre 0 y 50; nunca se aplica más que el máximo del acuerdo B2B">{(p) => <input {...p} className="input" type="text" inputMode="decimal" autoComplete="off" value={f.package_discount} onChange={setNum('package_discount')} />}</Field>
+            )}
+            <div className="field span-2">
+              <span className="label">Itinerario</span>
+              <ItinerarioEditor items={f.itinerary} onChange={set('itinerary')} errores={enviado || tocados.has('itinerary') ? validarItinerario(f.itinerary) : null} />
+              {errors.itinerary && <span className="error-text" role="alert">{errors.itinerary}</span>}
             </div>
           </div>
         </div>

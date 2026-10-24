@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
-  Building, CalendarX2, Check, ChevronLeft, ChevronRight, Clock, Heart, Languages, Lightbulb, MapPin, Share2, Ticket, X,
+  Accessibility, Baby, BadgeCheck, Building, CalendarX2, Check, ChevronLeft, ChevronRight, Clock, Heart, Languages, Lightbulb, MapPin, PawPrint, Share2, Ticket, X,
 } from 'lucide-react';
 import { Atracciones } from '../api/client';
 import AttractionCard, { FALLBACK_IMG, onImgError } from '../components/AttractionCard';
@@ -271,9 +271,50 @@ export default function AttractionDetail() {
               </section>
             )}
 
+            {a.itinerary?.length > 0 && (
+              <section className="detail-section" aria-labelledby="iti-title">
+                <h2 id="iti-title">Itinerario</h2>
+                <ol className="itinerario">
+                  {a.itinerary.map((p, i) => (
+                    <li key={i}>
+                      <span className="itinerario-hora">{p.time}</span>
+                      <div>
+                        <strong>{p.title}</strong>
+                        <span className="muted small"> · {p.duration_minutes >= 60 ? `${Math.floor(p.duration_minutes / 60)} h${p.duration_minutes % 60 ? ` ${p.duration_minutes % 60} min` : ''}` : `${p.duration_minutes} min`}{p.location ? ` · ${p.location}` : ''}</span>
+                        {p.description && <p className="small" style={{ margin: '2px 0 0' }}>{p.description}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            )}
+
+            <section className="detail-section" aria-labelledby="tarifas-title">
+              <h2 id="tarifas-title">Tarifas, guía y accesibilidad</h2>
+              <ul className="tarifas">
+                <li><span>Adulto <span className="muted small">(13 a 64 años)</span></span><strong>{fmtMoney(a.price.total)}</strong></li>
+                <li><span>Niño <span className="muted small">(5 a 12 años)</span></span><strong>{fmtMoney(a.child_price?.total ?? a.price.total)}</strong></li>
+                <li><span>Adulto mayor <span className="muted small">(65 años o más)</span></span><strong>{fmtMoney(a.senior_price?.total ?? a.price.total)}</strong></li>
+                <li><span>Infante <span className="muted small">(0 a 4 años, ocupa cupo)</span></span><strong>Gratis</strong></li>
+              </ul>
+              <ul className="list-icons" style={{ marginTop: 14 }}>
+                {a.guide_name && <li><BadgeCheck size={18} aria-hidden="true" /> Guía: {a.guide_name}</li>}
+                <li className={a.wheelchair_accessible ? 'yes' : 'no'}>
+                  <Accessibility size={18} aria-hidden="true" /> {a.wheelchair_accessible ? 'Apta para silla de ruedas' : 'No apta para silla de ruedas'}
+                </li>
+                <li className={a.stroller_accessible ? 'yes' : 'no'}>
+                  <Baby size={18} aria-hidden="true" /> {a.stroller_accessible ? 'Se puede ir con coche de bebé' : 'No apta para coche de bebé'}
+                </li>
+                <li className={a.service_animals_allowed ? 'yes' : 'no'}>
+                  <PawPrint size={18} aria-hidden="true" /> {a.service_animals_allowed ? 'Admite perros guía y animales de asistencia' : 'No admite animales (normas del área protegida)'}
+                </li>
+              </ul>
+            </section>
+
             <section className="detail-section" aria-labelledby="map-title">
               <h2 id="map-title">Punto de encuentro</h2>
               <p className="row" style={{ gap: 8, alignItems: 'flex-start' }}><MapPin size={18} color="var(--primary)" style={{ marginTop: 3, flexShrink: 0 }} aria-hidden="true" /> <span><strong>{a.meeting_point ?? loc?.address}</strong><br /><span className="muted small">Actividad en: {loc?.address}</span></span></p>
+              {a.arrival_instructions && <p className="small" style={{ marginTop: 6 }}>{a.arrival_instructions}</p>}
               {loc && (
                 <iframe
                   className="map-frame"
@@ -286,6 +327,25 @@ export default function AttractionDetail() {
                 <p className="muted small row" style={{ marginTop: 12, gap: 6 }}><Building size={16} aria-hidden="true" /> Operado por <strong style={{ color: 'var(--text)' }}>{a.operator.name}</strong></p>
               )}
             </section>
+
+            {a.rating_breakdown && a.ratings?.number_of_reviews > 0 && (
+              <section className="detail-section" aria-labelledby="pilares-title">
+                <h2 id="pilares-title">Calificación por aspecto</h2>
+                <dl className="pilares">
+                  {[['Limpieza', a.rating_breakdown.cleanliness], ['Servicio del guía', a.rating_breakdown.service], ['Calidad-precio', a.rating_breakdown.value], ['Puntualidad', a.rating_breakdown.punctuality]]
+                    .filter(([, v]) => v != null)
+                    .map(([k, v]) => (
+                      <div key={k}>
+                        <dt>{k}</dt>
+                        <dd>
+                          <span className="pilar-barra" aria-hidden="true"><span style={{ width: `${(v / 5) * 100}%` }} /></span>
+                          <strong>{v.toLocaleString('es-EC', { maximumFractionDigits: 1 })}</strong><span className="muted small"> / 5</span>
+                        </dd>
+                      </div>
+                    ))}
+                </dl>
+              </section>
+            )}
 
             <Reviews attraction={a} onChanged={load} />
           </div>

@@ -10,6 +10,7 @@ import { metricas } from '../../common/logging/json-logger';
 import { StorageService } from '../../common/storage/storage.service';
 import { escapeLike } from '../../common/utils/sql';
 import { AtraccionMapper } from './atraccion.mapper';
+import { StockSyncService } from './stock-sync.service';
 import { AvailabilityResponseDto, BlockDateDto, CalendarDayDto } from './dto/availability.dto';
 import { CreateAtraccionDto, RevisionAtraccionDto } from './dto/create-atraccion.dto';
 import { DetailsRequestDto } from './dto/details-request.dto';
@@ -67,6 +68,7 @@ export class AtraccionesService {
     private readonly mapper: AtraccionMapper,
     private readonly bitacora: BitacoraService,
     private readonly storage: StorageService,
+    private readonly stock: StockSyncService,
   ) {}
 
   /** Carga filas completas por atr_id conservando el orden recibido. */
@@ -310,7 +312,7 @@ export class AtraccionesService {
    * Tarifa versionada: si el precio cambia, se cierra la vigente (hasta ayer) y se abre
    * otra desde hoy. Así las compras anteriores conservan el precio con el que se hicieron.
    */
-  private async fijarTarifa(tx: Sql, atrId: string, tipo: 'ADULTO' | 'NINO', precio: number | null, moneda: string) {
+  private async fijarTarifa(tx: Sql, atrId: string, tipo: 'ADULTO' | 'NINO' | 'MAYOR', precio: number | null, moneda: string) {
     const vigente = await tx.one<{ tar_id: string; precio: number; hoy: boolean }>(
       `SELECT tar_id::text, tar_precio::float8 AS precio, tar_vigente_desde = ${HOY_EC} AS hoy FROM tarifa
         WHERE atr_id = $1 AND tar_tipo = $2 AND tar_vigente_desde <= ${HOY_EC}
@@ -414,6 +416,17 @@ export class AtraccionesService {
     if (dto.cancellation_hours !== undefined) cols.atr_horas_cancelacion = p.add(dto.cancellation_hours);
     if (dto.meeting_point !== undefined) cols.atr_punto_encuentro = p.add(dto.meeting_point || null);
     if (dto.featured !== undefined) cols.atr_destacada = p.add(dto.featured);
+    // Datos del contrato v2 con Booking
+    if (dto.includes_food !== undefined) cols.atr_incluye_comida = p.add(dto.includes_food);
+    if (dto.includes_transport !== undefined) cols.atr_incluye_transporte = p.add(dto.includes_transport);
+    if (dto.includes_guide !== undefined) cols.atr_incluye_guia = p.add(dto.includes_guide);
+    if (dto.wheelchair_accessible !== undefined) cols.atr_accesible_silla = p.add(dto.wheelchair_accessible);
+    if (dto.stroller_accessible !== undefined) cols.atr_accesible_coche = p.add(dto.stroller_accessible);
+    if (dto.service_animals_allowed !== undefined) cols.atr_animales_servicio = p.add(dto.service_animals_allowed);
+    if (dto.guide_name !== undefined) cols.atr_guia = p.add(dto.guide_name || null);
+    if (dto.arrival_instructions !== undefined) cols.atr_instrucciones_llegada = p.add(dto.arrival_instructions || null);
+    if (dto.allows_package !== undefined) cols.atr_permite_paquete = p.add(dto.allows_package);
+    if (dto.package_discount !== undefined) cols.atr_descuento_paquete = p.add(dto.package_discount);
     if (dto.operator !== undefined) {
       const op = await tx.one<{ ope_id: string }>('SELECT ope_id::text FROM operador WHERE ope_codigo = $1', [dto.operator.id]);
       if (!op) throw new BadRequestException(`El operador ${dto.operator.id} no existe.`);
@@ -457,6 +470,23 @@ export class AtraccionesService {
     }
     if (dto.price !== undefined) await this.fijarTarifa(tx, id, 'ADULTO', dto.price.total, moneda);
     if (dto.child_price !== undefined) await this.fijarTarifa(tx, id, 'NINO', dto.child_price, moneda);
+    if (dto.senior_price !== undefined) {
+      const adulto = dto.price?.total ?? (await tx.one<{ p: number | null }>(`SELECT ${sqlTarifa('ADULTO')} AS p FROM atraccion a WHERE a.atr_id = $1`, [id]))?.p;
+      if (adulto != null && dto.senior_price != null && dto.senior_price > adulto) {
+        throw new BadRequestException('senior_price no puede ser mayor que el precio de adulto.');
+      }
+      await this.fijarTarifa(tx, id, 'MAYOR', dto.senior_price, moneda);
+    }
+    if (dto.itinerary !== undefined) {
+      await tx.query('DELETE FROM atraccion_itinerario WHERE atr_id = $1', [id]);
+      for (const [i, s] of [...dto.itinerary].sort((a, b) => a.time.localeCompare(b.time)).entries()) {
+        await tx.query(
+          `INSERT INTO atraccion_itinerario (atr_id, iti_orden, iti_hora, iti_titulo, iti_descripcion, iti_duracion_min, iti_lugar)
+           VALUES ($1, $2, $3::time, $4, $5, $6, $7)`,
+          [id, i + 1, s.time, s.title, s.description || null, s.duration_minutes, s.location || null],
+        );
+      }
+    }
     await this.fijarHorarios(tx, id, dto.times, dto.capacity_per_slot);
 
     if (dto.categories !== undefined) {
@@ -750,13 +780,18 @@ export class AtraccionesService {
       [a.id, fecha, dto.reason.trim()],
     );
     await this.bitacora.registrar(user.sub, 'BLOQUEAR_FECHA', 'atraccion', a.uuid, { fecha, motivo: dto.reason });
+    this.stock.publicarFecha(a.uuid, fecha, 'AFORO'); // Booking: esos turnos quedan en 0
     return { id: b!.id, date: fecha, reason: dto.reason.trim(), affected_reservations: afectadas?.n ?? 0 };
   }
 
   async desbloquear(uuid: string, blockId: string, user: AuthUser) {
     const a = await this.getGestionable(uuid, user);
-    const r = await this.db.query('DELETE FROM fecha_bloqueada WHERE fb_id = $1 AND atr_id = $2 RETURNING fb_id', [blockId, a.id]);
+    const r = await this.db.query<{ fecha: string }>(
+      `DELETE FROM fecha_bloqueada WHERE fb_id = $1 AND atr_id = $2 RETURNING to_char(fb_fecha, 'YYYY-MM-DD') AS fecha`,
+      [blockId, a.id],
+    );
     if (!r.length) throw new NotFoundException('El bloqueo no existe.');
+    this.stock.publicarFecha(a.uuid, r[0].fecha, 'AFORO'); // Booking: los turnos vuelven a tener cupos
     await this.bitacora.registrar(user.sub, 'DESBLOQUEAR_FECHA', 'atraccion', a.uuid, { bloqueo: blockId });
   }
 }

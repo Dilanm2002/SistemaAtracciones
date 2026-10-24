@@ -3,9 +3,10 @@ import { Link, useLocation, useParams } from 'react-router-dom';
 import { CalendarPlus, CheckCircle2, Clock3, Compass, Copy, ListChecks, Printer } from 'lucide-react';
 import { Reservas } from '../api/client';
 import Factura from '../components/Factura';
+import VoucherQr from '../components/VoucherQr';
 import { Alert, ErrorState, Spinner, StatusBadge, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
-import { fmtDateLong, fmtDateTime, fmtMoney, PAYMENT } from '../utils/format';
+import { estadoVisible, fmtDateLong, fmtDateTime, fmtMoney, participantes, PAYMENT } from '../utils/format';
 
 /**
  * «Añadir a mi calendario» (MOV-014). Se abre un enlace firmado de la API que responde text/calendar:
@@ -82,17 +83,18 @@ export default function Confirmation() {
       <div className="card card-pad">
         <div className="row-between" style={{ marginBottom: 14 }}>
           <h2 style={{ fontSize: '1.15rem', margin: 0 }}>{r.attraction.name}</h2>
-          <StatusBadge status={r.status} />
+          <StatusBadge status={estadoVisible(r)} />
         </div>
         <dl className="detail-list">
           <dt>Fecha</dt><dd>{fmtDateLong(r.date)}</dd>
           <dt>Hora de salida</dt><dd>{r.time}</dd>
           <dt>Punto de encuentro</dt><dd>{r.attraction.meeting_point}</dd>
-          <dt>Participantes</dt><dd>{r.adults} adulto(s){r.children ? `, ${r.children} niño(s)` : ''}</dd>
+          <dt>Participantes</dt><dd>{participantes(r)}</dd>
           <dt>Titular</dt><dd>{r.customer?.name}</dd>
           <dt>Método de pago</dt><dd>{PAYMENT[r.payment_method]}</dd>
           <dt>Total</dt><dd><strong>{fmtMoney(r.total_price.total)}</strong></dd>
         </dl>
+        <VoucherQr r={r} />
         <Factura invoice={r.invoice} />
         {r.status !== 'CANCELLED' && (
           <div style={{ marginTop: 16 }}>

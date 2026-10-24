@@ -137,9 +137,19 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       body.code = 'RATE_LIMITED';
     }
     const requestId = (req as Request & { id?: string }).id;
+    // Contrato v2 (Booking): además correlation_id, timestamp e invalid_params [{ name, reason }]
+    const v2 = req.originalUrl.startsWith('/api/v2/')
+      ? {
+          correlation_id: requestId,
+          timestamp: new Date().toISOString(),
+          ...(Array.isArray(body.errors)
+            ? { invalid_params: (body.errors as { field: string; message: string }[]).map((e) => ({ name: e.field, reason: e.message })) }
+            : {}),
+        }
+      : {};
     res
       .status(status)
       .type('application/problem+json')
-      .json({ ...body, status, instance: req.originalUrl, ...(requestId ? { request_id: requestId } : {}) });
+      .json({ ...body, status, instance: req.originalUrl.split('?')[0], ...(requestId ? { request_id: requestId } : {}), ...v2 });
   }
 }

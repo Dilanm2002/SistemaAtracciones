@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, Eye, RefreshCw, Search, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Download, Eye, RefreshCw, Search, UserCheck, XCircle } from 'lucide-react';
 import { Atracciones, newIdempotencyKey, Reservas } from '../api/client';
-import { EmptyState, ErrorState, Spinner, StatusBadge, useConfirm, useDebounce } from '../components/ui';
+import { Alert, EmptyState, ErrorState, Field, Modal, Spinner, StatusBadge, useConfirm, useDebounce } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { CancelModal, ReservationDetailModal } from '../pages/MyReservations';
-import { addDays, fmtDate, fmtMoney, PAYMENT, STATUS, todayEc } from '../utils/format';
+import { addDays, estadoVisible, fmtDate, fmtMoney, PAYMENT, STATUS, todayEc } from '../utils/format';
 import { useAdmin } from './AdminLayout';
 import { exportXlsx } from './excel';
 
@@ -33,6 +33,7 @@ export default function ReservasAdmin() {
   const [busy, setBusy] = useState(null);
   const [detail, setDetail] = useState(null);
   const [cancel, setCancel] = useState(null);
+  const [checkin, setCheckin] = useState(null);
   const dq = useDebounce(q, 350);
 
   const query = useMemo(() => ({
@@ -143,7 +144,7 @@ export default function ReservasAdmin() {
                   <td className="num">{r.ticket_count}</td>
                   <td className="num">{fmtMoney(r.total_price.total)}</td>
                   <td className="small">{PAYMENT[r.payment_method]}</td>
-                  <td><StatusBadge status={r.status} /></td>
+                  <td><StatusBadge status={estadoVisible(r)} /></td>
                   <td>
                     <div className="actions">
                       <button className="icon-btn sm" onClick={() => setDetail(r)} aria-label={`Ver ${r.code}`} data-tip="Ver detalle"><Eye size={17} /></button>
@@ -152,7 +153,12 @@ export default function ReservasAdmin() {
                           {busy === r.reservation_id ? <Spinner /> : <CheckCircle2 size={17} />}
                         </button>
                       )}
-                      {r.status !== 'CANCELLED' && r.date >= todayEc() && (
+                      {r.status === 'CONFIRMED' && !r.checked_in_at && r.date >= todayEc() && (
+                        <button className="icon-btn sm" style={{ color: 'var(--brand, #0f766e)' }} onClick={() => setCheckin(r)} aria-label={`Check-in de ${r.code}`} data-tip="Check-in">
+                          <UserCheck size={17} />
+                        </button>
+                      )}
+                      {r.status !== 'CANCELLED' && !r.checked_in_at && r.date >= todayEc() && (
                         <button className="icon-btn sm" style={{ color: 'var(--danger)' }} onClick={() => setCancel(r)} aria-label={`Cancelar ${r.code}`} data-tip="Cancelar"><XCircle size={17} /></button>
                       )}
                     </div>
@@ -165,6 +171,17 @@ export default function ReservasAdmin() {
       )}
 
       {detail && <ReservationDetailModal r={detail} onClose={() => setDetail(null)} />}
+      {checkin && (
+        <CheckinModal
+          r={checkin}
+          onClose={() => setCheckin(null)}
+          onDone={(u) => {
+            replace({ ...checkin, checked_in_at: u.hora_checkin });
+            setCheckin(null);
+            toast(`Check-in de ${u.titular_nombre} registrado`, 'success');
+          }}
+        />
+      )}
       {cancel && (
         <CancelModal
           staff
@@ -176,3 +193,45 @@ export default function ReservasAdmin() {
     </>
   );
 }
+
+/**
+ * Check-in presencial: el guía u operador verifica el documento que presenta el titular en el punto de
+ * encuentro. Debe coincidir con el registrado en la reserva (misma regla que el contrato v2 con Booking).
+ */
+function CheckinModal({ r, onClose, onDone }) {
+  const [doc, setDoc] = useState('');
+  const [err, setErr] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const enviar = async (e) => {
+    e.preventDefault();
+    const d = doc.trim().toUpperCase();
+    if (d.length < 5) { setErr('Escribe el número de documento que presenta el titular'); return; }
+    setSaving(true);
+    setErr(null);
+    try {
+      onDone(await Reservas.checkin(r.reservation_id, d));
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Check-in · ${r.code}`}
+      description={`${r.attraction.name} · ${fmtDate(r.date, { day: 'numeric', month: 'long' })} ${r.time}`}
+      footer={<><button className="btn" onClick={onClose}>Cancelar</button><button className="btn btn-primary" form="checkin-form" disabled={saving}>{saving && <Spinner />} Registrar llegada</button></>}
+    >
+      <form id="checkin-form" onSubmit={enviar} className="stack" noValidate>
+        <p>Titular: <strong>{r.customer?.name}</strong> · {r.ticket_count} {r.ticket_count === 1 ? 'persona' : 'personas'}</p>
+        <Field label="Documento que presenta el titular" required error={err} hint={r.customer?.document ? 'Cédula, pasaporte o RUC: debe coincidir con el registrado en la reserva' : `Esta reserva no tiene documento registrado: verifica que el voucher del cliente diga ${r.code}`}>
+          {(p) => <input {...p} className="input" autoComplete="off" maxLength={20} value={doc} onChange={(e) => setDoc(e.target.value.replace(/[^0-9A-Za-z]/g, ''))} autoFocus />}
+        </Field>
+        <Alert tone="info">Al registrar el check-in la reserva ya no se puede cancelar.</Alert>
+      </form>
+    </Modal>
+  );
+}
+
