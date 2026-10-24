@@ -1,7 +1,10 @@
+import { randomBytes } from 'crypto';
 import { emitirVoucher, leerVoucher } from './voucher';
 
 describe('voucher QR firmado (contrato v2)', () => {
-  const secreto = 'secreto-de-prueba-0123456789abcdefghijklmnop';
+  // Secretos aleatorios en cada ejecución (nunca un literal en el código)
+  const secreto = randomBytes(32).toString('hex');
+  const otro = randomBytes(32).toString('hex');
 
   it('se lee con el mismo secreto y no lleva datos personales', () => {
     const t = emitirVoucher('f47ac10b-58cc-4372-a567-0e02b2c3d479', 'DEC-7F3K9Q', secreto);
@@ -14,7 +17,7 @@ describe('voucher QR firmado (contrato v2)', () => {
     const [h, , f] = t.split('.');
     const falso = `${h}.${Buffer.from(JSON.stringify({ r: 'id-2', c: 'DEC-BBBBBB', t: 'voucher', iat: 1 })).toString('base64url')}.${f}`;
     expect(leerVoucher(falso, secreto)).toBeNull();
-    expect(leerVoucher(t, 'otro-secreto-0123456789abcdefghijklmnopqrs')).toBeNull();
+    expect(leerVoucher(t, otro)).toBeNull();
     expect(leerVoucher('no-es-un-token', secreto)).toBeNull();
   });
 });
