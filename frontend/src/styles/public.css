@@ -128,9 +128,11 @@
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--r);
   color: var(--text); text-decoration: none; text-align: center;
   font-weight: 600; font-size: 0.9rem; line-height: 1.25;
-  transition: border-color var(--t-fast), box-shadow var(--t-fast), color var(--t-fast);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), color var(--t-fast), transform var(--t-fast);
 }
 .cat-card:hover { border-color: var(--primary); color: var(--primary); box-shadow: var(--shadow); }
+@media (hover: hover) { .cat-card:hover { transform: translateY(-2px); } .cat-card:hover .ci { background: var(--primary); color: #fff; } }
+.cat-card .ci { transition: background var(--t-fast), color var(--t-fast); }
 .cat-card .ci { width: 46px; height: 46px; border-radius: 12px; background: var(--primary-50); color: var(--primary); display: grid; place-items: center; }
 .cat-card small { color: var(--muted); font-weight: 500; font-size: 0.76rem; }
 
@@ -140,9 +142,10 @@
   position: relative; display: flex; flex-direction: column;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
   overflow: hidden; box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--t), border-color var(--t);
+  transition: box-shadow var(--t), border-color var(--t), transform var(--t);
 }
 .a-card:hover { box-shadow: var(--shadow); border-color: var(--border-strong); }
+@media (hover: hover) { .a-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); } }
 .a-card:hover .a-card-img img { transform: scale(1.04); }
 .a-card-link { position: absolute; inset: 0; z-index: 1; border-radius: var(--r); }
 .a-card-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
@@ -278,9 +281,22 @@
 @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
 .map-frame { width: 100%; height: 300px; border: 0; border-radius: var(--r); background: var(--surface-2); }
 
-/* Estática: era sticky, pero al ser más alta que la pantalla el botón "Reservar ahora" solo se
-   alcanzaba al llegar al final de la página. Ahora baja con el contenido como el resto. */
-.booking { position: static; }
+/* Fija en pantalla mientras se lee la ficha. Para que quepa completa (sin barra interna), el calendario
+   se resume en una línea al elegir la fecha y los participantes se despliegan al tocarlos. */
+.booking { position: sticky; top: var(--booking-top, calc(var(--header-h) + 16px)); }
+.booking-resumen {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; width: 100%;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface-2);
+  font: inherit; color: var(--text); text-align: left;
+}
+.booking-resumen span { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 0.92rem; }
+.booking-pax-toggle { cursor: pointer; transition: border-color 0.2s ease-out; }
+.booking-pax-toggle:hover { border-color: var(--primary); }
+.booking-pax-toggle svg.girado { transform: rotate(180deg); }
+.booking-pax-toggle svg { transition: transform 0.2s ease-out; flex-shrink: 0; }
+#booking-pax:not([hidden]) { margin-top: 4px; }
+.booking .summary-lines, .booking .summary-total { margin-top: 14px; }
+@media (prefers-reduced-motion: reduce) { .booking-pax-toggle svg { transition: none; } }
 .booking .card { padding: 22px; }
 /* A 320 px el calendario (7 días × 38 px) no cabía: tarjeta más compacta y días cuadrados flexibles */
 @media (max-width: 400px) { .booking .card { padding: 14px; } .booking .cal-day { min-height: 0; } }
@@ -385,7 +401,7 @@
   transition: border-color var(--t-fast), background var(--t-fast);
 }
 .pay-option:hover { border-color: var(--primary); }
-.pay-option:has(input:checked) { border-color: var(--primary); background: var(--primary-50); }
+.pay-option:has(input:checked) { border-color: var(--primary); background: var(--primary-50); box-shadow: 0 0 0 3px var(--primary-100); }
 .pay-option input { width: 20px; height: 20px; accent-color: var(--primary); margin-top: 2px; flex-shrink: 0; }
 .pay-option strong { display: block; }
 .pay-option span { font-size: 0.86rem; color: var(--muted); }

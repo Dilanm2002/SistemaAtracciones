@@ -24,7 +24,10 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 - **Tarjeta de crédito simulada en el pago:** se llena mientras se escribe, detecta la marca y gira al escribir el CVV (sin animación con `prefers-reduced-motion`; decorativa para lectores de pantalla).
 
 ### Corregido
-- **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo se alcanzaba al final de la página porque la tarjeta de reserva era *sticky* y más alta que la pantalla; ahora es estática y baja con el contenido.
+- **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo se alcanzaba al final de la página porque la tarjeta de reserva, fija en pantalla, era más alta que ella. Sigue fija, pero ahora cabe: el calendario se resume en una línea al elegir la fecha («Cambiar fecha»), los participantes se despliegan al tocarlos y, si aun así no cabe, la tarjeta sube lo justo para que el botón siga a la vista.
+
+### Cambiado
+- **Pulido de la interfaz** (pautas de la skill ui-ux-pro-max, sin tocar flujos): el paso actual del checkout va relleno y el tramo recorrido en color; las tarjetas de atracción y de categoría se elevan levemente al pasar el mouse (solo en equipos con mouse); los botones responden al presionar; el método de pago elegido lleva un anillo además del fondo. Todo respeta `prefers-reduced-motion`.
 - Microservicios: las conexiones a la base se mantienen abiertas para que el primer ping del semáforo de Booking tras un rato sin tráfico no salga `DEGRADED`.
 
 ## [2.9.0] - 2026-10-24

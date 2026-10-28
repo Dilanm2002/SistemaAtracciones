@@ -18,8 +18,10 @@
   font-size: 0.95rem;
   text-decoration: none;
   white-space: nowrap;
-  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast);
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
 }
+/* Respuesta al presionar (sin mover el layout: solo transform) */
+.btn:active:not([disabled]) { transform: translateY(1px); }
 .btn:hover { --btn-bg: var(--surface-2); color: var(--btn-ink); }
 .btn svg { flex-shrink: 0; }
 .btn-primary { --btn-bg: var(--primary); --btn-ink: #fff; --btn-border: var(--primary); }
@@ -330,7 +332,9 @@
 .steps li.done { color: var(--primary); }
 .steps li.done::before { content: '✓'; background: var(--primary); border-color: var(--primary); color: #fff; }
 .steps li.current { color: var(--text); }
-.steps li.current::before { border-color: var(--primary); color: var(--primary); }
+.steps li.current::before { border-color: var(--primary); background: var(--primary); color: #fff; box-shadow: 0 0 0 4px var(--primary-100); }
+/* El tramo ya recorrido se pinta: se lee de un vistazo cuánto falta */
+.steps li.done::after { background: var(--primary); }
 @media (max-width: 560px) { .steps li span { display: none; } .steps li.current span { display: inline; } }
 
 /* ── Acordeón ────────────────────────────────────────────────────────── */

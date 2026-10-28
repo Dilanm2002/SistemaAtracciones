@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarCheck, ChevronLeft, ChevronRight, Info, ShieldCheck } from 'lucide-react';
+import { CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Info, ShieldCheck, Users } from 'lucide-react';
 import { Atracciones } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { fmtDateLong, fmtMoney, fmtMonth, todayEc } from '../utils/format';
@@ -93,6 +93,28 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
   const [adults, setAdults] = useState(Math.max(1, Number(initialPeople) || 2));
   const [children, setChildren] = useState(0);
   const [touched, setTouched] = useState(false);
+  // La tarjeta queda fija en pantalla (sticky) y debe caber completa: el calendario se resume en una
+  // línea al elegir la fecha y los participantes se despliegan solo al tocarlos.
+  const [verCalendario, setVerCalendario] = useState(!date);
+  const [verPax, setVerPax] = useState(false);
+  const elegirFecha = (d) => { setDate(d); setVerCalendario(false); };
+  // Si aun así no cabe (participantes desplegados en una pantalla baja), la tarjeta sube lo justo
+  // para que "Reservar ahora" siga a la vista; cuando cabe, queda bajo la cabecera como siempre.
+  const cajaRef = useRef(null);
+  useEffect(() => {
+    const caja = cajaRef.current;
+    if (!caja || typeof ResizeObserver === 'undefined') return undefined;
+    const ajustar = () => {
+      const cabecera = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) || 68;
+      const arriba = Math.min(cabecera + 16, window.innerHeight - caja.offsetHeight - 16);
+      caja.style.setProperty('--booking-top', `${Math.round(arriba)}px`);
+    };
+    const ro = new ResizeObserver(ajustar);
+    ro.observe(caja);
+    window.addEventListener('resize', ajustar);
+    ajustar();
+    return () => { ro.disconnect(); window.removeEventListener('resize', ajustar); };
+  }, []);
 
   useEffect(() => {
     if (!date) return;
@@ -136,6 +158,14 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
     setAjuste(`Ajustamos a ${n} participante${n > 1 ? 's' : ''}: es el cupo disponible a las ${slot.time}.`);
   }, [slot]); // eslint-disable-line react-hooks/exhaustive-deps
   const pax = adults + children + seniors + students + infants;
+  const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+  const resumenPax = [
+    plural(adults, 'adulto', 'adultos'),
+    children && plural(children, 'niño', 'niños'),
+    seniors && plural(seniors, 'adulto mayor', 'adultos mayores'),
+    students && plural(students, 'estudiante', 'estudiantes'),
+    infants && plural(infants, 'infante', 'infantes'),
+  ].filter(Boolean).join(', ');
   const childPrice = a.child_price?.total ?? a.price.total;
   const seniorPrice = a.senior_price?.total ?? a.price.total;
   const studentPrice = a.student_price?.total ?? a.price.total;
@@ -156,7 +186,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
   const missing = useMemo(() => (!date ? 'Elige una fecha en el calendario' : !time ? 'Elige un horario de salida' : null), [date, time]);
 
   return (
-    <div className="booking" id="reservar">
+    <div className="booking" id="reservar" ref={cajaRef}>
       <div className="card">
         <div className="booking-price">
           <span className="price-from">Desde</span>
@@ -170,11 +200,18 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
         )}
 
         <h3>1. Elige la fecha</h3>
-        <AvailabilityCalendar attractionId={a.id} value={date} onChange={setDate} />
+        {verCalendario || !date ? (
+          <AvailabilityCalendar attractionId={a.id} value={date} onChange={elegirFecha} />
+        ) : (
+          <div className="booking-resumen">
+            <span><CalendarDays size={18} aria-hidden="true" /> {fmtDateLong(date)}</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setVerCalendario(true)}>Cambiar fecha</button>
+          </div>
+        )}
 
         {date && (
           <>
-            <h3>2. Elige el horario <span className="muted" style={{ fontWeight: 500 }}>· {fmtDateLong(date)}</span></h3>
+            <h3>2. Elige el horario</h3>
             {loadingAvail ? (
               <div className="row muted small"><Spinner label="Consultando cupos…" /></div>
             ) : avail?.slots?.length ? (
@@ -200,6 +237,11 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
         )}
 
         <h3>{date ? '3.' : '2.'} Participantes</h3>
+        <button type="button" className="booking-resumen booking-pax-toggle" aria-expanded={verPax} aria-controls="booking-pax" onClick={() => setVerPax(!verPax)}>
+          <span><Users size={18} aria-hidden="true" /> {resumenPax}</span>
+          <ChevronDown size={18} aria-hidden="true" className={verPax ? 'girado' : ''} />
+        </button>
+        <div id="booking-pax" hidden={!verPax}>
         <div className="pax-row">
           <div><strong>Adultos</strong><span>13 a 64 años · {fmtMoney(a.price.total)}</span></div>
           <Qty value={adults} onChange={setAdults} min={1} max={maxDe(adults, 1)} label="adultos" />
@@ -220,16 +262,18 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           <div><strong>Infantes</strong><span>0 a 4 años · gratis (ocupan cupo)</span></div>
           <Qty value={infants} onChange={setInfants} min={0} max={maxDe(infants)} label="infantes" />
         </div>
+        </div>
         {overCapacity && <Alert tone="warning">Solo quedan {slot.available} cupos a las {time}. Reduce participantes o elige otro horario.</Alert>}
         {ajuste && !overCapacity && <Alert tone="info">{ajuste}</Alert>}
 
-        <div className="summary-lines">
+        {/* El desglose solo cuando hay más de un tipo de boleto (con solo adultos, el total ya lo dice) */}
+        {(children || seniors || students || infants) > 0 && <div className="summary-lines">
           <div><span>{adults} adulto{adults > 1 ? 's' : ''} × {fmtMoney(a.price.total)}</span><span>{fmtMoney(adults * a.price.total)}</span></div>
           {children > 0 && <div><span>{children} niño{children > 1 ? 's' : ''} × {fmtMoney(childPrice)}</span><span>{fmtMoney(children * childPrice)}</span></div>}
           {seniors > 0 && <div><span>{seniors} adulto{seniors > 1 ? 's' : ''} mayor{seniors > 1 ? 'es' : ''} × {fmtMoney(seniorPrice)}</span><span>{fmtMoney(seniors * seniorPrice)}</span></div>}
           {students > 0 && <div><span>{students} estudiante{students > 1 ? 's' : ''} × {fmtMoney(studentPrice)}</span><span>{fmtMoney(students * studentPrice)}</span></div>}
           {infants > 0 && <div><span>{infants} infante{infants > 1 ? 's' : ''}</span><span>Gratis</span></div>}
-        </div>
+        </div>}
         <div className="summary-total">
           <span>Total</span>
           <span className="price">{fmtMoney(total)}</span>
