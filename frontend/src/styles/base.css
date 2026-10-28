@@ -182,3 +182,20 @@ button:disabled { cursor: not-allowed; }
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Impresión (comprobante de reserva) ──
+   Sin esto se imprimía la página tal cual: la cabecera fija caía encima del código de reserva y
+   salían el aviso flotante, los botones y todo el pie del sitio. */
+.solo-impresion { display: none; }
+@media print {
+  @page { margin: 14mm; }
+  html, body { background: #fff !important; }
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .site-header, .site-footer, .toasts, .skip-link, .mobile-book-bar, .breadcrumbs, .no-print { display: none !important; }
+  .solo-impresion { display: block !important; }
+  * { box-shadow: none !important; animation: none !important; transition: none !important; }
+  main, .container { padding: 0 !important; margin: 0 auto !important; max-width: none !important; }
+  .card { border-color: #cfc7ba !important; }
+  .voucher-qr, .factura, .detail-list, .alert { break-inside: avoid; }
+  h1, h2, h3 { break-after: avoid; }
+}

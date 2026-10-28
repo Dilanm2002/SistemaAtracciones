@@ -9,7 +9,7 @@ import { ReviewModal } from '../components/Reviews';
 import { Alert, EmptyState, ErrorState, Field, Modal, Spinner, StatusBadge, useAsync, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { estadoVisible, fmtDate, fmtDateLong, fmtDateTime, fmtMoney, participantes, PAYMENT, salidaEc } from '../utils/format';
-import { downloadIcs } from './Confirmation';
+import AnadirCalendario from '../components/AnadirCalendario';
 import { fotoProps, SIZES } from '../utils/fotos';
 
 const MOTIVOS = ['Cambio de planes', 'Problemas con mi vuelo o transporte', 'Motivos de salud', 'Clima o seguridad', 'Encontré otra opción', 'Otro'];
@@ -153,6 +153,7 @@ export default function MyReservations() {
   const { data, loading, error, reload, setData } = useAsync(() => Reservas.list(), []);
   const [cancel, setCancel] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [calendario, setCalendario] = useState(null);
   const [review, setReview] = useState(null);
 
   const groups = useMemo(() => {
@@ -221,7 +222,7 @@ export default function MyReservations() {
                 <button className="btn btn-sm" onClick={() => setDetail(r)}><Eye size={16} /> Ver detalle</button>
                 {tab === 'upcoming' && (
                   <>
-                    <button className="btn btn-sm" onClick={() => downloadIcs(r)}><CalendarPlus size={16} /> Calendario</button>
+                    <button className="btn btn-sm" onClick={() => setCalendario(r)}><CalendarPlus size={16} /> Calendario</button>
                     {r.can_cancel ? (
                       <button className="btn btn-sm btn-outline-danger" onClick={() => setCancel(r)} aria-describedby={`politica-${r.reservation_id}`}>
                         <XCircle size={16} /> {r.refundable ? 'Cancelar' : 'Cancelar sin reembolso'}
@@ -249,6 +250,7 @@ export default function MyReservations() {
         />
       )}
       {detail && <ReservationDetailModal r={detail} onClose={() => setDetail(null)} />}
+      <AnadirCalendario r={calendario} open={!!calendario} onClose={() => setCalendario(null)} />
       {review && (
         <ReviewModal open onClose={() => setReview(null)} attraction={{ id: review.attraction.id, name: review.attraction.name }} />
       )}

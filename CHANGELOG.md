@@ -25,8 +25,10 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ### Corregido
 - **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo se alcanzaba al final de la página porque la tarjeta de reserva, fija en pantalla, era más alta que ella. Sigue fija, pero ahora cabe: el calendario se resume en una línea al elegir la fecha («Cambiar fecha»), los participantes se despliegan al tocarlos y, si aun así no cabe, la tarjeta sube lo justo para que el botón siga a la vista.
+- **Imprimir el comprobante:** la página se imprimía tal cual (la cabecera fija caía sobre el código de reserva y salían el aviso flotante, los botones y el pie del sitio). Ahora hay hoja de impresión: cabecera propia del comprobante con el código, detalle, voucher y factura sin cortarse a mitad.
 
 ### Cambiado
+- **«Añadir a mi calendario» dentro del sistema:** antes descargaba un `.ics` que en Windows sin app de calendario no se abría. Ahora abre una ventana con el evento (fecha, horario según la duración de la experiencia, punto de encuentro) y lo añade con un clic a **Google Calendar** u **Outlook** en la web; el `.ics` queda como opción para Apple Calendar y otras apps. En la confirmación y en «Mis reservas».
 - **Pulido de la interfaz** (pautas de la skill ui-ux-pro-max, sin tocar flujos): el paso actual del checkout va relleno y el tramo recorrido en color; las tarjetas de atracción y de categoría se elevan levemente al pasar el mouse (solo en equipos con mouse); los botones responden al presionar; el método de pago elegido lleva un anillo además del fondo. Todo respeta `prefers-reduced-motion`.
 - Microservicios: las conexiones a la base se mantienen abiertas para que el primer ping del semáforo de Booking tras un rato sin tráfico no salga `DEGRADED`.
 

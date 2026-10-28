@@ -2,45 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { CalendarPlus, CheckCircle2, Clock3, Compass, Copy, ListChecks, Printer } from 'lucide-react';
 import { Reservas } from '../api/client';
+import AnadirCalendario from '../components/AnadirCalendario';
 import Factura from '../components/Factura';
 import VoucherQr from '../components/VoucherQr';
 import { Alert, ErrorState, Spinner, StatusBadge, usePageTitle } from '../components/ui';
 import { useToast } from '../context/ToastContext';
 import { estadoVisible, fmtDateLong, fmtDateTime, fmtMoney, participantes, PAYMENT } from '../utils/format';
-
-/**
- * «Añadir a mi calendario» (MOV-014). Se abre un enlace firmado de la API que responde text/calendar:
- * iPhone muestra «Añadir al calendario» y Android/escritorio descargan el .ics. Si la API no
- * responde, se genera el archivo en el navegador (funciona en Android y escritorio).
- */
-export async function downloadIcs(r) {
-  try {
-    const { url } = await Reservas.calendario(r.reservation_id);
-    window.location.assign(url);
-    return;
-  } catch {
-    descargarIcsLocal(r);
-  }
-}
-
-function descargarIcsLocal(r) {
-  const start = `${r.date.replace(/-/g, '')}T${r.time.replace(':', '')}00`;
-  const ics = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Descubre EC//Reservas//ES',
-    'BEGIN:VEVENT',
-    `UID:${r.reservation_id}@descubre-ec`,
-    `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`,
-    `DTSTART;TZID=America/Guayaquil:${start}`,
-    `SUMMARY:${r.attraction.name} (${r.code})`,
-    `LOCATION:${(r.attraction.meeting_point ?? r.attraction.city).replace(/,/g, '\\,')}`,
-    `DESCRIPTION:Reserva ${r.code} · ${r.ticket_count} persona(s). Presenta tu código en el punto de encuentro.`,
-    'END:VEVENT', 'END:VCALENDAR',
-  ].join('\r\n');
-  const url = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' }));
-  const link = Object.assign(document.createElement('a'), { href: url, download: `reserva-${r.code}.ics` });
-  link.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function Confirmation() {
   const { id } = useParams();
@@ -48,6 +15,7 @@ export default function Confirmation() {
   const toast = useToast();
   const [r, setR] = useState(state?.reservation ?? null);
   const [error, setError] = useState(null);
+  const [verCalendario, setVerCalendario] = useState(false);
   usePageTitle(r ? `Reserva ${r.code}` : 'Tu reserva');
 
   useEffect(() => {
@@ -64,6 +32,11 @@ export default function Confirmation() {
 
   return (
     <div className="container" style={{ maxWidth: 760 }}>
+      {/* Solo en papel: la cabecera del sitio no se imprime, así el comprobante lleva su propia marca */}
+      <div className="solo-impresion impresion-cab">
+        <strong>Descubre<span>EC</span></strong>
+        <span>Comprobante de reserva · {r.code}</span>
+      </div>
       <div className="confirm-hero">
         <div className={`confirm-icon ${ok ? 'ok' : 'pending'}`}>
           {ok ? <CheckCircle2 size={40} aria-hidden="true" /> : <Clock3 size={40} aria-hidden="true" />}
@@ -76,7 +49,7 @@ export default function Confirmation() {
         </p>
         <div className="code-box">
           <span className="sr-only">Código de reserva: </span>{r.code}
-          <button className="icon-btn sm" onClick={copy} aria-label="Copiar código"><Copy size={18} /></button>
+          <button className="icon-btn sm no-print" onClick={copy} aria-label="Copiar código"><Copy size={18} /></button>
         </div>
       </div>
 
@@ -109,12 +82,13 @@ export default function Confirmation() {
         )}
       </div>
 
-      <div className="row" style={{ justifyContent: 'center', marginTop: 24 }}>
-        <button className="btn" onClick={() => downloadIcs(r)}><CalendarPlus size={18} /> Añadir a mi calendario</button>
+      <div className="row no-print" style={{ justifyContent: 'center', marginTop: 24 }}>
+        <button className="btn" onClick={() => setVerCalendario(true)}><CalendarPlus size={18} /> Añadir a mi calendario</button>
         <button className="btn" onClick={() => window.print()}><Printer size={18} /> Imprimir</button>
         <Link to="/mis-reservas" className="btn btn-primary"><ListChecks size={18} /> Ver mis reservas</Link>
         <Link to="/explorar" className="btn btn-ghost"><Compass size={18} /> Seguir explorando</Link>
       </div>
+      <AnadirCalendario r={r} open={verCalendario} onClose={() => setVerCalendario(false)} />
     </div>
   );
 }

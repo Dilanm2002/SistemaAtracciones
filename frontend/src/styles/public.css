@@ -458,7 +458,40 @@
 .card-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
 .card-fields .span-2 { grid-column: 1 / -1; }
 
+/* Ventana «Añadir a tu calendario» (AnadirCalendario.jsx) */
+.cal-evento { display: flex; gap: 14px; align-items: flex-start; padding: 14px; border: 1px solid var(--border); border-radius: var(--r); background: var(--surface-2); }
+.cal-evento-fecha { width: 58px; flex-shrink: 0; border-radius: 10px; overflow: hidden; text-align: center; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+.cal-evento-fecha small { display: block; background: var(--primary); color: #fff; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; padding: 3px 0; }
+.cal-evento-fecha strong { display: block; font-family: var(--font-head); font-size: 1.5rem; line-height: 1.6; color: var(--text); }
+.cal-evento-info { display: grid; gap: 4px; min-width: 0; }
+.cal-evento-info strong { font-size: 1rem; line-height: 1.35; }
+.cal-evento-info span { display: flex; align-items: center; gap: 6px; font-size: 0.88rem; color: var(--text-2); }
+.cal-evento-info svg { flex-shrink: 0; color: var(--primary); }
+.cal-opciones { display: grid; gap: 10px; margin-top: 16px; }
+.cal-opcion {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 10px 14px;
+  border: 1.5px solid var(--border-strong); border-radius: var(--r); background: var(--surface);
+  color: var(--text); text-decoration: none; text-align: left; font: inherit; cursor: pointer;
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.cal-opcion:hover { border-color: var(--primary); background: var(--primary-50); color: var(--text); }
+.cal-opcion:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.cal-opcion > span:nth-child(2) { flex: 1; display: grid; }
+.cal-opcion small { color: var(--muted); font-size: 0.8rem; }
+.cal-opcion > svg { color: var(--muted); flex-shrink: 0; }
+.cal-opcion-logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; font-family: var(--font-head); font-weight: 700; color: #fff; }
+.cal-opcion-logo.g { background: #1a73e8; }
+.cal-opcion-logo.o { background: #0f6cbd; }
+.cal-opcion-logo.i { background: var(--text-2); }
 .confirm-hero { text-align: center; padding: 40px 20px 24px; }
+@media print {
+  .impresion-cab { display: flex !important; justify-content: space-between; align-items: baseline; padding-bottom: 10px; margin-bottom: 8px; border-bottom: 2px solid var(--primary); }
+  .impresion-cab strong { font-family: var(--font-head); font-size: 1.3rem; color: var(--text); }
+  .impresion-cab strong span { color: var(--cta-hover); }
+  .impresion-cab > span { font-size: 0.9rem; color: var(--muted); }
+  .confirm-hero { padding: 12px 0 16px; }
+  .confirm-hero h1 { font-size: 1.6rem !important; margin-bottom: 6px; }
+}
 .confirm-icon { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 16px; }
 .confirm-icon.ok { background: var(--success-bg); color: var(--success); }
 .confirm-icon.pending { background: var(--warning-bg); color: var(--warning); }
