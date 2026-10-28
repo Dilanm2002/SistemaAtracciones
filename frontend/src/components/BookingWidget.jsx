@@ -230,16 +230,19 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
           {students > 0 && <div><span>{students} estudiante{students > 1 ? 's' : ''} × {fmtMoney(studentPrice)}</span><span>{fmtMoney(students * studentPrice)}</span></div>}
           {infants > 0 && <div><span>{infants} infante{infants > 1 ? 's' : ''}</span><span>Gratis</span></div>}
         </div>
-        <div className="summary-total">
-          <span>Total</span>
-          <span className="price">{fmtMoney(total)}</span>
+        {/* Total y botón siempre a la vista: en escritorio quedan fijos al pie de la tarjeta (public.css) */}
+        <div className="booking-foot">
+          <div className="summary-total">
+            <span>Total</span>
+            <span className="price">{fmtMoney(total)}</span>
+          </div>
+          <button className="btn btn-cta btn-lg btn-block" onClick={go} disabled={!!overCapacity} aria-describedby="book-hint">
+            <CalendarCheck size={20} aria-hidden="true" /> Reservar ahora
+          </button>
+          <p id="book-hint" className={`small center ${touched && missing ? 'error-text' : 'muted'}`} style={{ margin: '10px 0 0', justifyContent: 'center' }}>
+            {touched && missing ? missing : missing ? <><Info size={14} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {missing}</> : isAuth ? 'No se te cobrará nada todavía' : 'Para reservar necesitas una cuenta: inicias sesión o te registras en el siguiente paso, sin perder tu selección'}
+          </p>
         </div>
-        <button className="btn btn-cta btn-lg btn-block" onClick={go} disabled={!!overCapacity} aria-describedby="book-hint">
-          <CalendarCheck size={20} aria-hidden="true" /> Reservar ahora
-        </button>
-        <p id="book-hint" className={`small center ${touched && missing ? 'error-text' : 'muted'}`} style={{ margin: '10px 0 0', justifyContent: 'center' }}>
-          {touched && missing ? missing : missing ? <><Info size={14} aria-hidden="true" style={{ verticalAlign: '-2px' }} /> {missing}</> : isAuth ? 'No se te cobrará nada todavía' : 'Para reservar necesitas una cuenta: inicias sesión o te registras en el siguiente paso, sin perder tu selección'}
-        </p>
       </div>
     </div>
   );

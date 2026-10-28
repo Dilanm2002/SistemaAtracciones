@@ -5,6 +5,7 @@ import { Atracciones, newIdempotencyKey, Reservas } from '../api/client';
 import { onImgError } from '../components/AttractionCard';
 import { LoginForm, RegisterForm } from '../components/AuthForms';
 import ProgresoPago from '../components/ProgresoPago';
+import TarjetaVisual from '../components/TarjetaVisual';
 import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePageTitle } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -63,6 +64,9 @@ export default function Checkout() {
   const [authTab, setAuthTab] = useState('login');
   const [form, setForm] = useState({ nombre: '', email: '', telefono: '', documento: '', notas: '' });
   const [pay, setPay] = useState({ metodo: 'TARJETA', numero: '', exp: '', cvv: '', titular: '', terms: false });
+  // Campo de la tarjeta que se está escribiendo: la vista previa lo resalta y gira al CVV
+  const [focoTarjeta, setFocoTarjeta] = useState(null);
+  const foco = (campo) => ({ onFocus: () => setFocoTarjeta(campo), onBlur: () => setFocoTarjeta(null) });
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState(null);
   const [verResumen, setVerResumen] = useState(false);
@@ -369,18 +373,19 @@ export default function Checkout() {
 
               {pay.metodo === 'TARJETA' && (
                 <>
+                  <TarjetaVisual numero={pay.numero} titular={pay.titular} exp={pay.exp} cvv={pay.cvv} marca={marcaTarjeta(pay.numero)} foco={focoTarjeta} />
                   <div className="card-fields">
                     <Field label="Número de tarjeta" required error={errors.numero} className="span-2">
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="4111 1111 1111 1111" maxLength={23} value={pay.numero} onChange={setP('numero', fmtCard)} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="4111 1111 1111 1111" maxLength={23} value={pay.numero} onChange={setP('numero', fmtCard)} {...foco('numero')} />}
                     </Field>
                     <Field label="Vencimiento" required error={errors.exp}>
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="MM/AA" maxLength={5} value={pay.exp} onChange={setP('exp', fmtExp)} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="MM/AA" maxLength={5} value={pay.exp} onChange={setP('exp', fmtExp)} {...foco('exp')} />}
                     </Field>
                     <Field label="CVV" required error={errors.cvv}>
-                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="123" maxLength={4} value={pay.cvv} onChange={setP('cvv', (v) => v.replace(/\D/g, ''))} />}
+                      {(p) => <input {...p} className="input" inputMode="numeric" autoComplete="off" placeholder="123" maxLength={4} value={pay.cvv} onChange={setP('cvv', (v) => v.replace(/\D/g, ''))} {...foco('cvv')} />}
                     </Field>
                     <Field label="Titular de la tarjeta" required error={errors.titular} className="span-2">
-                      {(p) => <input {...p} className="input" autoComplete="off" maxLength={LIMITES.nombrePersona} value={pay.titular} onChange={setP('titular')} />}
+                      {(p) => <input {...p} className="input" autoComplete="off" maxLength={LIMITES.nombrePersona} value={pay.titular} onChange={setP('titular')} {...foco('titular')} />}
                     </Field>
                   </div>
                   <p className="tiny muted" style={{ marginTop: 10 }}><Lock size={12} aria-hidden="true" /> Pago simulado para el prototipo: no se realizan cargos reales. Prueba con 4111 1111 1111 1111.</p>
