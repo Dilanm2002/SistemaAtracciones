@@ -25,6 +25,7 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ### Corregido
 - **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo se alcanzaba al final de la página porque la tarjeta de reserva, fija en pantalla, era más alta que ella. Sigue fija, pero ahora cabe: el calendario se resume en una línea al elegir la fecha («Cambiar fecha»), los participantes se despliegan al tocarlos y, si aun así no cabe, la tarjeta sube lo justo para que el botón siga a la vista.
+- **Calendario de disponibilidad:** al tocar «Cambiar fecha» todos los días se veían un momento como disponibles (verde) mientras se volvía a consultar la base. Ahora el mes ya consultado se reutiliza 60 s, los días que cargan se ven en gris y un día anterior a hoy nunca se ofrece.
 - **Imprimir el comprobante:** la página se imprimía tal cual (la cabecera fija caía sobre el código de reserva y salían el aviso flotante, los botones y el pie del sitio). Ahora hay hoja de impresión: cabecera propia del comprobante con el código, detalle, voucher y factura sin cortarse a mitad.
 
 ### Cambiado

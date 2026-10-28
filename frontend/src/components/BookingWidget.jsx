@@ -17,18 +17,33 @@ const shiftMonth = (m, n) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
+/**
+ * Meses ya consultados (60 s). Al tocar «Cambiar fecha» el calendario se vuelve a montar: sin esto
+ * pedía otra vez la disponibilidad y, mientras llegaba, todos los días se veían un momento como
+ * disponibles. Con la caché el mes aparece al instante y se actualiza en segundo plano.
+ */
+const CACHE_CALENDARIO = new Map();
+const VIGENCIA_CALENDARIO = 60_000;
+
 /** Calendario mensual con estado por día (disponible / pocos cupos / agotado / no opera). */
 export function AvailabilityCalendar({ attractionId, value, onChange }) {
   const today = todayEc();
   const [month, setMonth] = useState(monthOf(value || today));
-  const [days, setDays] = useState(null);
+  const clave = `${attractionId}|${month}`;
+  const [days, setDays] = useState(() => CACHE_CALENDARIO.get(clave)?.days ?? null);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    setDays(null);
+    const guardado = CACHE_CALENDARIO.get(clave);
+    setDays(guardado?.days ?? null);
     setError(null);
-    Atracciones.calendar(attractionId, month).then(setDays).catch(setError);
-  }, [attractionId, month]);
+    if (guardado && Date.now() - guardado.t < VIGENCIA_CALENDARIO) return undefined;
+    let vigente = true;
+    Atracciones.calendar(attractionId, month)
+      .then((d) => { CACHE_CALENDARIO.set(clave, { days: d, t: Date.now() }); if (vigente) setDays(d); })
+      .catch((e) => vigente && !guardado && setError(e));
+    return () => { vigente = false; };
+  }, [attractionId, month, clave]);
 
   const [y, m] = month.split('-').map(Number);
   const offset = (new Date(y, m - 1, 1).getDay() + 6) % 7; // lunes primero
@@ -54,7 +69,9 @@ export function AvailabilityCalendar({ attractionId, value, onChange }) {
         <div className="cal-grid" role="group" aria-label={`Disponibilidad de ${label}`} aria-busy={!days}>
           {DOW.map((d) => <div key={d} className="cal-dow" aria-hidden="true">{d}</div>)}
           {Array.from({ length: offset }, (_, i) => <div key={`e${i}`} aria-hidden="true" />)}
-          {(days ?? Array.from({ length: new Date(y, m, 0).getDate() }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, '0')}`, status: 'loading' }))).map((d) => {
+          {(days ?? Array.from({ length: new Date(y, m, 0).getDate() }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, '0')}`, status: 'loading' }))).map((dia) => {
+            // Un día anterior a hoy nunca se ofrece, aunque la respuesta (o la carga) diga otra cosa
+            const d = dia.date < today ? { ...dia, status: 'past' } : dia;
             const disabled = d.status !== 'available' && d.status !== 'low';
             const day = Number(d.date.slice(8));
             return (

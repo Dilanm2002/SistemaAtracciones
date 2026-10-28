@@ -375,6 +375,8 @@
 .cal-day.low::after { content: ''; position: absolute; bottom: 5px; width: 5px; height: 5px; border-radius: 50%; background: var(--cta-hover); }
 .cal-day.full, .cal-day.blocked { background: transparent; color: #a79d8f; text-decoration: line-through; }
 .cal-day.past { background: transparent; color: #c5bcae; }
+/* Mientras carga, neutro: con el verde de «disponible» parecía que todo el mes tenía cupos */
+.cal-day.loading { background: var(--surface-2); color: #c5bcae; }
 .cal-day.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
 .cal-day.selected::after { background: #fff; }
 .cal-day.today:not(.selected) { border-color: var(--border-strong); }
