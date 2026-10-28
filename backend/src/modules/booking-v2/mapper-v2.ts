@@ -69,8 +69,16 @@ export class MapperV2 {
     };
   }
 
+  /** InclusionesFlags: v3 exige los nombres en inglés (includes_*); los de v2 en español se mantienen. */
   inclusiones(f: FilaAtraccion) {
-    return { incluye_comida: f.incluye_comida, incluye_transporte: f.incluye_transporte, incluye_guia: f.incluye_guia };
+    return {
+      includes_food: f.incluye_comida,
+      includes_transport: f.incluye_transporte,
+      includes_guide: f.incluye_guia,
+      incluye_comida: f.incluye_comida,
+      incluye_transporte: f.incluye_transporte,
+      incluye_guia: f.incluye_guia,
+    };
   }
 
   card(f: FilaAtraccion) {

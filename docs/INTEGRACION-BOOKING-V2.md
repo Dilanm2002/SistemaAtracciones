@@ -1,6 +1,8 @@
-# Integración con Booking Prototipo — contrato v2 (RDA2)
+# Integración con Booking Prototipo — contratos v2 y v3 (RDA2)
 
 Qué implementa Descubre EC del contrato **final** [`backend/contracts/atracciones-openapi-v2.yaml`](../backend/contracts/atracciones-openapi-v2.yaml), cómo probarlo y qué decisiones se tomaron donde el contrato no era explícito.
+
+> **Semana 9:** Booking publicó el contrato **v3** y la [guía de integración de socios](GUIA_INTEGRACION_SOCIOS.md). Las mismas rutas se sirven también en `/api/v3` y en la URL base (`/reservas`). Ver la **sección 7** (incluye la prueba local por Tailscale).
 
 El archivo es **el que envió el equipo de Booking, sin modificar**. Redocly lo valida sin errores: solo da 29 avisos de estilo (falta `operationId`, etc.).
 
@@ -38,7 +40,7 @@ Todas están implementadas. El test [`contract-coverage.spec.ts`](../backend/src
 | `POST /atracciones/search` | Filtra por destino, rango de fechas (con cupos para `adult_count` o `cantidad_adultos`), precio, duración, idioma del guía, accesibilidad, animales, cancelación gratuita y categoría (incluye sus subcategorías) |
 | `GET /atracciones` | `city`, `categoria_id`, `incluye_*`, `page`, `limit` (≤ 50) y `sort` |
 | `GET /atracciones/{id}` | `id` = UUID **o slug**: itinerario, calificación por pilares, accesibilidad, punto de encuentro con coordenadas, política de cancelación, paquetes y proveedor |
-| `GET /atracciones/{id}/disponibilidad` | `date` o `fecha`. Turnos con `slot_id` (`slot-AAAAMMDD-HHMM`), `time` («10:30 a.m.»), `time_24h` y estado `AGOTADO`, `ULTIMOS_CUPOS` (≤ 3) o `DISPONIBLE` |
+| `GET /atracciones/{id}/disponibilidad` | `date` o `fecha`. Turnos con `slot_id` (`slot-AAAAMMDD-HHMM`), `time` («10:30 a.m.»), `time_24h` y estado `AGOTADO`, `ULTIMOS_CUPOS` (1 a 5) o `DISPONIBLE` |
 | `POST /atracciones/reservas` | Requiere `atraccion_id`, `fecha`, **`slot_id`**, `hora`, `adult_count`, `customer` y `payment_method`. Devuelve **201** con `external_order_id` (`ORD-…`), código PNR (`DEC-…`), voucher QR firmado y `Location`. **409 `OUT_OF_STOCK`** activa la compensación de la saga |
 | `GET /atracciones/reservas/{id}` | Por UUID o por código PNR |
 | `POST /atracciones/reservas/{id}/cancel` | Compensación: devuelve los cupos y reembolsa (`reembolso_id`, `monto_reembolsado`). Es idempotente |
@@ -69,9 +71,9 @@ Descubre EC es el **cliente**: después de cada venta, cancelación o cambio de 
 | Variable (Vercel) | Valor por defecto | Para qué |
 |---|---|---|
 | **`BOOKING_API_KEY`** | — (obligatoria para que Booking reserve) | Clave `X-API-Key` que recibe Booking |
-| `BOOKING_GRPC_URL` | `booking.epn.edu.ec:50051` | Servidor gRPC de Booking (en local: `localhost:50051`) |
-| `BOOKING_GRPC_TLS` | `true` con dominio público; `false` con `localhost` o un nombre de Docker | TLS en producción, h2c en red interna |
-| `BOOKING_SERVICE_ID` | `atracciones-dilan` | `service_id` del mensaje |
+| `BOOKING_GRPC_URL` | `rda1-backend-integracion-sistemas.onrender.com:50051` | Servidor gRPC de Booking (prueba local: `<IP Tailscale de Booking>:50051`) |
+| `BOOKING_GRPC_TLS` | `true` con dominio público; `false` con `localhost`, Docker, redes privadas o Tailscale (`100.64–127.x.x`, `*.ts.net`) | TLS en producción, h2c en red interna |
+| `BOOKING_SERVICE_ID` | `NODE_ATR_DILAN` (confirmado por Booking) | `service_id` del mensaje |
 | `BOOKING_GRPC_ENABLED` | `true` (en pruebas, `false`) | Apagar el envío |
 | `NODE_ID` / `NODE_CODE` | `node-dilan-atracciones-01` / `DILAN_ATRACCIONES` | Identidad del nodo en `/health` |
 | `NODE_KILL_SWITCH` | — | `true` fuerza `DOWN` (para probar el foco rojo) |
@@ -118,3 +120,54 @@ curl -s -X POST $API/atracciones/reservas \
                    "document_type":"CEDULA","document_id":"1710034065"},
        "payment_method":"SOA_BOOKING_GATEWAY","saga_id":"SAGA-PRUEBA-1"}'
 ```
+
+## 7. Contrato v3 y guía de integración de socios (semana 9)
+
+Archivos oficiales de Booking, guardados sin modificar:
+- [`backend/contracts/atracciones-openapi-v3.yaml`](../backend/contracts/atracciones-openapi-v3.yaml): mismas 14 rutas que v2. La versión del 27-oct ya no repite claves en `TimeSlotItem` y usa cédulas de ejemplo válidas.
+- [`backend/src/proto/inventory.proto`](../backend/src/proto/inventory.proto): agrega `slot_id` (campo 7), `error_code` y `current_available` en el acuse, y el RPC `GetSlotAvailability`.
+- [`GUIA_INTEGRACION_SOCIOS.md`](GUIA_INTEGRACION_SOCIOS.md).
+
+### 7.1 Qué acepta Descubre EC (sin romper v2)
+
+| Tema | Cómo se resuelve |
+|---|---|
+| Versión | Todo el contrato responde en `/api/v2` **y** en `/api/v3` |
+| `{baseUrlRest}/reservas` (guía §5) | `POST /api/v2/reservas` y `/api/v3/reservas` (también `GET /reservas/{id}`, `/cancel` y `/checkin`), con la misma lógica que `/atracciones/reservas` |
+| Ping del semáforo | `GET {baseUrlRest}/health` (igual que `/atracciones/health`) |
+| Nombres en inglés (v3) | `attraction_id`, `date`, `time`, `time_24h`, `slot_id`, `adult_count`… Los nombres de v2 y los alias en español siguen funcionando |
+| `payment_method` | Texto de v2 **o** el objeto de v3 `{ "method": "CREDIT_CARD" \| "DEBIT_CARD" \| "PAYPAL" \| "TRANSFER" }`. Si no llega (payload de la guía), `SOA_BOOKING_GATEWAY`: la compra ya la cobró Booking |
+| `customer` de la guía | `name` vale como `full_name`. Si falta `document_type`, se deduce del número: 10 dígitos → CEDULA, 13 → RUC, otro → PASAPORTE |
+| `total_tickets` | Si llega, debe ser la suma de los boletos (400 `TOTAL_TICKETS_MISMATCH`) |
+| `booking_reservation_id` | Se guarda como `saga_id` (para conciliar con Booking) |
+| `slot_id` vs `date`/`time` | Si alguno no coincide con el turno: **400 `SLOT_TIME_MISMATCH`** |
+| Respuesta 201 | La ficha del contrato **más** `success: true` y `message` (lo que espera la guía); `reservation_id` está siempre |
+| Check-in de la guía | `guia_asignado` vale como `guia_codigo` |
+| Seguridad | Igual que v2: **`X-API-Key` o JWT de administrador** (el contrato v3 lo exige en `security`). La guía no menciona la cabecera: **hay que acordar con Booking que la envíe** |
+| gRPC | Cada envío lleva `slot_id` y como `timestamp` el momento del cambio (no el del reintento). Si Booking responde `STALE_TIMESTAMP_IGNORED`, el envío queda `DESCARTADO` y no se reintenta |
+
+### 7.2 Prueba local con Booking (Tailscale)
+
+1. Levantar la base: `cd backend && docker compose up -d` (Docker Desktop encendido).
+2. En `backend/.env` (no se sube al repositorio):
+   ```env
+   HOST=0.0.0.0
+   BOOKING_API_KEY=<clave de 24+ caracteres acordada con Booking>
+   BOOKING_GRPC_URL=<IP Tailscale de Booking>:50051
+   BOOKING_GRPC_ENABLED=true
+   BOOKING_SERVICE_ID=<código de nodo que te asignen, ej. NODE_ATR_DILAN>
+   ```
+   Clave nueva: `node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"`.
+3. `cd backend && npm run start:dev`. Comprobar: `curl http://<tu IP Tailscale>:3000/api/v3/health`.
+4. En el panel de Booking → *Gestión de Proveedores* → *Registrar Proveedor*: URL base `http://<tu IP Tailscale>:3000/api/v3` (o `/api/v2`), tipo **Atracciones**. Luego 🔄 (ping) y 📥 (sincronizar).
+   **Con los microservicios** ([microservicios/README.md](../microservicios/README.md)) se registra el **API Gateway**: `http://<tu IP Tailscale>:8080/api/v3`. El catálogo lo atiende ms_catalog y el resto la tienda; antes de la reunión, `node scripts/prueba-humo.js` recorre todo el contrato a través del gateway.
+5. Si Windows pregunta por el Firewall al arrancar Node, permitir **redes privadas**.
+6. Ver en **Panel → Observabilidad** los envíos gRPC (`ops.sync_stock`).
+
+### 7.3 Confirmado por Booking (Paúl, 27-oct)
+
+- Booking envía **`X-API-Key`** en `/reservas`, `/cancel` y `/checkin` (la guarda como `TIENDA_ATRACCIONES_API_KEY`), junto con `Idempotency-Key` y `X-Correlation-Id`.
+- gRPC: `/inventory.InventoryStockService/PushStockUpdate`, puerto 50051 **sin TLS** (h2c). La IP de Tailscale la pasa en la reunión.
+- `service_id` = **`NODE_ATR_DILAN`** (ya registrado en Booking).
+- Panel: 🔄 llama `GET {base}/health`; 📥 llama `GET {base}/atracciones` y acepta `[...]`, `{ items }` o `{ data }`.
+- `ULTIMOS_CUPOS`: **1 a 5 cupos** (≤ 0 `AGOTADO`, > 5 `DISPONIBLE`).

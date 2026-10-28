@@ -19,6 +19,7 @@ interface Push {
   time_slot: string;
   available_units: number;
   timestamp: string;
+  slot_id: string;
 }
 
 /** Servidor gRPC de Booking simulado: guarda cada PushStockUpdate que recibe. */
@@ -33,6 +34,7 @@ async function bookingGrpcSimulado() {
       cb(null, { success: true, message: 'Stock recibido', processed_at: String(Date.now()) });
     },
     StreamInventoryChanges: (_call: unknown, cb: grpc.sendUnaryData<unknown>) => cb(null, { total_events_processed: 0, is_synchronized: true }),
+    GetSlotAvailability: (_call: unknown, cb: grpc.sendUnaryData<unknown>) => cb(null, {}),
   });
   const puerto = await new Promise<number>((ok, mal) =>
     server.bindAsync('127.0.0.1:0', grpc.ServerCredentials.createInsecure(), (e, p) => (e ? mal(e) : ok(p))),
@@ -75,11 +77,15 @@ describeDb('Contrato v2 final con Booking Prototipo (E2E)', () => {
     document_id: '1710034065',
     ...extra,
   });
-  /** Primer turno libre de la atracción en `dias` días (por la ruta canónica /disponibilidad). */
-  const turno = async (dias: number) => {
+  /**
+   * Primer turno con al menos `minimo` cupos libres en `dias` días (por la ruta canónica /disponibilidad).
+   * Con una base de pruebas reutilizada, los turnos se van llenando: se elige uno con cupos suficientes.
+   */
+  const turno = async (dias: number, minimo = 1) => {
     const fecha = fechaEc(dias);
     const r = await v2(false).get(`/atracciones/${atr.id}/disponibilidad?date=${fecha}`);
-    const slot = r.body.time_slots.find((t: { estado: string }) => t.estado !== 'AGOTADO');
+    const slot = r.body.time_slots.find((t: { cupos_disponibles: number }) => t.cupos_disponibles >= minimo);
+    if (!slot) throw new Error(`Sin turnos con ${minimo} cupos el ${fecha}: usa una base de pruebas nueva.`);
     return { fecha, slot };
   };
   const reserva = (fecha: string, slot: { slot_id: string; time_24h: string }, extra: Record<string, unknown> = {}) => ({
@@ -168,7 +174,7 @@ describeDb('Contrato v2 final con Booking Prototipo (E2E)', () => {
 
   describe('reservas y saga', () => {
     it('201 con slot_id, cinco tipos de boleto, voucher y Location; la misma Idempotency-Key no duplica; el stock llega por gRPC', async () => {
-      const { fecha, slot } = await turno(10);
+      const { fecha, slot } = await turno(10, 6);
       const key = randomUUID();
       const cuerpo = reserva(fecha, slot, {
         adult_count: 2, child_count: 1, senior_count: 1, student_count: 1, infant_count: 1, saga_id: 'SAGA-E2E-1',
@@ -200,7 +206,7 @@ describeDb('Contrato v2 final con Booking Prototipo (E2E)', () => {
 
       await esperar(() => grpcMock.recibidos.some((x) => x.msg.date === fecha && x.msg.time_slot === slot.time));
       const push = grpcMock.recibidos.filter((x) => x.msg.date === fecha && x.msg.time_slot === slot.time).at(-1)!;
-      expect(push.msg).toMatchObject({ service_id: 'atracciones-dilan', item_id: atr.id, available_units: slot.cupos_disponibles - 6 });
+      expect(push.msg).toMatchObject({ service_id: 'NODE_ATR_DILAN', item_id: atr.id, available_units: slot.cupos_disponibles - 6 });
       expect(push.correlacion).toBe('cid-e2e-12345');
       expect((await v2().get(`/atracciones/reservas/${r.body.reservation_code}`)).body.reservation_id).toBe(r.body.reservation_id);
     });
@@ -256,7 +262,7 @@ describeDb('Contrato v2 final con Booking Prototipo (E2E)', () => {
     });
 
     it('compensación de la saga: devuelve cupos, informa el reembolso, es idempotente y avisa a Booking', async () => {
-      const { fecha, slot } = await turno(14);
+      const { fecha, slot } = await turno(14, 2);
       const r = await v2().post('/atracciones/reservas').set('Idempotency-Key', randomUUID()).send(reserva(fecha, slot, { adult_count: 2 }));
       const c = await v2().post(`/atracciones/reservas/${r.body.reservation_id}/cancel`).set('Idempotency-Key', randomUUID())
         .send({ reason: 'SAGA_COMPENSATION_PARTNER_FAILURE', solicitante: 'SAGA_ORCHESTRATOR' });
@@ -301,7 +307,7 @@ describeDb('Contrato v2 final con Booking Prototipo (E2E)', () => {
     it('el panel ve la sincronización gRPC y el operador hace check-in desde la web (v1)', async () => {
       const admin = await login(app, USERS.admin);
       const o = await request(app.getHttpServer()).get('/api/v1/ops/resumen?rango=1h').set(bearer(admin)).set('X-Forwarded-For', freshIp());
-      expect(o.body.stock_sync).toMatchObject({ enabled: true, tls: false, service_id: 'atracciones-dilan' });
+      expect(o.body.stock_sync).toMatchObject({ enabled: true, tls: false, service_id: 'NODE_ATR_DILAN' });
       expect(o.body.stock_sync.enviados).toBeGreaterThan(0);
       const { fecha, slot } = await turno(15);
       const r = await v2().post('/atracciones/reservas').set('Idempotency-Key', randomUUID()).send(reserva(fecha, slot));
@@ -311,6 +317,97 @@ describeDb('Contrato v2 final con Booking Prototipo (E2E)', () => {
       const cli = await login(app, USERS.cliente);
       expect((await request(app.getHttpServer()).post(`/api/v1/atracciones/reservations/${r.body.reservation_id}/checkin`)
         .set(bearer(cli)).set('X-Forwarded-For', freshIp()).send({ documento_identidad: '1710034065' })).status).toBe(403);
+    });
+  });
+
+  /**
+   * Contrato v3 (contracts/atracciones-openapi-v3.yaml) y guía de integración de socios de Booking
+   * (docs/GUIA_INTEGRACION_SOCIOS.md): mismas rutas en /api/v3, cuerpo con nombres en inglés,
+   * `payment_method` como objeto, SLOT_TIME_MISMATCH y la compra despachada a {baseUrlRest}/reservas.
+   */
+  describe('contrato v3 y guía de integración de Booking', () => {
+    const v3 = () => {
+      const s = app.getHttpServer();
+      const w = (t: request.Test) => t.set('X-Forwarded-For', freshIp()).set('X-API-Key', API_KEY);
+      return { get: (u: string) => w(request(s).get(`/api/v3${u}`)), post: (u: string) => w(request(s).post(`/api/v3${u}`)) };
+    };
+    const base = (u: string) => request(app.getHttpServer()).post(u).set('X-Forwarded-For', freshIp()).set('X-API-Key', API_KEY);
+    const cuerpoV3 = (fecha: string, slot: { slot_id: string; time: string; time_24h: string }, extra: Record<string, unknown> = {}) => ({
+      attraction_id: atr.id, slot_id: slot.slot_id, date: fecha, time: slot.time, time_24h: slot.time_24h, adult_count: 1,
+      customer: cliente(), payment_method: { method: 'CREDIT_CARD' }, correlation_id: 'cid-v3-e2e', ...extra,
+    });
+
+    it('las rutas del contrato v3 responden en /api/v3 y la salud también en la URL base', async () => {
+      expect((await v3().get('/atracciones/health')).status).toBe(200);
+      expect((await v3().get('/atracciones/categorias/arbol')).status).toBe(200);
+      const h = await request(app.getHttpServer()).get('/api/v3/health');
+      expect(h.status).toBe(200);
+      expect(h.body).toMatchObject({ node_code: 'DILAN_ATRACCIONES' });
+      expect((await request(app.getHttpServer()).get('/api/v2/health')).status).toBe(200);
+      const d = await v3().get(`/atracciones/${atr.id}/disponibilidad?date=${fechaEc(16)}`);
+      expect(d.status).toBe(200);
+      expect(d.body.time_slots[0].slot_id).toMatch(/^slot-\d{8}-\d{4}$/);
+    });
+
+    it('201 con el cuerpo canónico v3 (inglés, payment_method objeto), Location v3 y la respuesta de la guía', async () => {
+      const { fecha, slot } = await turno(16);
+      const r = await v3().post('/atracciones/reservas').set('Idempotency-Key', randomUUID()).send(cuerpoV3(fecha, slot));
+      expect(r.status).toBe(201);
+      expect(r.headers.location).toBe(`/api/v3/atracciones/reservas/${r.body.reservation_id}`);
+      expect(r.body).toMatchObject({ success: true, message: expect.any(String), status: 'CONFIRMED', external_order_id: expect.stringMatching(/^ORD-/) });
+      expect((await v3().get(`/atracciones/reservas/${r.body.reservation_code}`)).body.reservation_id).toBe(r.body.reservation_id);
+      // El stock viaja por gRPC con el slot_id canónico (inventory.proto de la semana 9)
+      await esperar(() => grpcMock.recibidos.some((x) => x.msg.slot_id === slot.slot_id && x.msg.date === fecha));
+      const push = grpcMock.recibidos.find((x) => x.msg.slot_id === slot.slot_id)!.msg;
+      expect(Number(push.timestamp)).toBeGreaterThan(0);
+    });
+
+    it('400 SLOT_TIME_MISMATCH si date o time no coinciden con el slot_id; 400 si total_tickets no cuadra', async () => {
+      const { fecha, slot } = await turno(17);
+      const otraHora = await v3().post('/atracciones/reservas').set('Idempotency-Key', randomUUID())
+        .send(cuerpoV3(fecha, slot, { time: '11:59 p.m.', time_24h: undefined }));
+      expect(otraHora.status).toBe(400);
+      expect(otraHora.body.code).toBe('SLOT_TIME_MISMATCH');
+      const otraFecha = await v3().post('/atracciones/reservas').set('Idempotency-Key', randomUUID()).send(cuerpoV3(fechaEc(30), slot));
+      expect(otraFecha.status).toBe(400);
+      expect(otraFecha.body.code).toBe('SLOT_TIME_MISMATCH');
+      const total = await v3().post('/atracciones/reservas').set('Idempotency-Key', randomUUID()).send(cuerpoV3(fecha, slot, { total_tickets: 3 }));
+      expect(total.status).toBe(400);
+      expect(total.body.code).toBe('TOTAL_TICKETS_MISMATCH');
+    });
+
+    it('la compra despachada a {baseUrlRest}/reservas con el payload de la guía (customer.name, sin document_type ni payment_method)', async () => {
+      const { fecha, slot } = await turno(18, 3);
+      const guia = {
+        attraction_id: atr.id, date: fecha, time: slot.time, slot_id: slot.slot_id,
+        adult_count: 2, child_count: 1, senior_count: 0, infant_count: 0, total_tickets: 3,
+        customer: { name: 'María José Flores', email: 'turista@epn.edu.ec', phone: '+593991234567', document_id: '1710034065' },
+        special_requirements: 'Requiere audio-guía en inglés', booking_reservation_id: 'RES-ATR-A1B2C3',
+      };
+      const key = randomUUID();
+      const r = await base('/api/v2/reservas').set('Idempotency-Key', key).set('X-Correlation-Id', 'cid-guia-e2e').send(guia);
+      expect(r.status).toBe(201);
+      expect(r.body).toMatchObject({
+        success: true, reservation_id: expect.any(String), status: 'CONFIRMED', ticket_count: 3,
+        customer: { full_name: 'María José Flores', document_type: 'CEDULA' },
+      });
+      // Reintento de Booking con la misma clave: la misma reserva
+      const otra = await base('/api/v2/reservas').set('Idempotency-Key', key).send(guia);
+      expect(otra.body.reservation_id).toBe(r.body.reservation_id);
+      // Check-in de la guía (§7.1): documento + guia_asignado
+      const c = await base(`/api/v3/reservas/${r.body.reservation_id}/checkin`).set('Idempotency-Key', randomUUID())
+        .send({ documento_identidad: '1710034065', guia_asignado: 'Carlos Villacís (Licencia MINTUR-441)' });
+      expect(c.status).toBe(200);
+      expect(c.body.estado).toBe('CHECKED_IN');
+      // Sin cupos: 409 OUT_OF_STOCK, el único detonador de la compensación en Booking
+      const lleno = await base('/api/v2/reservas').set('Idempotency-Key', randomUUID()).send({ ...guia, adult_count: 49, child_count: 0, total_tickets: 49 });
+      expect(lleno.status).toBe(409);
+      expect(lleno.body.code).toBe('OUT_OF_STOCK');
+    });
+
+    it('sin credenciales sigue siendo 401 (el contrato v3 exige X-API-Key o JWT)', async () => {
+      const r = await request(app.getHttpServer()).post('/api/v3/reservas').set('X-Forwarded-For', freshIp()).set('Idempotency-Key', randomUUID()).send({});
+      expect(r.status).toBe(401);
     });
   });
 });

@@ -88,7 +88,20 @@
     ],
     "integracion_booking_v2": [
       "GET /v2/atracciones/vouchers/{codigo}/qr.png",
+      "GET /v3/atracciones/vouchers/{codigo}/qr.png",
       "POST /atracciones/reservations/{reservationId}/checkin"
+    ],
+    "integracion_booking_url_base": [
+      "GET /v2/health",
+      "POST /v2/reservas",
+      "GET /v2/reservas/{id}",
+      "POST /v2/reservas/{id}/cancel",
+      "POST /v2/reservas/{id}/checkin",
+      "GET /v3/health",
+      "POST /v3/reservas",
+      "GET /v3/reservas/{id}",
+      "POST /v3/reservas/{id}/cancel",
+      "POST /v3/reservas/{id}/checkin"
     ]
   }
 }

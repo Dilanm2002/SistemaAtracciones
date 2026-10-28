@@ -1,11 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Header, Headers, HttpCode, MiddlewareConsumer, Module, NestModule, Param, ParseUUIDPipe, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Headers, HttpCode, MiddlewareConsumer, Module, NestModule, Param, ParseUUIDPipe, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Scopes } from '../../common/auth/auth.decorators';
 import { JwtAuthGuard } from '../../common/auth/jwt-auth.guard';
 import { AuthUser, SCOPES } from '../../common/auth/scopes';
 import { BitacoraService } from '../../common/db/bitacora.service';
 import { ReservasService } from '../atracciones/reservas.service';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import * as QRCode from 'qrcode';
 import { CommonModule } from '../../common/common.module';
 import { IdempotencyKeyGuard } from '../../common/guards/idempotency-key.guard';
@@ -32,15 +32,24 @@ import { randomUUID } from 'crypto';
 const CORRELACION = { name: 'X-Correlation-Id', required: false, description: 'Trazabilidad distribuida: se devuelve igual y se guarda en logs y eventos' };
 const IDEMPOTENCIA = { name: 'Idempotency-Key', required: true, description: 'UUID v4: la misma clave repite la respuesta sin duplicar nada' };
 const API_KEY = { name: 'X-API-Key', required: false, description: 'Clave de Booking Prototipo (o Authorization: Bearer con un JWT de administrador)' };
+/** v2 (contrato final) y v3 (atracciones-openapi-v3.yaml) comparten rutas y lógica. */
+const VERSIONES = ['2', '3'];
+
+/** Versión de la URL pedida (/api/v3/... → 3) para armar el Location. */
+const versionDe = (req: Request) => /\/api\/v(\d+)\//.exec(req.originalUrl)?.[1] ?? '2';
+
+/** Respuesta 201 de la guía de integración ({ success, reservation_id, status, message }) + la ficha del contrato. */
+const confirmada = <T extends object>(r: T) => ({ success: true, message: 'Reserva confirmada exitosamente en Descubre EC.', ...r });
 
 /**
- * Contrato v2 con Booking Prototipo (contracts/atracciones-openapi-v2.yaml), servido en /api/v2.
+ * Contrato con Booking Prototipo: v2 (contracts/atracciones-openapi-v2.yaml) en /api/v2 y v3
+ * (contracts/atracciones-openapi-v3.yaml, mismas rutas) en /api/v3.
  * Seguridad según el contrato: catálogo, disponibilidad y salud son públicos (`security: []`); el resto
  * exige X-API-Key de Booking o el JWT de un administrador (SocioGuard). Las rutas fijas van antes de `:id`.
  */
 @ApiTags('Booking v2 (contrato RDA2)')
 @ApiHeader(CORRELACION)
-@Controller({ path: 'atracciones', version: '2' })
+@Controller({ path: 'atracciones', version: VERSIONES })
 export class AtraccionesV2Controller {
   constructor(
     private readonly catalogo: CatalogoV2Service,
@@ -117,10 +126,10 @@ export class AtraccionesV2Controller {
   @ApiOperation({ summary: 'Crear reserva (201 confirmada · 409 OUT_OF_STOCK activa la compensación de la saga)' })
   @ApiResponse({ status: 201 })
   @ApiResponse({ status: 409, description: 'OUT_OF_STOCK' })
-  async reservar(@Body() dto: CreateReservaRequestV2, @Headers('idempotency-key') key: string, @Res({ passthrough: true }) res: Response) {
+  async reservar(@Body() dto: CreateReservaRequestV2, @Headers('idempotency-key') key: string, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const r = await this.reservas.crear(dto, key);
-    res.setHeader('Location', `/api/v2/atracciones/reservas/${r.reservation_id}`);
-    return r;
+    res.setHeader('Location', `/api/v${versionDe(req)}/atracciones/reservas/${r.reservation_id}`);
+    return confirmada(r);
   }
 
   @Get('reservas/:id')
@@ -178,6 +187,69 @@ export class AtraccionesV2Controller {
 }
 
 /**
+ * Rutas en la URL base que se registra en Booking (GUIA_INTEGRACION_SOCIOS.md §5 y §8): Booking despacha
+ * la compra a `{baseUrlRest}/reservas` y el semáforo hace ping a la base. `baseUrlRest` es
+ * `http://<host>:<puerto>/api/v2` (o v3). Misma lógica, seguridad e idempotencia que /atracciones/reservas.
+ */
+@ApiTags('Booking v2 (contrato RDA2)')
+@ApiHeader(CORRELACION)
+@Controller({ version: VERSIONES })
+export class SocioBaseController {
+  constructor(
+    private readonly reservas: ReservasV2Service,
+    private readonly integracion: IntegracionV2Service,
+  ) {}
+
+  @Get('health')
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: '[Guía Booking] Salud del nodo en la URL base (igual que /atracciones/health)' })
+  async salud(@Res({ passthrough: true }) res: Response) {
+    const s = await this.integracion.salud();
+    if (s.status === 'DOWN') res.status(503);
+    return s.body;
+  }
+
+  @Post('reservas')
+  @UseGuards(SocioGuard, IdempotencyKeyGuard)
+  @ApiHeader(API_KEY)
+  @ApiHeader(IDEMPOTENCIA)
+  @ApiOperation({ summary: '[Guía Booking] Compra despachada por Booking a {baseUrlRest}/reservas (201 · 409 OUT_OF_STOCK)' })
+  async reservar(@Body() dto: CreateReservaRequestV2, @Headers('idempotency-key') key: string, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const r = await this.reservas.crear(dto, key);
+    res.setHeader('Location', `/api/v${versionDe(req)}/atracciones/reservas/${r.reservation_id}`);
+    return confirmada(r);
+  }
+
+  @Get('reservas/:id')
+  @UseGuards(SocioGuard)
+  @ApiHeader(API_KEY)
+  @ApiOperation({ summary: '[Guía Booking] Reserva por UUID o código PNR' })
+  reserva(@Param('id') id: string) {
+    return this.reservas.obtener(id);
+  }
+
+  @Post('reservas/:id/cancel')
+  @HttpCode(200)
+  @UseGuards(SocioGuard, IdempotencyKeyGuard)
+  @ApiHeader(API_KEY)
+  @ApiHeader(IDEMPOTENCIA)
+  @ApiOperation({ summary: '[Guía Booking] Cancelar / compensación de saga' })
+  cancelar(@Param('id') id: string, @Body() dto: CancelReservationRequestV2, @Headers('idempotency-key') key: string) {
+    return this.reservas.cancelar(id, dto ?? {}, key);
+  }
+
+  @Post('reservas/:id/checkin')
+  @HttpCode(200)
+  @UseGuards(SocioGuard, IdempotencyKeyGuard)
+  @ApiHeader(API_KEY)
+  @ApiHeader(IDEMPOTENCIA)
+  @ApiOperation({ summary: '[Guía Booking] Check-in presencial' })
+  checkin(@Param('id') id: string, @Body() dto: CheckinRequestV2, @Headers('idempotency-key') key: string) {
+    return this.reservas.checkin(id, dto, key);
+  }
+}
+
+/**
  * Check-in desde el panel de la web (v1, con sesión): el personal de la empresa operadora o el
  * administrador registra la llegada del titular con su documento. Misma lógica que el contrato v2.
  */
@@ -212,12 +284,12 @@ export class CheckinPanelController {
 
 @Module({
   imports: [CommonModule, AtraccionesModule],
-  controllers: [AtraccionesV2Controller, CheckinPanelController],
+  controllers: [AtraccionesV2Controller, SocioBaseController, CheckinPanelController],
   providers: [CatalogoV2Service, ReservasV2Service, IntegracionV2Service, MapperV2, SocioGuard],
   exports: [ReservasV2Service],
 })
 export class BookingV2Module implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(AliasV2Middleware).forRoutes(AtraccionesV2Controller);
+    consumer.apply(AliasV2Middleware).forRoutes(AtraccionesV2Controller, SocioBaseController);
   }
 }

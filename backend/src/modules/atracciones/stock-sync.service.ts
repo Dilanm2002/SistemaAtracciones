@@ -7,7 +7,7 @@ import { DbService } from '../../common/db/db.service';
 import { contextoActual, msDesde } from '../../common/observabilidad/contexto';
 import { despuesDeResponder, limpiar } from '../../common/observabilidad/metricas-http';
 import { stockDeTurno } from './compras';
-import { hora12 } from './utils/hora12';
+import { hora12, parseHora } from './utils/hora12';
 
 /** Motivo del envío (se guarda en ops.sync_stock para el panel de Observabilidad). */
 export type MotivoStock = 'VENTA' | 'CANCELACION' | 'CHECKIN' | 'AFORO';
@@ -23,7 +23,13 @@ interface StockUpdateAck {
   success: boolean;
   message: string;
   processed_at: string;
+  /** OK · STALE_TIMESTAMP_IGNORED · ITEM_NOT_FOUND · INVALID_SLOT (inventory.proto de la semana 9) */
+  error_code?: string;
+  current_available?: number;
 }
+
+/** Clave canónica del turno: slot-AAAAMMDD-HHMM (la misma que devuelve la disponibilidad REST). */
+export const slotId = (fecha: string, hora24: string) => `slot-${fecha.replace(/-/g, '')}-${hora24.replace(':', '')}`;
 
 type ClienteInventario = grpc.Client & {
   PushStockUpdate(
@@ -57,9 +63,12 @@ export class StockSyncService {
     private readonly config: ConfigService,
   ) {}
 
-  /** Destino gRPC de Booking: grpc://booking.epn.edu.ec:50051 (local: localhost:50051). */
+  /**
+   * Destino gRPC de Booking. Guía de socios §3: rda1-backend-integracion-sistemas.onrender.com:50051 en la nube;
+   * en la prueba local, la IP de Tailscale de Booking (p. ej. 100.x.y.z:50051) en BOOKING_GRPC_URL.
+   */
   get destino(): string {
-    return (this.config.get<string>('BOOKING_GRPC_URL') ?? 'booking.epn.edu.ec:50051').replace(/^grpcs?:\/\//, '');
+    return (this.config.get<string>('BOOKING_GRPC_URL') ?? 'rda1-backend-integracion-sistemas.onrender.com:50051').replace(/^grpcs?:\/\//, '');
   }
 
   get habilitado(): boolean {
@@ -67,15 +76,20 @@ export class StockSyncService {
     return v ? v === 'true' : this.config.get<string>('NODE_ENV') !== 'test';
   }
 
-  /** TLS en producción pública; h2c (sin TLS) en red interna, Docker o local. */
+  /**
+   * TLS en producción pública; h2c (sin TLS) en red interna, Docker, local o Tailscale
+   * (IP 100.64.0.0/10 o nombre *.ts.net), redes privadas 10/8, 172.16/12 y 192.168/16.
+   */
   private get tls(): boolean {
     const v = this.config.get<string>('BOOKING_GRPC_TLS');
     if (v) return v === 'true';
-    return !/^(localhost|127\.|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal|[a-z0-9-]+:\d+$)/i.test(this.destino);
+    const host = this.destino.replace(/:\d+$/, '');
+    return !/^(localhost|127\.|0\.0\.0\.0|\[?::1\]?|host\.docker\.internal|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|[a-z0-9-]+$)/i.test(host)
+      && !/\.ts\.net$/i.test(host);
   }
 
   get serviceId(): string {
-    return this.config.get<string>('BOOKING_SERVICE_ID') ?? 'atracciones-dilan';
+    return this.config.get<string>('BOOKING_SERVICE_ID') ?? 'NODE_ATR_DILAN';
   }
 
   private obtenerCliente(): ClienteInventario {
@@ -158,30 +172,40 @@ export class StockSyncService {
 
   /** Un intento de PushStockUpdate para la fila `id`; actualiza su estado. */
   private async intentar(id: string): Promise<boolean> {
-    const f = await this.db.one<{ item: string; fecha: string; turno: string; disponibles: number }>(
-      `SELECT ss_item_id AS item, to_char(ss_fecha, 'YYYY-MM-DD') AS fecha, ss_turno AS turno, ss_disponibles AS disponibles
+    const f = await this.db.one<{ item: string; fecha: string; turno: string; disponibles: number; creado_ms: string }>(
+      `SELECT ss_item_id AS item, to_char(ss_fecha, 'YYYY-MM-DD') AS fecha, ss_turno AS turno, ss_disponibles AS disponibles,
+              (extract(epoch FROM ss_creado_en) * 1000)::bigint::text AS creado_ms
          FROM ops.sync_stock WHERE ss_id = $1`,
       [id],
     );
     if (!f) return false;
     const inicio = process.hrtime.bigint();
     try {
+      const hora24 = parseHora(f.turno) ?? f.turno;
       const ack = await this.push({
         service_id: this.serviceId,
         item_id: f.item,
         date: f.fecha,
         time_slot: f.turno,
         available_units: f.disponibles,
-        timestamp: Date.now(),
+        // Momento del cambio (no del reintento): Booking descarta lo que llegue con un timestamp menor al último
+        timestamp: f.creado_ms,
+        slot_id: slotId(f.fecha, hora24),
       });
       const ok = ack.success !== false;
+      // Un valor más nuevo del mismo turno ya llegó: no es un error ni se reintenta
+      const obsoleto = !ok && ack.error_code === 'STALE_TIMESTAMP_IGNORED';
+      const estado = ok ? 'ENVIADO' : obsoleto ? 'DESCARTADO' : 'ERROR';
+      const detalle = [ack.error_code && ack.error_code !== 'OK' ? ack.error_code : null, ack.message || (ok ? 'OK' : 'Rechazado por Booking'),
+        ack.current_available !== undefined && ack.current_available !== null ? `Booking: ${ack.current_available} cupos` : null]
+        .filter(Boolean).join(' · ');
       await this.db.query(
         `UPDATE ops.sync_stock SET ss_estado = $2::varchar, ss_intentos = ss_intentos + 1, ss_latencia_ms = $3, ss_respuesta = $4,
                                    ss_enviado_en = CASE WHEN $2::varchar = 'ENVIADO' THEN now() ELSE ss_enviado_en END
           WHERE ss_id = $1`,
-        [id, ok ? 'ENVIADO' : 'ERROR', Math.round(msDesde(inicio)), limpiar(ack.message || (ok ? 'OK' : 'Rechazado por Booking'), 300)],
+        [id, estado, Math.round(msDesde(inicio)), limpiar(detalle, 300)],
       );
-      return ok;
+      return ok || obsoleto;
     } catch (e) {
       const err = e as grpc.ServiceError;
       const detalle = `${grpc.status[err.code] ?? 'ERROR'}: ${err.details || err.message}`;

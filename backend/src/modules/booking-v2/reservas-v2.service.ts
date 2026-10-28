@@ -106,10 +106,17 @@ export class ReservasV2Service {
     }
     const hora = parseHora(dto.hora);
     if (!hora) throw new BadRequestException('hora no es válida: usa HH:mm:ss (24 h) o el formato del turno, p. ej. «10:30 a.m.».');
-    // El turno (slot_id) manda: debe ser el mismo día y hora que fecha y hora
+    // El turno (slot_id) manda: fecha y hora, y también `date`/`time` si llegan los dos nombres (v3 §1.1.2)
     const [, diaSlot, horaSlot] = /^slot-(\d{8})-(\d{4})$/.exec(dto.slot_id)!;
-    if (diaSlot !== dto.fecha.slice(0, 10).replace(/-/g, '') || horaSlot !== hora.replace(':', '')) {
-      throw new BadRequestException(`slot_id ${dto.slot_id} no corresponde a la fecha ${dto.fecha.slice(0, 10)} y hora ${hora}.`);
+    const fechas = [dto.fecha, dto.date].filter((f): f is string => typeof f === 'string').map((f) => f.slice(0, 10));
+    const horas = [hora, ...[dto.time, dto.time_24h].filter((h): h is string => typeof h === 'string').map((h) => parseHora(h))];
+    const fechaMal = fechas.find((f) => f.replace(/-/g, '') !== diaSlot);
+    const horaMal = horas.find((h) => !h || h.replace(':', '') !== horaSlot);
+    if (fechaMal !== undefined || horaMal !== undefined) {
+      throw new BadRequestException({
+        message: `El slot_id ${dto.slot_id} no corresponde a ${fechaMal !== undefined ? `la fecha ${fechaMal}` : `la hora ${horaMal ?? dto.time}`}.`,
+        code: 'SLOT_TIME_MISMATCH',
+      });
     }
     this.validarDocumento(dto.customer.document_type, dto.customer.document_id);
     const ninos = dto.child_count ?? 0;
@@ -118,6 +125,9 @@ export class ReservasV2Service {
     const estudiantes = dto.student_count ?? 0;
     const tickets = dto.adult_count + ninos + seniors + infantes + estudiantes;
     if (tickets > 50) throw new BadRequestException('Una reserva admite como máximo 50 boletos.');
+    if (dto.total_tickets !== undefined && dto.total_tickets !== tickets) {
+      throw new BadRequestException({ message: `total_tickets (${dto.total_tickets}) no coincide con la suma de los boletos (${tickets}).`, code: 'TOTAL_TICKETS_MISMATCH' });
+    }
     if ((dto.passengers?.length ?? 0) > tickets - 1) {
       throw new BadRequestException('passengers tiene más acompañantes que boletos (el titular ya ocupa uno).');
     }

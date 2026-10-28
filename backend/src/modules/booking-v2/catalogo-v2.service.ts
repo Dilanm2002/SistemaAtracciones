@@ -35,6 +35,9 @@ export interface NodoCategoria {
   incluye_comida: boolean;
   incluye_transporte: boolean;
   incluye_guia: boolean;
+  includes_food: boolean;
+  includes_transport: boolean;
+  includes_guide: boolean;
   orden: number;
   subcategorias: NodoCategoria[];
 }
@@ -71,6 +74,10 @@ export class CatalogoV2Service {
       incluye_comida: c.comida,
       incluye_transporte: c.transporte,
       incluye_guia: c.guia,
+      // Guía de integración §7.3: también en inglés
+      includes_food: c.comida,
+      includes_transport: c.transporte,
+      includes_guide: c.guia,
       orden: c.orden,
       subcategorias: hijos,
     };
@@ -107,6 +114,9 @@ export class CatalogoV2Service {
         incluye_comida: c.comida,
         incluye_transporte: c.transporte,
         incluye_guia: c.guia,
+        includes_food: c.comida,
+        includes_transport: c.transporte,
+        includes_guide: c.guia,
       }));
   }
 
@@ -231,7 +241,7 @@ export class CatalogoV2Service {
     return this.mapper.detalle(f, acuerdo);
   }
 
-  /** Turnos del día con cupos y estado (DISPONIBLE, ULTIMOS_CUPOS ≤ 3, AGOTADO). */
+  /** Turnos del día con cupos y estado (DISPONIBLE, ULTIMOS_CUPOS de 1 a 5 —regla confirmada por Booking—, AGOTADO). */
   async disponibilidad(ref: string, fecha: string) {
     const f = await this.fila(ref);
     const dia = fecha.slice(0, 10);
@@ -251,17 +261,26 @@ export class CatalogoV2Service {
     const slots = turnos.map((t) => {
       // Una salida de hoy que ya partió no se puede reservar
       const libres = dia === hoy && t.hora <= ahora ? 0 : t.disponibles;
+      const estado = libres === 0 ? 'AGOTADO' : libres <= 5 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE';
+      const adulto = f.precio_adulto ?? 0;
+      const nino = f.precio_nino ?? f.precio_adulto ?? 0;
       return {
         slot_id: `slot-${dia.replace(/-/g, '')}-${t.hora.replace(':', '')}`,
         time: hora12(t.hora),
         hora: hora12(t.hora),
         time_24h: `${t.hora}:00`,
         hora_24h: `${t.hora}:00`,
+        // v3 (TimeSlotItem): nombres en inglés obligatorios; los de v2 en español se mantienen
+        total_slots: t.total,
+        available_slots: libres,
+        status: estado,
+        price_adult: adulto,
+        price_child: nino,
         cupos_totales: t.total,
         cupos_disponibles: libres,
-        estado: libres === 0 ? 'AGOTADO' : libres <= 3 ? 'ULTIMOS_CUPOS' : 'DISPONIBLE',
-        precio_adulto_slot: f.precio_adulto ?? 0,
-        precio_nino_slot: f.precio_nino ?? f.precio_adulto ?? 0,
+        estado,
+        precio_adulto_slot: adulto,
+        precio_nino_slot: nino,
       };
     });
     const total = slots.reduce((s, x) => s + x.cupos_disponibles, 0);

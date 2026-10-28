@@ -176,6 +176,7 @@ export class CustomerContactV2 {
   @ApiPropertyOptional() @IsOptional() @Allow() telefono?: string;
   @ApiPropertyOptional() @IsOptional() @Allow() tipo_documento?: string;
   @ApiPropertyOptional() @IsOptional() @Allow() numero_documento?: string;
+  @ApiPropertyOptional({ description: 'Alias de full_name (guía de integración de Booking)' }) @IsOptional() @Allow() name?: string;
 }
 
 export class PassengerItemV2 {
@@ -278,6 +279,19 @@ export class CreateReservaRequestV2 {
   @ApiPropertyOptional() @IsOptional() @Allow() cantidad_infantes?: number;
   @ApiPropertyOptional() @IsOptional() @Allow() metodo_pago?: string;
   @ApiPropertyOptional() @IsOptional() @Allow() observaciones?: string;
+
+  // Nombres canónicos del contrato v3 y de la guía de integración de Booking
+  @ApiPropertyOptional({ description: 'v3: alias de atraccion_id' }) @IsOptional() @Allow() attraction_id?: string;
+  @ApiPropertyOptional({ description: 'v3: alias de fecha; debe coincidir con el slot_id' }) @IsOptional() @Allow() date?: string;
+  @ApiPropertyOptional({ description: 'v3: «10:30 a.m.» o «10:30:00»; debe coincidir con el slot_id' }) @IsOptional() @Allow() time?: string;
+  @ApiPropertyOptional({ description: 'Guía de Booking: si llega, debe ser la suma de los boletos' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  total_tickets?: number;
+  @ApiPropertyOptional({ description: 'Guía de Booking: id de la reserva en Booking (se guarda como saga_id)' }) @IsOptional() @Allow() booking_reservation_id?: string;
+  @ApiPropertyOptional({ description: 'v3: identificador de correlación en el cuerpo (la cabecera X-Correlation-Id manda)' }) @IsOptional() @Allow() correlation_id?: string;
 }
 
 export class CancelReservationRequestV2 {
@@ -305,6 +319,7 @@ export class CheckinRequestV2 {
   @ApiPropertyOptional({ example: 'DEC-7F3K9Q' }) @IsOptional() @IsString() @MaxLength(600) codigo_voucher_qr?: string;
   @ApiPropertyOptional({ example: 'GUIA-CARLOS-01' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(60) guia_codigo?: string;
   @ApiPropertyOptional({ example: 'SCANNER-TERMINAL-04' }) @IsOptional() @Transform(trim) @IsString() @MaxLength(60) scanner_device_id?: string;
+  @ApiPropertyOptional({ description: 'Guía de Booking: alias de guia_codigo' }) @IsOptional() @Allow() guia_asignado?: string;
 }
 
 // ── Promociones B2B ───────────────────────────────────────────────────────

@@ -13,8 +13,8 @@ import { join } from 'path';
  *     administración, autenticación, catálogos…) en contracts/operaciones-internas.json.
  *  3. La lista de internas no tiene entradas obsoletas.
  * Así una ruta nueva sin documentar, o una promesa del contrato sin implementar, rompe CI.
- * Lo mismo para el contrato v2 con Booking (atracciones-openapi-v2.yaml): sus rutas se comparan con
- * los controladores de la versión 2 (/api/v2) y se distinguen con el prefijo «/v2».
+ * Lo mismo para los contratos con Booking: v2 (atracciones-openapi-v2.yaml) y v3 (atracciones-openapi-v3.yaml)
+ * se comparan con los controladores de esas versiones (/api/v2, /api/v3) y se distinguen con «/v2» y «/v3».
  */
 const RAIZ = join(__dirname, '..');
 const norm = (p: string) => ('/' + p).replace(/\/+/g, '/').replace(/\/$/, '').replace(/:[\w]+/g, '{}').replace(/\{[\w]+\}/g, '{}') || '/';
@@ -34,14 +34,15 @@ function implementadas(): Set<string> {
     for (const cls of Object.values(mod)) {
       if (typeof cls !== 'function' || !Reflect.getMetadata('__controller__', cls)) continue;
       const bases = ([] as string[]).concat(Reflect.getMetadata(PATH_METADATA, cls) ?? '');
-      const v2 = ([] as string[]).concat(Reflect.getMetadata(VERSION_METADATA, cls) ?? []).includes('2') ? '/v2' : '';
+      const versiones = ([] as string[]).concat(Reflect.getMetadata(VERSION_METADATA, cls) ?? []).filter((v) => v === '2' || v === '3');
+      const prefijos = versiones.length ? versiones.map((v) => `/v${v}`) : [''];
       const proto = (cls as { prototype: object }).prototype;
       for (const nombre of Object.getOwnPropertyNames(proto)) {
         const handler = (proto as Record<string, unknown>)[nombre];
         if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) === undefined) continue;
         const metodo = RequestMethod[Reflect.getMetadata(METHOD_METADATA, handler) as number];
         const rutas = ([] as string[]).concat(Reflect.getMetadata(PATH_METADATA, handler) ?? '');
-        for (const b of bases) for (const r of rutas) ops.add(`${metodo} ${v2}${norm(`${b}/${r}`)}`);
+        for (const pre of prefijos) for (const b of bases) for (const r of rutas) ops.add(`${metodo} ${pre}${norm(`${b}/${r}`)}`);
       }
     }
   }
@@ -50,8 +51,9 @@ function implementadas(): Set<string> {
 
 function delContrato(): Set<string> {
   const ops = new Set<string>();
-  for (const [archivo, prefijo] of [['atracciones-openapi.yaml', ''], ['atracciones-openapi-v2.yaml', '/v2']]) {
-    const doc = load(readFileSync(join(RAIZ, 'contracts', archivo), 'utf8')) as { paths: Record<string, Record<string, unknown>> };
+  for (const [archivo, prefijo] of [['atracciones-openapi.yaml', ''], ['atracciones-openapi-v2.yaml', '/v2'], ['atracciones-openapi-v3.yaml', '/v3']]) {
+    // json: el v3 oficial de Booking repite claves en TimeSlotItem; se toma la última (solo se leen las rutas)
+    const doc = load(readFileSync(join(RAIZ, 'contracts', archivo), 'utf8'), { json: true }) as { paths: Record<string, Record<string, unknown>> };
     for (const [ruta, item] of Object.entries(doc.paths)) {
       for (const m of METODOS) if (item[m]) ops.add(`${m.toUpperCase()} ${prefijo}${norm(ruta)}`);
     }
@@ -65,7 +67,8 @@ describe('Cobertura del contrato OpenAPI frente a la implementación (API-015)',
   const internas = new Set(
     Object.values((JSON.parse(readFileSync(join(RAIZ, 'contracts', 'operaciones-internas.json'), 'utf8')) as { grupos: Record<string, string[]> }).grupos).flat().map((o) => {
       const [m, r] = o.split(' ');
-      return r.startsWith('/v2/') ? `${m} /v2${norm(r.slice(3))}` : `${m} ${norm(r)}`;
+      const v = /^\/(v[23])\//.exec(r)?.[1];
+      return v ? `${m} /${v}${norm(r.slice(3))}` : `${m} ${norm(r)}`;
     }),
   );
 
