@@ -1,0 +1,264 @@
+openapi: 3.0.3
+info:
+  title: Review Service (ms_review) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 5 del equipo: **reseñas y puntuaciones** de los clientes.
+
+    - Base de datos propia `ms_review`: tabla `resena` del script del equipo + `002_pilares_y_outbox.sql`
+      (notas por pilar que exige el contrato v3 de Booking y outbox de eventos).
+    - **IDs lógicos (sin FK):** `atr_id` → ms_catalog (se valida por su API) · `usu_id` → ms_identity (del JWT).
+    - **Publica `RESENA_PUBLICADA`** (reemplaza al trigger `trg_resena_calificacion`): cada reseña nueva u
+      ocultada/mostrada envía a ms_catalog el promedio, el total y los pilares (`POST /v1/internal/eventos` de
+      ms_catalog, cabecera `X-Servicio-Token`). Formato del evento: esquema `EventoResenaPublicada`.
+    - Una reseña por usuario y atracción (409). Anónimas: sin token y con `ren_autor_nombre` (regla del script).
+    - Errores RFC 7807. Cabecera opcional `X-Correlation-Id` (viaja también en el evento).
+  contact:
+    name: Dilan Mena (responsable de ms_location, ms_catalog y ms_review)
+servers:
+  - url: http://localhost:4003/api/v1
+    description: Local
+tags:
+  - name: Reseñas
+  - name: Salud
+paths:
+  /resenas:
+    get:
+      tags: [Reseñas]
+      summary: Reseñas visibles de una atracción (las más nuevas primero)
+      operationId: listarResenas
+      parameters:
+        - { name: atr_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Página
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, total, page, limit]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Resena' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+        '400': { $ref: '#/components/responses/Problema' }
+    post:
+      tags: [Reseñas]
+      summary: Publicar una reseña (con token, del usuario; sin token, anónima con ren_autor_nombre)
+      operationId: crearResena
+      security: [{}, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearResena' }
+      responses:
+        '201':
+          description: Publicada (y RESENA_PUBLICADA queda en el outbox)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resena' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '409': { $ref: '#/components/responses/Problema' }
+        '422': { $ref: '#/components/responses/Problema' }
+        '503': { $ref: '#/components/responses/Problema' }
+  /resenas/resumen:
+    get:
+      tags: [Reseñas]
+      summary: Promedio, total y pilares de una atracción (lo mismo que viaja en RESENA_PUBLICADA)
+      operationId: resumenResenas
+      parameters:
+        - { name: atr_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Resumen
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResumenResenas' }
+        '400': { $ref: '#/components/responses/Problema' }
+  /resenas/eventos/reintentar:
+    post:
+      tags: [Reseñas]
+      summary: (ADMIN) Volver a encolar los eventos apartados tras 20 envíos fallidos
+      operationId: reintentarEventos
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Cuántos eventos volvieron a la cola
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [reencolados]
+                properties:
+                  reencolados: { type: integer }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+  /resenas/{ren_id}:
+    get:
+      tags: [Reseñas]
+      summary: Una reseña
+      operationId: obtenerResena
+      parameters:
+        - { name: ren_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Reseña
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resena' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /resenas/{ren_id}/visibilidad:
+    patch:
+      tags: [Reseñas]
+      summary: Ocultar o mostrar una reseña (ADMIN); recalcula y publica RESENA_PUBLICADA
+      operationId: cambiarVisibilidad
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: ren_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ren_visible]
+              properties:
+                ren_visible: { type: boolean }
+      responses:
+        '200':
+          description: Actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resena' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio
+      operationId: salud
+      responses:
+        '200':
+          description: Operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT de ms_identity (HS256). Se usan sub (usu_id) y rol.
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Resena:
+      type: object
+      additionalProperties: false
+      required: [ren_id, atr_id, usu_id, ren_autor_nombre, ren_puntuacion, ren_comentario, ren_visible, ren_creado_en]
+      properties:
+        ren_id: { type: integer }
+        atr_id: { type: integer, description: ID lógico de ms_catalog }
+        usu_id: { type: integer, nullable: true, description: ID lógico de ms_identity (null = anónima) }
+        ren_autor_nombre: { type: string, nullable: true, description: Solo en reseñas anónimas }
+        ren_puntuacion: { type: integer, minimum: 1, maximum: 5 }
+        ren_comentario: { type: string, maxLength: 1000 }
+        ren_visible: { type: boolean }
+        ren_creado_en: { type: string, format: date-time }
+        ren_limpieza: { type: integer, minimum: 1, maximum: 5, nullable: true }
+        ren_servicio: { type: integer, minimum: 1, maximum: 5, nullable: true }
+        ren_relacion_valor: { type: integer, minimum: 1, maximum: 5, nullable: true }
+        ren_puntualidad: { type: integer, minimum: 1, maximum: 5, nullable: true }
+    CrearResena:
+      type: object
+      additionalProperties: false
+      required: [atr_id, ren_puntuacion, ren_comentario]
+      properties:
+        atr_id: { type: integer, minimum: 1 }
+        ren_puntuacion: { type: integer, minimum: 1, maximum: 5 }
+        ren_comentario: { type: string, minLength: 10, maxLength: 1000 }
+        ren_autor_nombre: { type: string, minLength: 2, maxLength: 120, description: Obligatorio sin token }
+        ren_limpieza: { type: integer, minimum: 1, maximum: 5 }
+        ren_servicio: { type: integer, minimum: 1, maximum: 5 }
+        ren_relacion_valor: { type: integer, minimum: 1, maximum: 5 }
+        ren_puntualidad: { type: integer, minimum: 1, maximum: 5 }
+    ResumenResenas:
+      type: object
+      additionalProperties: false
+      required: [atr_id, atr_calificacion_promedio, atr_numero_resenas, pilares]
+      properties:
+        atr_id: { type: integer }
+        atr_calificacion_promedio: { type: number, minimum: 0, maximum: 5 }
+        atr_numero_resenas: { type: integer, minimum: 0 }
+        pilares:
+          type: object
+          additionalProperties: false
+          required: [limpieza, servicio, relacion_valor, puntualidad]
+          properties:
+            limpieza: { type: number, nullable: true }
+            servicio: { type: number, nullable: true }
+            relacion_valor: { type: number, nullable: true }
+            puntualidad: { type: number, nullable: true }
+    EventoResenaPublicada:
+      type: object
+      description: Evento que ms_review envía a ms_catalog (POST /api/v1/internal/eventos) — formato CloudEvents.
+      required: [specversion, event_id, event_type, source, correlation_id, timestamp, data]
+      properties:
+        specversion: { type: string, enum: ['1.0'] }
+        event_id: { type: string, format: uuid }
+        event_type: { type: string, enum: [RESENA_PUBLICADA] }
+        source: { type: string, example: /api/v1/ms-review }
+        correlation_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        data: { $ref: '#/components/schemas/ResumenResenas' }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        invalid_params:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              reason: { type: string }

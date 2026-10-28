@@ -1,0 +1,26 @@
+{
+  "name": "descubre-ec-microservicios",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Microservicios de Descubre EC (ms_location, ms_catalog, ms_review) y el API Gateway que los integra con Booking Prototipo",
+  "workspaces": [
+    "ms-location",
+    "ms-catalog",
+    "ms-review",
+    "gateway"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "test": "npm test --workspaces",
+    "db:up": "docker compose up -d",
+    "migrar": "npm run build -w ms-location -w ms-catalog -w ms-review && node scripts/migrar-desde-tienda.js"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "overrides": {
+    "@nestjs/platform-express": {
+      "multer": "2.5.0"
+    }
+  }
+}

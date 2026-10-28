@@ -1,0 +1,661 @@
+openapi: 3.0.3
+info:
+  title: Catalog & Attractions Service (ms_catalog) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 4 del equipo: **ficha de la atracción, árbol de categorías, idiomas, inclusiones, fotos,
+    itinerario y operadores**.
+
+    - Base de datos propia `ms_catalog`: tablas del script del equipo + `002_campos_booking.sql`
+      (banderas de inclusión, accesibilidad, paquetes, itinerario y proyecciones que exige el contrato v3 de Booking).
+    - **IDs lógicos (sin FK):** `ciu_id` → ms_location · `operador_usuario.usu_id` → ms_identity.
+    - **Proyecciones por eventos:** calificación y pilares ← `RESENA_PUBLICADA` (ms_review); precio vigente ←
+      `PRECIO_ACTUALIZADO` (ms_pricing). Se reciben en `POST /v1/internal/eventos`.
+    - **Rutas del contrato con Booking** (`/v2` y `/v3`): mismos esquemas que
+      [`booking-atracciones-v3.yaml`](booking-atracciones-v3.yaml) (el contrato oficial, sin modificar).
+    - Errores RFC 7807. Cabecera opcional `X-Correlation-Id`.
+    - Escrituras: `Authorization: Bearer <JWT>` de ms_identity (rol ADMIN u OPERADOR de la empresa).
+  contact:
+    name: Dilan Mena (responsable de ms_location, ms_catalog y ms_review)
+servers:
+  - url: http://localhost:4002/api
+    description: Local
+tags:
+  - name: Booking (contrato v3)
+  - name: Catálogo
+  - name: Atracciones
+  - name: Eventos
+  - name: Salud
+paths:
+  # ── Contrato con Booking (también en /v2) ────────────────────────────────
+  /v3/atracciones/categorias/arbol:
+    get:
+      tags: [Booking (contrato v3)]
+      summary: Árbol de categorías con banderas de inclusión
+      operationId: bookingArbol
+      responses:
+        '200':
+          description: Árbol
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: 'booking-atracciones-v3.yaml#/components/schemas/CategoryTreeNode'
+  /v3/atracciones/categorias:
+    get:
+      tags: [Booking (contrato v3)]
+      summary: Categorías planas (hijas de padre_id o raíz)
+      operationId: bookingCategorias
+      parameters:
+        - { name: padre_id, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Categorías
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: 'booking-atracciones-v3.yaml#/components/schemas/CategoryFlat'
+  /v3/atracciones/search:
+    post:
+      tags: [Booking (contrato v3)]
+      summary: Búsqueda avanzada (con fechas consulta la disponibilidad de la tienda / ms_inventory)
+      operationId: bookingSearch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: 'booking-atracciones-v3.yaml#/components/schemas/SearchAtraccionesRequestV2'
+      responses:
+        '200':
+          description: Resultados
+          content:
+            application/json:
+              schema:
+                $ref: 'booking-atracciones-v3.yaml#/components/schemas/SearchAtraccionesResponseV2'
+        '400':
+          $ref: '#/components/responses/Problema'
+  /v3/atracciones:
+    get:
+      tags: [Booking (contrato v3)]
+      summary: Listado paginado (city = nombre de la ciudad, resuelto en ms_location)
+      operationId: bookingListar
+      parameters:
+        - { name: city, in: query, schema: { type: string } }
+        - { name: categoria_id, in: query, schema: { type: string } }
+        - { name: incluye_comida, in: query, schema: { type: boolean } }
+        - { name: incluye_transporte, in: query, schema: { type: boolean } }
+        - { name: incluye_guia, in: query, schema: { type: boolean } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+        - { name: sort, in: query, schema: { type: string, enum: [PRICE_ASC, PRICE_DESC, RATING_DESC, POPULARITY] } }
+      responses:
+        '200':
+          description: Página
+          content:
+            application/json:
+              schema:
+                $ref: 'booking-atracciones-v3.yaml#/components/schemas/SearchAtraccionesResponseV2'
+        '400':
+          $ref: '#/components/responses/Problema'
+  /v3/atracciones/{id}:
+    get:
+      tags: [Booking (contrato v3)]
+      summary: Ficha completa por UUID o slug (solo publicadas)
+      operationId: bookingDetalle
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Ficha
+          content:
+            application/json:
+              schema:
+                $ref: 'booking-atracciones-v3.yaml#/components/schemas/AtraccionDetailResponseV2'
+        '404':
+          $ref: '#/components/responses/Problema'
+
+  # ── API propia (nombres de columna) ──────────────────────────────────────
+  /v1/categorias:
+    get:
+      tags: [Catálogo]
+      summary: Todas las categorías (incluye inactivas)
+      operationId: listarCategorias
+      responses:
+        '200':
+          description: Categorías
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Categoria' }
+  /v1/categorias/arbol:
+    get:
+      tags: [Catálogo]
+      summary: Árbol de categorías activas (mismo formato que el contrato con Booking)
+      operationId: arbolCategorias
+      responses:
+        '200':
+          description: Árbol
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/NodoCategoria' }
+  /v1/categorias/{cat_id}:
+    get:
+      tags: [Catálogo]
+      summary: Una categoría
+      operationId: obtenerCategoria
+      parameters:
+        - { name: cat_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Categoría
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Categoria' }
+        '404':
+          $ref: '#/components/responses/Problema'
+  /v1/idiomas:
+    get:
+      tags: [Catálogo]
+      summary: Idiomas de guía (ISO 639-1)
+      operationId: listarIdiomas
+      responses:
+        '200':
+          description: Idiomas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Idioma' }
+  /v1/inclusiones:
+    get:
+      tags: [Catálogo]
+      summary: Qué incluye / no incluye / recomendaciones
+      operationId: listarInclusiones
+      responses:
+        '200':
+          description: Inclusiones
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Inclusion' }
+  /v1/operadores:
+    get:
+      tags: [Catálogo]
+      summary: Empresas operadoras
+      operationId: listarOperadores
+      responses:
+        '200':
+          description: Operadores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Operador' }
+  /v1/operadores/{ope_id}:
+    get:
+      tags: [Catálogo]
+      summary: Una empresa operadora
+      operationId: obtenerOperador
+      parameters:
+        - { name: ope_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '200':
+          description: Operador
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Operador' }
+        '404':
+          $ref: '#/components/responses/Problema'
+  /v1/atracciones:
+    get:
+      tags: [Atracciones]
+      summary: Atracciones no eliminadas (todas las de estado, para el panel)
+      operationId: listarAtracciones
+      parameters:
+        - { name: atr_estado, in: query, schema: { type: string, enum: [BORRADOR, PUBLICADA, INACTIVA] } }
+        - { name: ciu_id, in: query, schema: { type: integer } }
+        - { name: ope_id, in: query, schema: { type: integer } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Página
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, total, page, limit]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Atraccion' }
+                  total: { type: integer }
+                  page: { type: integer }
+                  limit: { type: integer }
+        '400':
+          $ref: '#/components/responses/Problema'
+    post:
+      tags: [Atracciones]
+      summary: Crear atracción (ADMIN con ope_id, u OPERADOR para su empresa). Nace en BORRADOR.
+      operationId: crearAtraccion
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearAtraccion' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Atraccion' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+        '422': { $ref: '#/components/responses/Problema' }
+        '503': { $ref: '#/components/responses/Problema' }
+  /v1/atracciones/{ref}:
+    get:
+      tags: [Atracciones]
+      summary: Atracción completa por atr_id, UUID o slug
+      operationId: obtenerAtraccion
+      parameters:
+        - { name: ref, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Atracción
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Atraccion' }
+        '404':
+          $ref: '#/components/responses/Problema'
+  /v1/atracciones/{atr_id}:
+    patch:
+      tags: [Atracciones]
+      summary: Actualización parcial (las listas enviadas reemplazan a las anteriores)
+      operationId: actualizarAtraccion
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: atr_id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CamposAtraccion' }
+      responses:
+        '200':
+          description: Actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Atraccion' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+        '404': { $ref: '#/components/responses/Problema' }
+    delete:
+      tags: [Atracciones]
+      summary: Borrado lógico (atr_eliminado_en) y queda INACTIVA
+      operationId: eliminarAtraccion
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: atr_id, in: path, required: true, schema: { type: integer } }
+      responses:
+        '204': { description: Eliminada }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /v1/internal/eventos:
+    post:
+      tags: [Eventos]
+      summary: Recibir RESENA_PUBLICADA (ms_review) o PRECIO_ACTUALIZADO (ms_pricing). Idempotente por event_id.
+      operationId: recibirEvento
+      security: [{ ServicioToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventoEntrante' }
+      responses:
+        '200':
+          description: procesado=false si el event_id ya se había recibido
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [procesado]
+                properties:
+                  procesado: { type: boolean }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '422': { $ref: '#/components/responses/Problema' }
+  /v1/health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio
+      operationId: salud
+      responses:
+        '200':
+          description: Operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT de ms_identity (HS256). Claims usados - rol (ADMIN / OPERADOR) y operador (ope_codigo).
+    ServicioToken:
+      type: apiKey
+      in: header
+      name: X-Servicio-Token
+      description: Secreto compartido entre microservicios (SERVICIOS_TOKEN)
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Categoria:
+      type: object
+      additionalProperties: false
+      required: [cat_id, cat_padre_id, cat_nombre, cat_slug, cat_descripcion, cat_icono, cat_orden, cat_activa, cat_incluye_comida, cat_incluye_transporte, cat_incluye_guia]
+      properties:
+        cat_id: { type: integer }
+        cat_padre_id: { type: integer, nullable: true }
+        cat_nombre: { type: string, maxLength: 80 }
+        cat_slug: { type: string, maxLength: 80 }
+        cat_descripcion: { type: string, nullable: true, maxLength: 255 }
+        cat_icono: { type: string, maxLength: 40 }
+        cat_orden: { type: integer }
+        cat_activa: { type: boolean }
+        cat_incluye_comida: { type: boolean }
+        cat_incluye_transporte: { type: boolean }
+        cat_incluye_guia: { type: boolean }
+    NodoCategoria:
+      type: object
+      required: [id, nombre, slug, incluye_comida, incluye_transporte, incluye_guia, orden, subcategorias]
+      properties:
+        id: { type: string, example: cat-1 }
+        nombre: { type: string }
+        slug: { type: string }
+        descripcion: { type: string }
+        icono: { type: string }
+        incluye_comida: { type: boolean }
+        incluye_transporte: { type: boolean }
+        incluye_guia: { type: boolean }
+        includes_food: { type: boolean, description: Guía de integración §7.3 }
+        includes_transport: { type: boolean }
+        includes_guide: { type: boolean }
+        orden: { type: integer }
+        subcategorias:
+          type: array
+          items: { $ref: '#/components/schemas/NodoCategoria' }
+    Idioma:
+      type: object
+      additionalProperties: false
+      required: [idi_id, idi_codigo, idi_nombre]
+      properties:
+        idi_id: { type: integer }
+        idi_codigo: { type: string, minLength: 2, maxLength: 2 }
+        idi_nombre: { type: string }
+    Inclusion:
+      type: object
+      additionalProperties: false
+      required: [inc_id, inc_tipo, inc_nombre, inc_orden]
+      properties:
+        inc_id: { type: integer }
+        inc_tipo: { type: string, enum: [INCLUYE, NO_INCLUYE, RECOMENDACION] }
+        inc_nombre: { type: string }
+        inc_orden: { type: integer }
+    Operador:
+      type: object
+      additionalProperties: false
+      required: [ope_id, ope_codigo, ope_nombre, ope_ruc, ope_correo, ope_telefono, ope_direccion, prov_id, ope_activo]
+      properties:
+        ope_id: { type: integer }
+        ope_codigo: { type: integer, description: Código legado del contrato (proveedor-<ope_codigo>) }
+        ope_nombre: { type: string }
+        ope_ruc: { type: string, nullable: true, pattern: '^[0-9]{13}$' }
+        ope_correo: { type: string, nullable: true }
+        ope_telefono: { type: string, nullable: true }
+        ope_direccion: { type: string, nullable: true }
+        prov_id: { type: integer, description: ID lógico de ms_location }
+        ope_activo: { type: boolean }
+    Atraccion:
+      type: object
+      additionalProperties: false
+      description: Atracción completa con los nombres de columna (script del equipo + 002_campos_booking.sql)
+      required: [atr_id, atr_uuid, atr_nombre, atr_slug, atr_descripcion, atr_tipo, atr_estado, atr_latitud, atr_longitud, atr_duracion_horas,
+                 atr_moneda, ciu_id, ope_id, atr_cancelacion_gratuita, atr_horas_cancelacion, atr_destacada, atr_calificacion_promedio,
+                 atr_numero_resenas, atr_incluye_comida, atr_incluye_transporte, atr_incluye_guia, operador, categorias, idiomas,
+                 inclusiones, fotos, itinerario, tarifas]
+      properties:
+        atr_id: { type: integer }
+        atr_uuid: { type: string, format: uuid }
+        atr_nombre: { type: string, maxLength: 200 }
+        atr_slug: { type: string, maxLength: 220 }
+        atr_descripcion: { type: string }
+        atr_descripcion_corta: { type: string, nullable: true, maxLength: 280 }
+        atr_tipo: { type: string, enum: [GUIDED_TOUR, ADMISSION, DAY_TRIP, TRANSPORT, PACKAGE] }
+        atr_estado: { type: string, enum: [BORRADOR, PUBLICADA, INACTIVA] }
+        atr_latitud: { type: number, minimum: -90, maximum: 90 }
+        atr_longitud: { type: number, minimum: -180, maximum: 180 }
+        atr_direccion: { type: string, nullable: true }
+        atr_punto_encuentro: { type: string, nullable: true }
+        atr_duracion_horas: { type: number }
+        atr_moneda: { type: string, pattern: '^[A-Z]{3}$' }
+        ciu_id: { type: integer, description: ID lógico de ms_location }
+        ope_id: { type: integer }
+        atr_cancelacion_gratuita: { type: boolean }
+        atr_horas_cancelacion: { type: integer }
+        atr_destacada: { type: boolean }
+        atr_calificacion_promedio: { type: number, minimum: 0, maximum: 5, description: Proyección de ms_review }
+        atr_numero_resenas: { type: integer, description: Proyección de ms_review }
+        atr_creado_en: { type: string, format: date-time }
+        atr_actualizado_en: { type: string, format: date-time }
+        atr_eliminado_en: { type: string, format: date-time, nullable: true }
+        atr_incluye_comida: { type: boolean }
+        atr_incluye_transporte: { type: boolean }
+        atr_incluye_guia: { type: boolean }
+        atr_accesible_silla: { type: boolean }
+        atr_accesible_coche: { type: boolean }
+        atr_animales_servicio: { type: boolean }
+        atr_guia: { type: string, nullable: true }
+        atr_instrucciones_llegada: { type: string, nullable: true }
+        atr_permite_paquete: { type: boolean }
+        atr_descuento_paquete: { type: number, minimum: 0, maximum: 50 }
+        atr_pilar_limpieza: { type: number, nullable: true }
+        atr_pilar_servicio: { type: number, nullable: true }
+        atr_pilar_relacion_valor: { type: number, nullable: true }
+        atr_pilar_puntualidad: { type: number, nullable: true }
+        operador:
+          type: object
+          required: [ope_id, ope_codigo, ope_nombre]
+          properties:
+            ope_id: { type: integer }
+            ope_codigo: { type: integer }
+            ope_nombre: { type: string }
+            ope_ruc: { type: string, nullable: true }
+            ope_correo: { type: string, nullable: true }
+            ope_telefono: { type: string, nullable: true }
+        categorias:
+          type: array
+          items:
+            type: object
+            required: [cat_id, cat_nombre, cat_slug]
+            properties:
+              cat_id: { type: integer }
+              cat_nombre: { type: string }
+              cat_slug: { type: string }
+        idiomas:
+          type: array
+          items: { $ref: '#/components/schemas/Idioma' }
+        inclusiones:
+          type: array
+          items:
+            type: object
+            required: [inc_id, inc_tipo, inc_nombre]
+            properties:
+              inc_id: { type: integer }
+              inc_tipo: { type: string, enum: [INCLUYE, NO_INCLUYE, RECOMENDACION] }
+              inc_nombre: { type: string }
+        fotos:
+          type: array
+          items:
+            type: object
+            required: [fot_id, fot_url, fot_alt, fot_orden]
+            properties:
+              fot_id: { type: integer }
+              fot_url: { type: string }
+              fot_alt: { type: string }
+              fot_orden: { type: integer }
+        itinerario:
+          type: array
+          items:
+            type: object
+            required: [iti_id, iti_orden, iti_hora, iti_titulo, iti_duracion_min]
+            properties:
+              iti_id: { type: integer }
+              iti_orden: { type: integer }
+              iti_hora: { type: string, pattern: '^\d{2}:\d{2}$' }
+              iti_titulo: { type: string }
+              iti_descripcion: { type: string, nullable: true }
+              iti_duracion_min: { type: integer }
+              iti_lugar: { type: string, nullable: true }
+        tarifas:
+          type: array
+          description: Proyección de ms_pricing (precio vigente por tipo de boleto)
+          items:
+            type: object
+            required: [tav_tipo, tav_precio, tav_moneda]
+            properties:
+              tav_tipo: { type: string, enum: [ADULTO, NINO, MAYOR, ESTUDIANTE, GRUPO] }
+              tav_precio: { type: number, minimum: 0 }
+              tav_moneda: { type: string }
+    CamposAtraccion:
+      type: object
+      additionalProperties: false
+      properties:
+        atr_nombre: { type: string, minLength: 3, maxLength: 200 }
+        atr_descripcion: { type: string, minLength: 20 }
+        atr_descripcion_corta: { type: string, maxLength: 280 }
+        atr_tipo: { type: string, enum: [GUIDED_TOUR, ADMISSION, DAY_TRIP, TRANSPORT, PACKAGE] }
+        atr_estado: { type: string, enum: [BORRADOR, PUBLICADA, INACTIVA] }
+        atr_latitud: { type: number }
+        atr_longitud: { type: number }
+        atr_direccion: { type: string, maxLength: 255 }
+        atr_punto_encuentro: { type: string, maxLength: 255 }
+        atr_duracion_horas: { type: number, minimum: 0.25, maximum: 720 }
+        ciu_id: { type: integer, description: Debe existir en ms_location (422 si no) }
+        atr_cancelacion_gratuita: { type: boolean }
+        atr_horas_cancelacion: { type: integer }
+        atr_destacada: { type: boolean }
+        atr_incluye_comida: { type: boolean }
+        atr_incluye_transporte: { type: boolean }
+        atr_incluye_guia: { type: boolean }
+        atr_accesible_silla: { type: boolean }
+        atr_accesible_coche: { type: boolean }
+        atr_animales_servicio: { type: boolean }
+        atr_guia: { type: string, maxLength: 150 }
+        atr_instrucciones_llegada: { type: string, maxLength: 300 }
+        atr_permite_paquete: { type: boolean }
+        atr_descuento_paquete: { type: number, minimum: 0, maximum: 50 }
+        cat_ids: { type: array, maxItems: 10, items: { type: integer } }
+        idi_ids: { type: array, maxItems: 10, items: { type: integer } }
+        inc_ids: { type: array, maxItems: 50, items: { type: integer } }
+        fotos:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [fot_url, fot_alt]
+            properties:
+              fot_url: { type: string }
+              fot_alt: { type: string, minLength: 3, maxLength: 200 }
+        itinerario:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [iti_orden, iti_hora, iti_titulo, iti_duracion_min]
+            properties:
+              iti_orden: { type: integer, minimum: 1 }
+              iti_hora: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+              iti_titulo: { type: string }
+              iti_descripcion: { type: string }
+              iti_duracion_min: { type: integer, minimum: 1, maximum: 1440 }
+              iti_lugar: { type: string }
+    CrearAtraccion:
+      allOf:
+        - $ref: '#/components/schemas/CamposAtraccion'
+        - type: object
+          required: [atr_nombre, atr_descripcion, atr_tipo, atr_latitud, atr_longitud, atr_duracion_horas, ciu_id]
+          properties:
+            ope_id: { type: integer, description: Obligatorio para ADMIN; el OPERADOR crea para su empresa }
+    EventoEntrante:
+      type: object
+      additionalProperties: false
+      description: Sobre CloudEvents 1.0. Campos desconocidos → 400 (el servicio valida con whitelist).
+      required: [event_id, event_type, data]
+      properties:
+        specversion: { type: string, enum: ['1.0'] }
+        event_id: { type: string, format: uuid }
+        event_type: { type: string, enum: [RESENA_PUBLICADA, PRECIO_ACTUALIZADO] }
+        source: { type: string, example: /api/v1/ms-review }
+        correlation_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        data:
+          type: object
+          description: |
+            RESENA_PUBLICADA → { atr_id, atr_calificacion_promedio (0-5), atr_numero_resenas,
+            pilares: { limpieza, servicio, relacion_valor, puntualidad } }.
+            PRECIO_ACTUALIZADO → { atr_id, tarifas: [{ tipo, precio, moneda }] }.
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        invalid_params:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              reason: { type: string }

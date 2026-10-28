@@ -7,6 +7,26 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+### Agregado
+- **Contrato v3 de Booking Prototipo (semana 9)** sin romper v2 ([docs/INTEGRACION-BOOKING-V2.md §7](docs/INTEGRACION-BOOKING-V2.md)):
+  - Las 14 rutas del contrato responden también en **`/api/v3`**; el test de cobertura verifica `contracts/atracciones-openapi-v3.yaml` (guardado tal como lo envió Booking).
+  - **Rutas en la URL base** que Booking registra (guía de integración de socios): `POST {baseUrlRest}/reservas` (más consulta, cancelación y check-in) y `GET {baseUrlRest}/health`.
+  - El cuerpo de reserva acepta los nombres en inglés de v3 (`attraction_id`, `date`, `time`), `payment_method` como objeto `{ method }`, y el payload de la guía (`customer.name`, sin `document_type` ni `payment_method`, `total_tickets`, `booking_reservation_id`).
+  - **`400 SLOT_TIME_MISMATCH`** si `date` o `time` no coinciden con el `slot_id`; `400 TOTAL_TICKETS_MISMATCH`.
+  - La respuesta 201 agrega `success` y `message` (formato de la guía).
+- **gRPC de stock con el `inventory.proto` de la semana 9:** envía `slot_id`, el `timestamp` es el del cambio (no el del reintento) y un `STALE_TIMESTAMP_IGNORED` queda como descartado. Las IP de Tailscale y de redes privadas usan h2c (sin TLS). Destino por defecto: `rda1-backend-integracion-sistemas.onrender.com:50051`.
+- La API escucha en `0.0.0.0` (variable `HOST`) para aceptar conexiones de otras máquinas.
+- **Campos obligatorios del v3 que faltaban:** `includes_food/transport/guide` en las inclusiones y en el árbol de categorías (guía §7.3) y `total_slots`, `available_slots`, `status`, `price_adult`, `price_child` en cada turno. Los nombres en español se mantienen.
+- **Microservicios del equipo** ([microservicios/README.md](microservicios/README.md)): `ms_location`, `ms_catalog` y `ms_review` (cada uno con su base, contrato OpenAPI y pruebas de esquemas) y el **API Gateway** que se registra en Booking: el catálogo lo atiende ms_catalog y el resto sigue en la tienda (migración gradual con los mismos IDs).
+- Contrato v3 y guía de Booking actualizados a su última versión (sin claves repetidas; cédulas de ejemplo válidas; `reservation_id` = UUID de la reserva, como ya se respondía).
+- **Despliegue en Azure Container Apps** ([deploy/azure/desplegar.sh](deploy/azure/desplegar.sh), región Chile Central): ms_location, ms_catalog, ms_review y el gateway público (HTTPS) que Booking registra. Base en Supabase con **un schema por microservicio** (`DB_SCHEMA`); la copia de datos de la tienda corre como job dentro de Azure. Imágenes Docker: `microservicios/Dockerfile` (una para los 4) y `backend/Dockerfile`.
+- **Gateway con `SIN_TIENDA=true`:** el nodo publica solo los microservicios de Dilan; las rutas de los compañeros (disponibilidad, reservas, promociones) responden `503 SERVICIO_NO_CONECTADO` indicando el microservicio dueño, y `/health` revisa solo ms_catalog, ms_location y ms_review.
+- **Tarjeta de crédito simulada en el pago:** se llena mientras se escribe, detecta la marca y gira al escribir el CVV (sin animación con `prefers-reduced-motion`; decorativa para lectores de pantalla).
+
+### Corregido
+- **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo aparecía al final de la página porque la tarjeta de reserva era más alta que la pantalla; ahora la tarjeta se desplaza por dentro y el total con el botón quedan fijos al pie.
+- Microservicios: las conexiones a la base se mantienen abiertas para que el primer ping del semáforo de Booking tras un rato sin tráfico no salga `DEGRADED`.
+
 ## [2.9.0] - 2026-10-24
 
 ### Cambiado

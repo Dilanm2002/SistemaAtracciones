@@ -1,0 +1,24 @@
+# Bases de datos de los microservicios (una por servicio: database-per-service).
+# Un solo contenedor PostgreSQL con una base para cada servicio, más su copia para pruebas.
+# Puerto 5434 en el host para no chocar con la base de la tienda (5433) ni con un PostgreSQL local (5432).
+services:
+  postgres:
+    image: postgres:16
+    container_name: descubre_ms_db
+    ports:
+      - '${MS_DB_PORT:-5434}:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - ms_db_data:/var/lib/postgresql/data
+      - ./scripts/crear-bases.sql:/docker-entrypoint-initdb.d/01-crear-bases.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  ms_db_data:

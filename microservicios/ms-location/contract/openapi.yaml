@@ -1,0 +1,229 @@
+openapi: 3.0.3
+info:
+  title: Location Service (ms_location) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 3 del equipo: **regiones, provincias y ciudades** (destinos). Catálogo de solo lectura que
+    consultan los demás servicios (ms_catalog resuelve aquí el nombre de la ciudad de cada atracción).
+
+    - Base de datos propia: `ms_location` (tablas `region`, `provincia`, `ciudad` del script del equipo).
+    - Los esquemas usan **los nombres de columna de la base** (`ciu_id`, `ciu_nombre`, `prov_id`…), como acordó el equipo.
+    - Sin referencias externas. Errores en formato RFC 7807 (`application/problem+json`).
+    - Cabecera opcional `X-Correlation-Id`: se devuelve igual en la respuesta.
+  contact:
+    name: Dilan Mena (responsable de ms_location, ms_catalog y ms_review)
+servers:
+  - url: http://localhost:4001/api/v1
+    description: Local
+tags:
+  - name: Ubicación
+  - name: Salud
+paths:
+  /regiones:
+    get:
+      tags: [Ubicación]
+      summary: Regiones naturales (SIERRA, COSTA, AMAZONIA, GALAPAGOS)
+      operationId: listarRegiones
+      parameters:
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Regiones
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Region'
+  /provincias:
+    get:
+      tags: [Ubicación]
+      summary: Provincias (opcionalmente de una región)
+      operationId: listarProvincias
+      parameters:
+        - name: reg_id
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1 }
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Provincias
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Provincia'
+        '400':
+          $ref: '#/components/responses/Problema'
+  /provincias/{prov_id}:
+    get:
+      tags: [Ubicación]
+      summary: Una provincia
+      operationId: obtenerProvincia
+      parameters:
+        - name: prov_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Provincia
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Provincia'
+        '404':
+          $ref: '#/components/responses/Problema'
+  /ciudades:
+    get:
+      tags: [Ubicación]
+      summary: Ciudades con filtros (provincia, región, texto sin tildes, varios ids)
+      operationId: listarCiudades
+      parameters:
+        - name: prov_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: reg_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: q
+          in: query
+          description: Parte del nombre, sin importar tildes ni mayúsculas («banos» encuentra «Baños»)
+          schema: { type: string, maxLength: 80 }
+        - name: ids
+          in: query
+          description: Varios ciu_id separados por coma (máximo 500)
+          schema: { type: string, example: '1,4,7' }
+        - name: ciu_activa
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Ciudades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ciudad'
+        '400':
+          $ref: '#/components/responses/Problema'
+  /ciudades/{ciu_id}:
+    get:
+      tags: [Ubicación]
+      summary: Una ciudad con su provincia y región
+      operationId: obtenerCiudad
+      parameters:
+        - name: ciu_id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Ciudad
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ciudad'
+        '404':
+          $ref: '#/components/responses/Problema'
+  /health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Salud'
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Salud'
+components:
+  parameters:
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: { type: string }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+  schemas:
+    Region:
+      type: object
+      additionalProperties: false
+      required: [reg_id, reg_nombre, reg_codigo]
+      properties:
+        reg_id: { type: integer, example: 1 }
+        reg_nombre: { type: string, example: SIERRA }
+        reg_codigo: { type: string, minLength: 2, maxLength: 2, example: SI }
+    Provincia:
+      type: object
+      additionalProperties: false
+      required: [prov_id, prov_nombre, prov_codigo, reg_id, reg_nombre, prov_activa]
+      properties:
+        prov_id: { type: integer, example: 19 }
+        prov_nombre: { type: string, example: Pichincha }
+        prov_codigo: { type: string, minLength: 2, maxLength: 2, example: '19' }
+        reg_id: { type: integer }
+        reg_nombre: { type: string, example: SIERRA }
+        prov_activa: { type: boolean }
+    Ciudad:
+      type: object
+      additionalProperties: false
+      required: [ciu_id, ciu_nombre, ciu_codigo, prov_id, prov_nombre, reg_id, reg_nombre, ciu_activa, ciu_descripcion, ciu_imagen]
+      properties:
+        ciu_id: { type: integer, example: 3 }
+        ciu_nombre: { type: string, example: Quito }
+        ciu_codigo: { type: string, minLength: 6, maxLength: 6, example: '170150' }
+        prov_id: { type: integer }
+        prov_nombre: { type: string, example: Pichincha }
+        reg_id: { type: integer }
+        reg_nombre: { type: string, example: SIERRA }
+        ciu_activa: { type: boolean }
+        ciu_descripcion: { type: string, nullable: true, maxLength: 500 }
+        ciu_imagen: { type: string, nullable: true, maxLength: 500 }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        invalid_params:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              reason: { type: string }
