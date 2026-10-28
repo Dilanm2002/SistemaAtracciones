@@ -24,7 +24,7 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 - **Tarjeta de crédito simulada en el pago:** se llena mientras se escribe, detecta la marca y gira al escribir el CVV (sin animación con `prefers-reduced-motion`; decorativa para lectores de pantalla).
 
 ### Corregido
-- **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo aparecía al final de la página porque la tarjeta de reserva era más alta que la pantalla; ahora la tarjeta se desplaza por dentro y el total con el botón quedan fijos al pie.
+- **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo se alcanzaba al final de la página porque la tarjeta de reserva era *sticky* y más alta que la pantalla; ahora es estática y baja con el contenido.
 - Microservicios: las conexiones a la base se mantienen abiertas para que el primer ping del semáforo de Booking tras un rato sin tráfico no salga `DEGRADED`.
 
 ## [2.9.0] - 2026-10-24
