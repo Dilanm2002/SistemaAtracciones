@@ -15,13 +15,14 @@
     "ms-payment",
     "ms-refund",
     "ms-invoicing",
+    "ms-identity",
     "gateway"
   ],
   "scripts": {
     "build": "npm run build --workspaces",
     "test": "npm test --workspaces",
     "db:up": "docker compose up -d",
-    "migrar": "npm run build -w ms-location -w ms-catalog -w ms-review -w ms-pricing -w ms-inventory -w ms-coupon -w ms-order -w ms-booking -w ms-payment -w ms-refund -w ms-invoicing && node scripts/migrar-desde-tienda.js"
+    "migrar": "npm run build -w ms-location -w ms-catalog -w ms-review -w ms-pricing -w ms-inventory -w ms-coupon -w ms-order -w ms-booking -w ms-payment -w ms-refund -w ms-invoicing -w ms-identity && node scripts/migrar-desde-tienda.js"
   },
   "engines": {
     "node": ">=20.11"

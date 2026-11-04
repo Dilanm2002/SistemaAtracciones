@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Arranca los 11 microservicios y el gateway (Docker Desktop encendido; la tienda monolítica ya no hace falta).
+# Arranca los 12 microservicios y el gateway (Docker Desktop encendido; la tienda monolítica ya no hace falta).
 #   bash microservicios/scripts/arrancar-todo.sh
 # Las claves se leen de backend/.env (BOOKING_API_KEY, JWT_SECRET, BOOKING_GRPC_*); nada se imprime.
 # Registros en microservicios/logs/<servicio>.log · detener: Ctrl+C
@@ -13,8 +13,9 @@ leer() { grep -E "^$1=" "$RAIZ/backend/.env" 2>/dev/null | tail -1 | cut -d= -f2
 export BOOKING_API_KEY="$(leer BOOKING_API_KEY)"
 export JWT_SECRET="$(leer JWT_SECRET)"
 export SERVICIOS_TOKEN="${SERVICIOS_TOKEN:-$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")}"
-# Stock por gRPC a Booking: apagado en local salvo que se pida (BOOKING_GRPC_ENABLED=true BOOKING_GRPC_URL=host:50051)
-export BOOKING_GRPC_ENABLED="${BOOKING_GRPC_ENABLED:-false}"
+# Stock y aviso de check-in a Booking: apagados en local salvo que se pidan
+export BOOKING_STOCK_ENABLED="${BOOKING_STOCK_ENABLED:-false}"
+export BOOKING_AVISOS_ENABLED="${BOOKING_AVISOS_ENABLED:-false}"
 export BOOKING_SERVICE_ID="${BOOKING_SERVICE_ID:-NODE_ATR_DILAN}"
 export PUBLIC_URL="${PUBLIC_URL:-http://localhost:8080}"
 export FOTOS_BASE_URL="${FOTOS_BASE_URL:-https://sistemaatracciones-backend.vercel.app}"
@@ -41,6 +42,7 @@ lanzar ms-booking   DATABASE_URL=$DB/ms_booking
 lanzar ms-payment   DATABASE_URL=$DB/ms_payment
 lanzar ms-refund    DATABASE_URL=$DB/ms_refund
 lanzar ms-invoicing DATABASE_URL=$DB/ms_invoicing
+lanzar ms-identity  DATABASE_URL=$DB/ms_identity
 lanzar gateway
 
 echo "Esperando a que todo responda…"

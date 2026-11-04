@@ -5,6 +5,7 @@ import { randomInt, randomUUID } from 'crypto';
 import { DbService, Sql } from './comun/db.service';
 import { iniciarServidorGrpc } from './comun/grpc';
 import { parseHora } from './comun/tiempo';
+import { AvisoCheckin } from './aviso-checkin';
 import { CatalogoClient, FacturacionClient, InventarioClient, OrdenClient, Pago, PagoClient, PricingClient, ReembolsoClient } from './clientes';
 import { CancelReservationRequestV2, CheckinRequestV2, CreateReservaRequestV2 } from './dto';
 import { icsReserva } from './enlaces';
@@ -57,6 +58,7 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
     private readonly pagos: PagoClient,
     private readonly reembolsos: ReembolsoClient,
     private readonly facturas: FacturacionClient,
+    private readonly aviso: AvisoCheckin,
   ) {}
 
   onApplicationBootstrap() {
@@ -349,15 +351,15 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
   }
 
   /** Check-in presencial (la misma Idempotency-Key repite el pase ya emitido; otra clave sobre una reserva ya registrada → 409). */
-  async checkin(ref: string, dto: CheckinRequestV2, key: string) {
+  async checkin(ref: string, dto: CheckinRequestV2, key: string, adminId?: string) {
     const r0 = await this.filaOr404(ref);
-    return this.idem.ejecutar(key, `v2:checkin:${r0.id}`, 'booking', dto, () => this.registrarCheckin(r0.id, dto), {
+    return this.idem.ejecutar(key, `v2:checkin:${r0.id}`, 'booking', dto, () => this.registrarCheckin(r0.id, dto, adminId), {
       referencia: (r) => r.reserva_id,
       reconstruir: async (uuid) => this.respuestaCheckin(await this.filaOr404(uuid)),
     });
   }
 
-  private async registrarCheckin(ref: string, dto: CheckinRequestV2) {
+  private async registrarCheckin(ref: string, dto: CheckinRequestV2, adminId?: string) {
     const secreto = process.env.VOUCHER_SECRET ?? process.env.JWT_SECRET ?? '';
     const r = await this.db.tx(async (tx) => {
       await tx.query('SELECT 1 FROM reserva WHERE res_uuid = $1 FOR UPDATE', [ref]);
@@ -376,13 +378,16 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
         throw new BadRequestException('La reserva no tiene documento registrado: valida al titular escaneando el código QR del voucher.');
       }
       await tx.query(
-        `UPDATE reserva SET est_id = (SELECT est_id FROM estado WHERE est_codigo = 'CHECKED_IN'), res_checkin_en = now(), res_checkin_guia = $2, res_checkin_dispositivo = $3
+        `UPDATE reserva SET est_id = (SELECT est_id FROM estado WHERE est_codigo = 'CHECKED_IN'), res_checkin_en = now(), res_checkin_guia = $2, res_checkin_dispositivo = $3,
+                res_checkin_admin = $4, res_checkin_asistentes = $5, res_checkin_observaciones = $6,
+                res_aviso_checkin = CASE WHEN res_origen = 'BOOKING' THEN 'PENDIENTE' END
           WHERE res_uuid = $1`,
-        [f.id, dto.guia_codigo ?? null, dto.scanner_device_id ?? null],
+        [f.id, dto.guia_codigo ?? null, dto.scanner_device_id ?? null, (adminId ?? dto.guia_codigo ?? null)?.slice(0, 120) ?? null, dto.asistentes_reales ?? null, dto.observaciones ?? null],
       );
       await this.eventos.reserva(tx, EVENTOS.RESERVA_CHECKIN, f.res_id, { guide_code: dto.guia_codigo ?? null });
       return this.filaOr404(f.id, tx);
     });
+    if (r.origen === 'BOOKING') this.aviso.programar(r.res_id);
     return { ...this.respuestaCheckin(r), titular_documento: r.pax_documento ?? dto.documento_identidad };
   }
 

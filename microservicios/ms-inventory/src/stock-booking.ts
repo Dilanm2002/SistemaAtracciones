@@ -1,6 +1,6 @@
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown } from '@nestjs/common';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { correlacionActual } from './comun/correlacion';
@@ -23,29 +23,52 @@ type ClienteBooking = grpc.Client & {
 };
 
 const DEADLINE_MS = 3000;
+const DEADLINE_REST_MS = 8000;
 const MAX_INTENTOS = 10;
 
 /**
- * Stock a Booking Prototipo por gRPC (`inventory.InventoryStockService/PushStockUpdate`, contrato v2 §2.1,
- * criterio excluyente CE01). Mismo comportamiento que tenía la tienda:
+ * Stock a Booking Prototipo. Canal por defecto: REST (`POST /api/v3/inventory/stock`, el que recomienda
+ * Booking). Con BOOKING_STOCK_CANAL=grpc usa `inventory.InventoryStockService/PushStockUpdate` (contrato v2
+ * §2.1). Mismo comportamiento que tenía la tienda:
  * - Se envía DESPUÉS de confirmar el cambio y nunca retrasa ni hace fallar la reserva.
  * - Cada envío queda en `sync_stock`; lo que falla se reintenta (hasta 10 veces) y, si llega un valor
  *   más nuevo del mismo turno, el anterior se descarta: solo importa el último.
  * - Cliente propio (no comun/grpc): a Booking NO se le manda el token interno entre servicios.
  */
 @Injectable()
-export class StockBooking {
+export class StockBooking implements OnApplicationBootstrap, OnApplicationShutdown {
   private readonly logger = new Logger('StockBooking');
   private cliente: ClienteBooking | null = null;
+  private timer: NodeJS.Timeout | null = null;
 
   constructor(private readonly db: DbService) {}
 
+  onApplicationBootstrap() {
+    // Lo que Booking no recibió se reintenta solo, aunque no vuelva a cambiar el stock de ese turno
+    if (process.env.NODE_ENV !== 'test' && this.habilitado) this.timer = setInterval(() => void this.reintentarPendientes().catch(() => undefined), 60_000);
+  }
+
+  onApplicationShutdown() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  get canal(): 'rest' | 'grpc' {
+    const v = process.env.BOOKING_STOCK_CANAL;
+    if (v === 'rest' || v === 'grpc') return v;
+    return process.env.BOOKING_GRPC_URL ? 'grpc' : 'rest';
+  }
+
+  private get urlRest(): string {
+    return `${(process.env.BOOKING_API_URL ?? 'https://booking-core-api.azurewebsites.net').replace(/\/$/, '')}/api/v3/inventory/stock`;
+  }
+
   get destino(): string {
-    return (process.env.BOOKING_GRPC_URL ?? 'rda1-backend-integracion-sistemas.onrender.com:50051').replace(/^grpcs?:\/\//, '');
+    if (this.canal === 'rest') return this.urlRest;
+    return (process.env.BOOKING_GRPC_URL ?? 'booking-core-api.azurewebsites.net:50051').replace(/^grpcs?:\/\//, '');
   }
 
   get habilitado(): boolean {
-    const v = process.env.BOOKING_GRPC_ENABLED;
+    const v = process.env.BOOKING_STOCK_ENABLED ?? process.env.BOOKING_GRPC_ENABLED;
     return v ? v === 'true' : process.env.NODE_ENV !== 'test';
   }
 
@@ -116,12 +139,9 @@ export class StockBooking {
     if (!f) return false;
     const inicio = Date.now();
     try {
-      const ack = await this.push({
-        service_id: this.serviceId,
-        item_id: f.item,
-        date: f.fecha,
-        time_slot: f.turno,
-        available_units: f.disponibles,
+      const base = { service_id: this.serviceId, item_id: f.item, date: f.fecha, time_slot: f.turno, available_units: f.disponibles };
+      const ack = this.canal === 'rest' ? await this.pushRest(base) : await this.push({
+        ...base,
         // Momento del cambio (no del reintento): Booking descarta lo que llegue con un timestamp menor al último
         timestamp: f.creado_ms,
         slot_id: slotId(f.fecha, parseHora(f.turno) ?? f.turno),
@@ -146,6 +166,26 @@ export class StockBooking {
       this.logger.warn(`PushStockUpdate a ${this.destino} falló: ${detalle}`);
       return false;
     }
+  }
+
+  /** Body exacto del contrato de Booking. Un 2xx es éxito salvo que responda `success: false`. */
+  private async pushRest(msg: Record<string, unknown>): Promise<StockUpdateAck> {
+    const cid = correlacionActual();
+    const r = await fetch(this.urlRest, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': process.env.BOOKING_API_KEY ?? '', ...(cid ? { 'X-Correlation-Id': cid } : {}) },
+      body: JSON.stringify(msg),
+      signal: AbortSignal.timeout(DEADLINE_REST_MS),
+    });
+    const texto = await r.text().catch(() => '');
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${texto}`);
+    let cuerpo: Partial<StockUpdateAck> = {};
+    try {
+      cuerpo = JSON.parse(texto) as Partial<StockUpdateAck>;
+    } catch {
+      /* 2xx sin JSON: Booking lo recibió */
+    }
+    return { success: cuerpo.success !== false, message: cuerpo.message ?? '', processed_at: '0', error_code: cuerpo.error_code, current_available: cuerpo.current_available };
   }
 
   private push(msg: Record<string, unknown>): Promise<StockUpdateAck> {
@@ -173,6 +213,6 @@ export class StockBooking {
               ss_latencia_ms AS latency_ms, ss_respuesta AS response, ss_creado_en AS created_at
          FROM sync_stock ORDER BY ss_id DESC LIMIT 15`,
     );
-    return { enabled: this.habilitado, target: this.destino, tls: this.tls, service_id: this.serviceId, ...totales, recent: recientes };
+    return { enabled: this.habilitado, channel: this.canal, target: this.destino, tls: this.tls, service_id: this.serviceId, ...totales, recent: recientes };
   }
 }

@@ -22,7 +22,7 @@ async function ping(destino: Destino, ruta: string): Promise<{ estado: EstadoDep
 const CRITICOS: Destino[] = ['catalogo', 'inventory', 'booking'];
 
 /**
- * Salud del nodo para el semáforo de Booking (NodeHealthResponse del contrato), agregando la de los 11
+ * Salud del nodo para el semáforo de Booking (NodeHealthResponse del contrato), agregando la de los 12
  * microservicios: si cae uno crítico (catálogo, inventario o reservas) el nodo está DOWN (503); si cae
  * otro, DEGRADED. `dependencias` es una extensión que no rompe el contrato.
  */

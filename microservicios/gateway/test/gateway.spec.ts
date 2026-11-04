@@ -50,6 +50,8 @@ describe('tabla de ruteo (cada ruta del contrato v3 a su microservicio)', () => 
     ['GET', '/api/v3/atracciones/quito-city-tour', 'catalogo'],
     ['GET', `/api/v3/atracciones/${uuid}`, 'catalogo'],
     ['GET', `/api/v3/atracciones/${uuid}/disponibilidad?date=2026-11-01`, 'inventory'],
+    ['GET', '/api/v3/clientes?email=a@b.com', 'identity'],
+    ['POST', '/api/v3/clientes', 'identity'],
     ['POST', '/api/v3/atracciones/reservas', 'booking'],
     ['GET', '/api/v3/atracciones/reservas/DEC-7F3K9Q', 'booking'],
     ['POST', '/api/v3/atracciones/reservas/x/cancel', 'booking'],
@@ -136,7 +138,7 @@ describe('API Gateway', () => {
     expect(DESTINOS.reduce((n, d) => n + s[d].recibidos.length, 0)).toBe(antes);
   });
 
-  it('salud agregada de los 11: UP; DEGRADED si cae uno no crítico; DOWN (503) si cae catálogo, inventario o reservas', async () => {
+  it('salud agregada de los 12: UP; DEGRADED si cae uno no crítico; DOWN (503) si cae catálogo, inventario o reservas', async () => {
     const r = await http().get('/api/v3/health');
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ status: 'UP', node_id: expect.any(String), node_code: expect.any(String), version: expect.any(String), database_connected: true, latency_ms: expect.any(Number) });

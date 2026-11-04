@@ -1,4 +1,4 @@
-# Una sola imagen con los 11 microservicios y el gateway; SERVICIO elige cuál arranca.
+# Una sola imagen con los 12 microservicios y el gateway; SERVICIO elige cuál arranca.
 #   docker build -t descubre-ms microservicios
 #   docker run -e SERVICIO=ms-booking -e DATABASE_URL=… descubre-ms
 FROM node:20-alpine AS build
@@ -15,6 +15,7 @@ COPY ms-booking/package.json ms-booking/
 COPY ms-payment/package.json ms-payment/
 COPY ms-refund/package.json ms-refund/
 COPY ms-invoicing/package.json ms-invoicing/
+COPY ms-identity/package.json ms-identity/
 COPY gateway/package.json gateway/
 RUN npm ci
 COPY . .

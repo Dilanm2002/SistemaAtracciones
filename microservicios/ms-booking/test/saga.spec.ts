@@ -9,6 +9,7 @@ import request = require('supertest');
 import { AppModule as Booking } from '../src/app.module';
 import { crearApp } from '../src/comun/arranque';
 import { hoyEc, sumarDias } from '../src/comun/tiempo';
+import { AvisoCheckin } from '../src/aviso-checkin';
 import { ReservasService } from '../src/reservas';
 import { AppModule as Inventory } from '../../ms-inventory/src/app.module';
 import { crearApp as crearInventory } from '../../ms-inventory/src/comun/arranque';
@@ -288,6 +289,52 @@ describeSaga('saga de reserva con los 7 microservicios reales', () => {
     expect((await reservar(pedido({ ...uno, client_id: 'DEC-USR-1', customer: { ...turista, client_id: 'DEC-USR-2' } }))).status).toBe(400);
     expect((await reservar(pedido({ ...uno, client_id: 'no válido' }))).status).toBe(400);
     expect(await libres()).toBe(antes); // rechazadas sin retener cupos
+  });
+
+  it('aviso de check-in (v3.1): cuerpo oficial con la X-API-Key y reintento si Booking no respondió', async () => {
+    const recibidos: { url?: string; clave?: unknown; cuerpo: Record<string, unknown> }[] = [];
+    let responder = 503;
+    const falso = createServer((req, res) => {
+      let b = '';
+      req.on('data', (d) => (b += d));
+      req.on('end', () => {
+        recibidos.push({ url: req.url, clave: req.headers['x-api-key'], cuerpo: JSON.parse(b) });
+        res.writeHead(responder, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ acknowledged: responder === 200, status: 'CONFIRMADO_ASISTIDO' }));
+      });
+    });
+    await new Promise<void>((ok) => falso.listen(0, '127.0.0.1', ok));
+    process.env.BOOKING_API_URL = `http://127.0.0.1:${(falso.address() as AddressInfo).port}`;
+    process.env.BOOKING_AVISOS_ENABLED = 'true';
+    process.env.BOOKING_API_KEY = CLAVE;
+    const aviso = apps.booking.get(AvisoCheckin);
+    const estado = async (codigo: string) => (await sql('ms_booking', 'SELECT res_aviso_checkin AS e, res_aviso_intentos AS n FROM reserva WHERE res_codigo = $1', [codigo]))[0];
+    try {
+      await sql('ms_inventory', 'UPDATE disponibilidad SET dis_cupo_total = dis_cupo_total + 5 WHERE dis_fecha = $1', [dia]);
+      const r = await reservar(pedido({ adult_count: 2, child_count: 0, infant_count: 0, total_tickets: 2, client_id: 'DEC-USR-7' }));
+      const ruta = `/api/v3/atracciones/reservas/${r.body.reservation_id}/checkin`;
+      const ok = await http().post(ruta).set('X-API-Key', CLAVE).set('Idempotency-Key', randomUUID()).send({ documento_identidad: '1724589633' });
+      expect(ok.status).toBe(200); // la caída de Booking no afecta al guía
+
+            for (let i = 0; i < 50 && (await estado(r.body.reservation_code)).n === 0; i++) await new Promise((f) => setTimeout(f, 20));
+      expect(await estado(r.body.reservation_code)).toEqual({ e: 'PENDIENTE', n: 1 });
+      const deEsta = () => recibidos.filter((x) => x.url?.includes(r.body.reservation_code));
+      expect(deEsta()[0]).toMatchObject({ url: `/api/v3/reservas/${r.body.reservation_code}/checkin`, clave: CLAVE });
+      expect(deEsta()[0].cuerpo).toEqual({
+        external_order_id: r.body.reservation_code, client_id: 'DEC-USR-7', estado: 'CONFIRMADO_ASISTIDO', asistentes_reales: 2,
+        admin_id: 'guia-turistico', fecha_checkin: ok.body.hora_checkin, observaciones: 'Turista validado en el punto de encuentro',
+      });
+
+      responder = 200;
+      await sql('ms_booking', "UPDATE reserva SET res_aviso_intento_en = now() - interval '1 minute' WHERE res_codigo = $1", [r.body.reservation_code]);
+      await aviso.reintentar();
+      expect(await estado(r.body.reservation_code)).toEqual({ e: 'ENVIADO', n: 2 });
+      await aviso.reintentar();
+      expect(deEsta()).toHaveLength(2); // ya confirmado: no se repite
+    } finally {
+      delete process.env.BOOKING_AVISOS_ENABLED;
+      await new Promise((f) => falso.close(f));
+    }
   });
 
   it('validaciones del contrato: SLOT_TIME_MISMATCH, cédula inválida 422, sin Idempotency-Key 400, sin X-API-Key 401', async () => {

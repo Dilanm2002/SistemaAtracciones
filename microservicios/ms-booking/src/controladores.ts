@@ -70,8 +70,8 @@ export class ReservasBookingController {
   @Post('reservas/:id/checkin')
   @HttpCode(200)
   @UseGuards(SocioGuard, IdempotencyKeyGuard)
-  checkin(@Param('id') id: string, @Body() dto: CheckinRequestV2, @Headers('idempotency-key') key: string) {
-    return this.s.checkin(id, dto, key);
+  checkin(@Param('id') id: string, @Body() dto: CheckinRequestV2, @Headers('idempotency-key') key: string, @Req() req: Request & { usuario?: { email?: string; sub: string } }) {
+    return this.s.checkin(id, dto, key, req.usuario?.email ?? req.usuario?.sub);
   }
 
   /** PNG del QR del voucher (o del pase de abordar con ?tipo=pase). */

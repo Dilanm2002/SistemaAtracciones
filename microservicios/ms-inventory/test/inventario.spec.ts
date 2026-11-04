@@ -11,6 +11,7 @@ import { AppModule } from '../src/app.module';
 import { crearApp } from '../src/comun/arranque';
 import { iniciarServidorGrpc, llamarGrpc } from '../src/comun/grpc';
 import { hoyEc, sumarDias } from '../src/comun/tiempo';
+import { StockBooking } from '../src/stock-booking';
 import { baseVacia, Contrato, describeDb, sql } from './helpers';
 
 const SECRETO = 'secreto-de-pruebas-de-ms-inventory-0123456789';
@@ -158,6 +159,40 @@ describeDb('ms_inventory', () => {
     expect((await inv<Turno>('ObtenerTurno', { dis_id: t.dis_id })).disponibles).toBe(17);
   });
 
+  it('stock por REST: body exacto del contrato con la X-API-Key; si falla queda para reintentar', async () => {
+    const recibidos: { url?: string; clave?: unknown; cuerpo: unknown }[] = [];
+    let responder = 500;
+    const falso = createServer((req, res) => {
+      let b = '';
+      req.on('data', (d) => (b += d));
+      req.on('end', () => {
+        recibidos.push({ url: req.url, clave: req.headers['x-api-key'], cuerpo: JSON.parse(b) });
+        res.writeHead(responder);
+        res.end('{}');
+      });
+    });
+    await new Promise<void>((ok) => falso.listen(0, '127.0.0.1', ok));
+    Object.assign(process.env, { BOOKING_STOCK_CANAL: 'rest', BOOKING_API_URL: `http://127.0.0.1:${(falso.address() as AddressInfo).port}`, BOOKING_API_KEY: 'clave-booking-de-pruebas-1234567' });
+    const stock = app.get(StockBooking);
+    const turno = { atrUuid: UUID, fecha: '2030-01-15', hora: '10:30', disponibles: 15 };
+    const estado = async () => (await sql(`SELECT ss_estado AS e, ss_intentos AS n FROM sync_stock WHERE ss_fecha = '2030-01-15'`))[0];
+    try {
+      await stock.enviarTurno(turno, 'VENTA');
+      expect(await estado()).toEqual({ e: 'ERROR', n: 1 });
+      expect(recibidos[0]).toEqual({
+        url: '/api/v3/inventory/stock', clave: 'clave-booking-de-pruebas-1234567',
+        cuerpo: { service_id: 'NODE_ATR_DILAN', item_id: UUID, date: '2030-01-15', time_slot: '10:30 a.m.', available_units: 15 },
+      });
+      responder = 200;
+      await sql(`UPDATE sync_stock SET ss_creado_en = now() - interval '1 minute' WHERE ss_fecha = '2030-01-15'`);
+      expect(await stock.reintentarPendientes()).toBe(1);
+      expect(await estado()).toEqual({ e: 'ENVIADO', n: 2 });
+    } finally {
+      delete process.env.BOOKING_STOCK_CANAL;
+      await new Promise((f) => falso.close(f));
+    }
+  });
+
   it('API propia: horarios, fechas bloqueadas (con JWT) y el stock de ese día en 0 para Booking', async () => {
     const h = await http().get('/api/v1/horarios?atr_id=1');
     expect(contrato.respuesta('GET', '/api/v1/horarios', 200, h.body)).toEqual([]);
@@ -169,7 +204,7 @@ describeDb('ms_inventory', () => {
     expect(contrato.respuesta('POST', '/api/v1/fechas-bloqueadas', 201, b.body)).toEqual([]);
     await esperar(400);
     const nuevos = booking.recibidos.slice(antes);
-    expect(nuevos.map((x) => [x.time_slot, x.available_units])).toEqual([['09:00 a.m.', 0], ['02:00 p.m.', 0]]);
+    expect(nuevos.map((x) => [x.time_slot, x.available_units]).sort()).toEqual([['02:00 p.m.', 0], ['09:00 a.m.', 0]]);
     const d = await http().get(`/api/v3/atracciones/1/disponibilidad?date=${fecha}`);
     expect(d.body.total_available_slots).toBe(0);
 

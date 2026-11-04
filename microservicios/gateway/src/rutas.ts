@@ -6,19 +6,20 @@
  *  - Reservas, cancelación, check-in, vouchers QR y feed de eventos (y `/reservas` de la URL base, guía de
  *    socios §5) → ms_booking, que orquesta la saga con los demás.
  *  - Acuerdo de promociones → ms_coupon.
+ *  - Turistas de Booking (/api/v3/clientes, contrato v3.1) → ms_identity.
  *  - `/api/v1/calendario/*.ics` (enlace de ics_calendar_url) → ms_booking.
  *  - APIs propias de cada microservicio, para el equipo y el panel: /ms/<servicio>/v1/… → /api/v1/…
  *    (nunca las rutas /internal/, que son solo entre servicios).
  * Lo que no es del contrato responde 404 (la tienda monolítica ya no participa).
  */
-export type Destino = 'catalogo' | 'location' | 'review' | 'pricing' | 'inventory' | 'coupon' | 'order' | 'booking' | 'payment' | 'refund' | 'invoicing';
+export type Destino = 'catalogo' | 'location' | 'review' | 'pricing' | 'inventory' | 'coupon' | 'order' | 'booking' | 'payment' | 'refund' | 'invoicing' | 'identity';
 
-export const DESTINOS: Destino[] = ['catalogo', 'location', 'review', 'pricing', 'inventory', 'coupon', 'order', 'booking', 'payment', 'refund', 'invoicing'];
+export const DESTINOS: Destino[] = ['catalogo', 'location', 'review', 'pricing', 'inventory', 'coupon', 'order', 'booking', 'payment', 'refund', 'invoicing', 'identity'];
 
 /** Nombre en /ms/<servicio> → destino. */
 const PROPIAS: Record<string, Destino> = {
   location: 'location', catalog: 'catalogo', review: 'review', pricing: 'pricing', inventory: 'inventory', coupon: 'coupon',
-  order: 'order', booking: 'booking', payment: 'payment', refund: 'refund', invoicing: 'invoicing',
+  order: 'order', booking: 'booking', payment: 'payment', refund: 'refund', invoicing: 'invoicing', identity: 'identity',
 };
 
 /** Segmentos bajo /atracciones que NO son un id o slug de atracción. */
@@ -45,6 +46,7 @@ export function rutear(metodo: string, url: string): Ruta {
     return { destino, ruta: `/api${ms[2] ?? ''}${q}` };
   }
 
+  if (/^\/api\/v3\/clientes\/?$/.test(camino)) return { destino: 'identity', ruta: url };
   if (/^\/api\/v1\/calendario\/[^/]+\.ics$/.test(camino)) return { destino: 'booking', ruta: url };
   if (/^\/api\/v[23]\/reservas(\/|$)/.test(camino)) return { destino: 'booking', ruta: url };
 
@@ -64,7 +66,7 @@ export function rutear(metodo: string, url: string): Ruta {
 }
 
 const PUERTOS: Record<Destino, number> = {
-  location: 4001, catalogo: 4002, review: 4003, pricing: 4004, inventory: 4005, coupon: 4006, order: 4007, booking: 4008, payment: 4009, refund: 4010, invoicing: 4011,
+  location: 4001, catalogo: 4002, review: 4003, pricing: 4004, inventory: 4005, coupon: 4006, order: 4007, booking: 4008, payment: 4009, refund: 4010, invoicing: 4011, identity: 4012,
 };
 
 /** URL de cada servicio: <SERVICIO>_URL (CATALOG_URL para el catálogo) o localhost con su puerto. */

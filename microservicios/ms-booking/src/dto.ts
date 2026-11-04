@@ -226,6 +226,9 @@ export class CheckinRequestV2 {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(60) guia_codigo?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(60) scanner_device_id?: string;
   @IsOptional() @Allow() guia_asignado?: string;
+  // Contrato v3.1: datos del aviso a Booking
+  @IsOptional() @IsInt() @Min(1) @Max(200) asistentes_reales?: number;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(500) observaciones?: string;
 }
 
 export class EventosQueryV2 {

@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: Identity Service (ms_identity) — Descubre EC
+  version: 1.0.0
+  description: |
+    Turistas de Booking sin duplicados (contrato v3.1). El inicio de sesión de la web sigue en la tienda.
+    `client_id` se deriva del id interno (`DEC-USR-<usu_id>`) y nunca cambia.
+servers:
+  - url: http://localhost:4012/api
+    description: Local
+paths:
+  /v3/clientes:
+    get:
+      summary: Consultar si un turista ya existe (basta con que coincida email o identificación)
+      security: [{ ApiKeyAuth: [] }]
+      parameters:
+        - { name: email, in: query, schema: { type: string } }
+        - { name: identificacion, in: query, schema: { type: string } }
+        - { name: identification, in: query, description: Alias de identificacion, schema: { type: string } }
+      responses:
+        '200':
+          description: Turista encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cliente' }
+        '400': { description: Falta email o identificacion }
+        '401': { description: X-API-Key inválida }
+        '404': { description: El turista no existe }
+    post:
+      summary: Registrar un turista (idempotente)
+      security: [{ ApiKeyAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, email, identificacion]
+              properties:
+                nombre: { type: string }
+                email: { type: string, format: email }
+                identificacion: { type: string }
+                telefono: { type: string }
+      responses:
+        '201':
+          description: Turista creado
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [client_id]
+                properties:
+                  client_id: { type: string, example: DEC-USR-1029 }
+        '200':
+          description: Ya existía; se reutiliza su client_id
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [client_id, mensaje]
+                properties:
+                  client_id: { type: string, example: DEC-USR-1029 }
+                  mensaje: { type: string }
+        '400': { description: Datos inválidos }
+        '401': { description: X-API-Key inválida }
+  /v1/clientes:
+    get:
+      summary: Turistas registrados, para el panel (solo ADMIN)
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200': { description: Página de turistas }
+        '401': { description: Sin token válido }
+        '403': { description: Sin rol ADMIN }
+components:
+  securitySchemes:
+    ApiKeyAuth: { type: apiKey, in: header, name: X-API-Key }
+    BearerAuth: { type: http, scheme: bearer }
+  schemas:
+    Cliente:
+      type: object
+      additionalProperties: false
+      required: [client_id, nombre, email]
+      properties:
+        client_id: { type: string, example: DEC-USR-1029 }
+        nombre: { type: string }
+        email: { type: string }
+        identificacion: { type: string, nullable: true }

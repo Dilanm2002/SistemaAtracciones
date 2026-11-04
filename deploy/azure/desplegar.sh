@@ -80,7 +80,7 @@ az containerapp env show -g "$AZ_GRUPO" -n "$ENTORNO" -o none 2>/dev/null || az 
 DOMINIO="$(az containerapp env show -g "$AZ_GRUPO" -n "$ENTORNO" --query properties.defaultDomain -o tsv)"
 GATEWAY_URL="https://descubre-gateway.$DOMINIO"
 
-SERVICIOS=(location catalog review pricing inventory coupon order booking payment refund invoicing)
+SERVICIOS=(location catalog review pricing inventory coupon order booking payment refund invoicing identity)
 # Servicios gRPC del script del equipo y su puerto (expuesto solo dentro del entorno)
 declare -A GRPC_PUERTO=([pricing]=50044 [inventory]=50045 [order]=50047 [booking]=50048)
 
@@ -163,14 +163,16 @@ if existe descubre-tienda; then
 fi
 
 paso "Aplicaciones"
-STOCK=(BOOKING_GRPC_ENABLED=false)
-[ -n "${BOOKING_GRPC_URL:-}" ] && STOCK=(BOOKING_GRPC_URL="$BOOKING_GRPC_URL" BOOKING_GRPC_ENABLED=true BOOKING_SERVICE_ID="${BOOKING_SERVICE_ID:-NODE_ATR_DILAN}")
+# Stock y aviso de check-in a Booking: REST por defecto; con BOOKING_GRPC_URL el stock va por gRPC
+BOOKING_API_URL="${BOOKING_API_URL:-https://booking-core-api.azurewebsites.net}"
+STOCK=(BOOKING_STOCK_ENABLED=true BOOKING_SERVICE_ID="${BOOKING_SERVICE_ID:-NODE_ATR_DILAN}")
+[ -n "${BOOKING_GRPC_URL:-}" ] && STOCK+=(BOOKING_GRPC_URL="$BOOKING_GRPC_URL")
 MS_SECRETOS=(database-url="$MS_DATABASE_URL" jwt-secret="$JWT_SECRET" booking-key="$BOOKING_API_KEY" servicios-token="$SERVICIOS_TOKEN")
 URLS=()
 for s in "${SERVICIOS[@]}"; do URLS+=("${s^^}_URL=http://descubre-$s"); done
 for s in "${!GRPC_PUERTO[@]}"; do URLS+=("${s^^}_GRPC_URL=descubre-$s:${GRPC_PUERTO[$s]}"); done
 MS_VARS=(NODE_ENV=production PORT=8080 DB_SSL=true DATABASE_URL=secretref:database-url JWT_SECRET=secretref:jwt-secret
-  BOOKING_API_KEY=secretref:booking-key SERVICIOS_TOKEN=secretref:servicios-token PUBLIC_URL="$GATEWAY_URL"
+  BOOKING_API_KEY=secretref:booking-key SERVICIOS_TOKEN=secretref:servicios-token PUBLIC_URL="$GATEWAY_URL" BOOKING_API_URL="$BOOKING_API_URL"
   FOTOS_BASE_URL="${FOTOS_BASE_URL:-https://sistemaatracciones-backend.vercel.app}" "${URLS[@]}")
 # El Session pooler de Supabase (plan gratuito) admite ~15 conexiones: 1 por servicio, 2 en los más usados
 declare -A POOL=([catalog]=2 [inventory]=2 [booking]=2)
@@ -180,6 +182,8 @@ for s in "${SERVICIOS[@]}"; do
   [ -n "${GRPC_PUERTO[$s]:-}" ] && extra+=(GRPC_PORT="${GRPC_PUERTO[$s]}")
   [ -n "${EVENTOS[$s]:-}" ] && extra+=(EVENTOS_DESTINOS="${EVENTOS[$s]}")
   [ "$s" = inventory ] && extra+=("${STOCK[@]}")
+  # ms-identity se usa poco: suelta su conexión al quedar inactivo y el pooler se queda con 14 fijas
+  [ "$s" = identity ] && extra+=(DB_IDLE_MS=30000)
   app "descubre-$s" internal 0.25 0.5Gi -- "${MS_SECRETOS[@]}" -- "${extra[@]}" "${MS_VARS[@]}"
   [ -n "${GRPC_PUERTO[$s]:-}" ] && puerto_grpc "descubre-$s" "${GRPC_PUERTO[$s]}"
 done

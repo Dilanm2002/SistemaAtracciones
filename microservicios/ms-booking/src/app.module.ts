@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AliasV2Middleware } from './alias.middleware';
+import { AvisoCheckin } from './aviso-checkin';
 import { CatalogoClient, FacturacionClient, InventarioClient, OrdenClient, PagoClient, PricingClient, ReembolsoClient } from './clientes';
 import { DbService } from './comun/db.service';
 import { NOMBRE_SERVICIO, SaludController } from './comun/salud.controller';
@@ -11,7 +12,7 @@ import { ReservaGrpc, ReservasService } from './reservas';
 @Module({
   controllers: [ReservasBookingController, ReservasBaseController, ReservasPropiasController, SaludController],
   providers: [
-    DbService, Idempotencia, EventosService, ReservasService, ReservaGrpc,
+    DbService, Idempotencia, EventosService, ReservasService, ReservaGrpc, AvisoCheckin,
     CatalogoClient, PricingClient, InventarioClient, OrdenClient, PagoClient, ReembolsoClient, FacturacionClient,
     { provide: NOMBRE_SERVICIO, useValue: 'ms-booking' },
   ],
