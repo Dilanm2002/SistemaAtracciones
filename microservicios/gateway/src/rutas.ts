@@ -12,8 +12,9 @@
  *    (nunca las rutas /internal/, que son solo entre servicios).
  * Lo que no es del contrato responde 404 (la tienda monolítica ya no participa).
  */
-export type Destino = 'catalogo' | 'location' | 'review' | 'pricing' | 'inventory' | 'coupon' | 'order' | 'booking' | 'payment' | 'refund' | 'invoicing' | 'identity';
+export type Destino = 'catalogo' | 'location' | 'review' | 'pricing' | 'inventory' | 'coupon' | 'order' | 'booking' | 'payment' | 'refund' | 'invoicing' | 'identity' | 'bff';
 
+/** Los que cuentan para la salud del nodo. El BFF no: solo lo usa la web, no Booking. */
 export const DESTINOS: Destino[] = ['catalogo', 'location', 'review', 'pricing', 'inventory', 'coupon', 'order', 'booking', 'payment', 'refund', 'invoicing', 'identity'];
 
 /** Nombre en /ms/<servicio> → destino. */
@@ -37,6 +38,10 @@ export interface Ruta {
 export function rutear(metodo: string, url: string): Ruta {
   const [camino, consulta = ''] = url.split('?');
   const q = consulta ? `?${consulta}` : '';
+
+  // BFF de la web y el panel: /bff/v1/atracciones → /api/v1/atracciones
+  const bff = /^\/bff(\/v1\/.*)$/.exec(camino);
+  if (bff) return { destino: 'bff', ruta: `/api${bff[1]}${q}` };
 
   // APIs propias: /ms/catalog/v1/atracciones → /api/v1/atracciones (las /internal/ no se publican)
   const ms = /^\/ms\/([a-z]+)(\/.*)?$/.exec(camino);
@@ -66,7 +71,7 @@ export function rutear(metodo: string, url: string): Ruta {
 }
 
 const PUERTOS: Record<Destino, number> = {
-  location: 4001, catalogo: 4002, review: 4003, pricing: 4004, inventory: 4005, coupon: 4006, order: 4007, booking: 4008, payment: 4009, refund: 4010, invoicing: 4011, identity: 4012,
+  location: 4001, catalogo: 4002, review: 4003, pricing: 4004, inventory: 4005, coupon: 4006, order: 4007, booking: 4008, payment: 4009, refund: 4010, invoicing: 4011, identity: 4012, bff: 4013,
 };
 
 /** URL de cada servicio: <SERVICIO>_URL (CATALOG_URL para el catálogo) o localhost con su puerto. */

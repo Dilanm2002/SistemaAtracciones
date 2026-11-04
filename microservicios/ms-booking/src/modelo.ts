@@ -35,6 +35,11 @@ export interface FilaReserva {
   reembolso_numero: string | null;
   reembolso_monto: number | null;
   origen: string;
+  usu_id: string | null;
+  client_id: string | null;
+  observaciones: string | null;
+  aviso_checkin: string | null;
+  aviso_respuesta: string | null;
   saga_id: string | null;
   checkin_en: Date | null;
   cancelado_en: Date | null;
@@ -56,6 +61,7 @@ export const SELECT_RESERVA = `SELECT r.res_id::text, r.res_uuid::text AS id, r.
        r.res_cancelacion_gratuita AS cancelacion_gratuita, r.res_horas_cancelacion AS horas_cancelacion,
        r.res_metodo_pago AS metodo, r.res_pago_estado AS pago_estado, r.res_reembolso_numero AS reembolso_numero,
        r.res_reembolso_monto::float8 AS reembolso_monto, r.res_origen AS origen, r.res_saga_id AS saga_id,
+       r.res_usu_id AS usu_id, r.res_client_id AS client_id, r.res_observaciones AS observaciones, r.res_aviso_checkin AS aviso_checkin, r.res_aviso_respuesta AS aviso_respuesta,
        r.res_checkin_en AS checkin_en, r.res_cancelado_en AS cancelado_en, r.res_motivo_cancelacion AS motivo_cancelacion,
        r.res_creado_en AS creado_en,
        p.pax_nombre, p.pax_documento, p.pax_tipo_documento, p.pax_correo, p.pax_telefono

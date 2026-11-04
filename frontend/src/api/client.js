@@ -2,6 +2,11 @@ import { pruebaDpop, reiniciarLlaves } from './dpop';
 import { ahoraServidor, sincronizarReloj } from './reloj';
 import { reportarError, rutaPlantilla } from './telemetria';
 export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api/v1').replace(/\/$/, '');
+/**
+ * BFF de los microservicios detrás del gateway (…/bff/v1): catálogo, cupos y reservas. Sin esta variable, todo
+ * vuelve a la API de la tienda. El inicio de sesión y las fotos siguen siempre en la tienda.
+ */
+export const BFF_URL = (import.meta.env.VITE_BFF_URL ?? '').replace(/\/$/, '');
 /** Contrato v2 con Booking Prototipo (mismo servidor, /api/v2) */
 export const API_URL_V2 = API_URL.replace(/\/v1$/, '/v2');
 const TOKEN_KEY = 'dec_token';
@@ -61,8 +66,8 @@ const wait = (ms, signal) =>
  * @param {string} path  ruta relativa a /api/v1
  * @param {{method?:string, body?:any, idempotencyKey?:string, signal?:AbortSignal, form?:FormData}} opts
  */
-export async function api(path, { method = 'GET', body, idempotencyKey, signal, form, v2 = false, _reintentoDpop = false } = {}) {
-  const BASE = v2 ? API_URL_V2 : API_URL;
+export async function api(path, { method = 'GET', body, idempotencyKey, signal, form, v2 = false, bff = false, _reintentoDpop = false } = {}) {
+  const BASE = bff && BFF_URL ? BFF_URL : v2 ? API_URL_V2 : API_URL;
   const token = tokenStore.get();
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -113,7 +118,7 @@ export async function api(path, { method = 'GET', body, idempotencyKey, signal, 
   // se reintenta UNA vez antes de mostrar el error o cerrar la sesión
   if (res.status === 401 && conPrueba && !_reintentoDpop && /Prueba DPoP inválida/.test(data?.detail ?? '')) {
     if (!/hora/.test(data.detail)) await reiniciarLlaves();
-    return api(path, { method, body, idempotencyKey, signal, form, v2, _reintentoDpop: true });
+    return api(path, { method, body, idempotencyKey, signal, form, v2, bff, _reintentoDpop: true });
   }
   if (!res.ok) {
     if (res.status === 401 && token) window.dispatchEvent(new CustomEvent('auth:expired'));
@@ -172,41 +177,43 @@ export const Favoritos = {
   remove: (id) => api(`/favoritos/${id}`, { method: 'DELETE' }),
 };
 
+const apiBff = (path, opts = {}) => api(path, { ...opts, bff: true });
+
 export const Atracciones = {
-  search: (body, signal) => api('/atracciones/search', { method: 'POST', body, signal }),
-  list: (params = {}) => api(`/atracciones${qs(params)}`),
-  get: (id) => api(`/atracciones/${id}`),
-  details: (ids) => api('/atracciones/details', { method: 'POST', body: { attractions: ids, languages: ['es'] } }),
-  create: (data) => api('/atracciones', { method: 'POST', body: data }),
-  update: (id, data) => api(`/atracciones/${id}`, { method: 'PATCH', body: data }),
-  remove: (id) => api(`/atracciones/${id}`, { method: 'DELETE' }),
+  search: (body, signal) => apiBff('/atracciones/search', { method: 'POST', body, signal }),
+  list: (params = {}) => apiBff(`/atracciones${qs(params)}`),
+  get: (id) => apiBff(`/atracciones/${id}`),
+  details: (ids) => apiBff('/atracciones/details', { method: 'POST', body: { attractions: ids, languages: ['es'] } }),
+  create: (data) => apiBff('/atracciones', { method: 'POST', body: data }),
+  update: (id, data) => apiBff(`/atracciones/${id}`, { method: 'PATCH', body: data }),
+  remove: (id) => apiBff(`/atracciones/${id}`, { method: 'DELETE' }),
   /** Admin: aprobar (APPROVE) o rechazar con motivo (REJECT) lo que subió una empresa */
-  review: (id, decision, reason) => api(`/atracciones/${id}/review`, { method: 'POST', body: { decision, ...(reason ? { reason } : {}) } }),
-  availability: (id, date) => api(`/atracciones/${id}/availability${qs({ date })}`),
-  calendar: (id, month) => api(`/atracciones/${id}/availability/calendar${qs({ month })}`),
-  blocked: (id) => api(`/atracciones/${id}/blocked-dates`),
-  block: (id, date, reason) => api(`/atracciones/${id}/blocked-dates`, { method: 'POST', body: { date, reason } }),
-  unblock: (id, blockId) => api(`/atracciones/${id}/blocked-dates/${blockId}`, { method: 'DELETE' }),
-  reviews: (id, params = {}) => api(`/atracciones/${id}/reviews${qs(params)}`),
-  reviewEligibility: (id) => api(`/atracciones/${id}/reviews/eligibility`),
+  review: (id, decision, reason) => apiBff(`/atracciones/${id}/review`, { method: 'POST', body: { decision, ...(reason ? { reason } : {}) } }),
+  availability: (id, date) => apiBff(`/atracciones/${id}/availability${qs({ date })}`),
+  calendar: (id, month) => apiBff(`/atracciones/${id}/availability/calendar${qs({ month })}`),
+  blocked: (id) => apiBff(`/atracciones/${id}/blocked-dates`),
+  block: (id, date, reason) => apiBff(`/atracciones/${id}/blocked-dates`, { method: 'POST', body: { date, reason } }),
+  unblock: (id, blockId) => apiBff(`/atracciones/${id}/blocked-dates/${blockId}`, { method: 'DELETE' }),
+  reviews: (id, params = {}) => apiBff(`/atracciones/${id}/reviews${qs(params)}`),
+  reviewEligibility: (id) => apiBff(`/atracciones/${id}/reviews/eligibility`),
   /** pilares (opcional): { cleanliness, service, value, punctuality } de 1 a 5 */
-  createReview: (id, rating, comment, pilares = {}) => api(`/atracciones/${id}/reviews`, { method: 'POST', body: { rating, comment, ...pilares } }),
+  createReview: (id, rating, comment, pilares = {}) => apiBff(`/atracciones/${id}/reviews`, { method: 'POST', body: { rating, comment, ...pilares } }),
 };
 
 export const Reservas = {
-  calendario: (id) => api(`/atracciones/reservations/${id}/calendar-link`),
+  calendario: (id) => apiBff(`/atracciones/reservations/${id}/calendar-link`),
   create: (atraccionId, body, idempotencyKey) =>
-    api(`/atracciones/${atraccionId}/reservations`, { method: 'POST', body, idempotencyKey }),
-  list: (params = {}) => api(`/atracciones/reservations${qs(params)}`),
-  get: (id) => api(`/atracciones/reservations/${id}`),
+    apiBff(`/atracciones/${atraccionId}/reservations`, { method: 'POST', body, idempotencyKey }),
+  list: (params = {}) => apiBff(`/atracciones/reservations${qs(params)}`),
+  get: (id) => apiBff(`/atracciones/reservations/${id}`),
   /** acceptNoRefund: el cliente confirma que cancela fuera de plazo, sin reembolso */
   cancel: (id, reason, idempotencyKey, acceptNoRefund = false) =>
-    api(`/atracciones/reservations/${id}/cancel`, { method: 'POST', body: { reason, ...(acceptNoRefund ? { accept_no_refund: true } : {}) }, idempotencyKey }),
-  confirm: (id, idempotencyKey) => api(`/atracciones/reservations/${id}/confirm`, { method: 'POST', idempotencyKey }),
+    apiBff(`/atracciones/reservations/${id}/cancel`, { method: 'POST', body: { reason, ...(acceptNoRefund ? { accept_no_refund: true } : {}) }, idempotencyKey }),
+  confirm: (id, idempotencyKey) => apiBff(`/atracciones/reservations/${id}/confirm`, { method: 'POST', idempotencyKey }),
   /** Check-in presencial desde el panel (operador o admin) */
-  checkin: (id, documento) => api(`/atracciones/reservations/${id}/checkin`, { method: 'POST', body: { documento_identidad: documento } }),
+  checkin: (id, documento) => apiBff(`/atracciones/reservations/${id}/checkin`, { method: 'POST', body: { documento_identidad: documento }, idempotencyKey: newIdempotencyKey() }),
   /** Imagen del QR del voucher (contrato v2) */
-  qrUrl: (codigo) => `${API_URL_V2}/atracciones/vouchers/${codigo}/qr.png`,
+  qrUrl: (codigo) => `${BFF_URL ? BFF_URL.replace(/\/bff\/v1$/, '/api/v3') : API_URL_V2}/atracciones/vouchers/${codigo}/qr.png`,
 };
 
 /** Acuerdo B2B de promociones y combos con Booking Prototipo (contrato v2) */
@@ -229,6 +236,11 @@ export const Resenas = {
   list: (params = {}) => api(`/resenas${qs(params)}`),
   moderate: (id, visible) => api(`/resenas/${id}`, { method: 'PATCH', body: { visible } }),
   remove: (id) => api(`/resenas/${id}`, { method: 'DELETE' }),
+};
+
+/** Turistas registrados por Booking (contrato v3.1), para el panel. */
+export const Turistas = {
+  list: (params = {}) => apiBff(`/turistas${qs(params)}`),
 };
 
 export const Reportes = {

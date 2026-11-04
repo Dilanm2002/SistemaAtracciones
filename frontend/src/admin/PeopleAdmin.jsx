@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Download, Eye, EyeOff, Mail, MailOpen, MessageSquareText, Plus, Reply, Search, Star, Trash2, UserCog, Users } from 'lucide-react';
-import { Mensajes, Operadores, Reportes, Resenas, Usuarios } from '../api/client';
+import { Mensajes, Operadores, Reportes, Resenas, Turistas, Usuarios } from '../api/client';
 import { Alert, EmptyState, ErrorState, Field, Modal, RequiredLegend, Spinner, Stars, Switch, useAsync, useConfirm, useDebounce } from '../components/ui';
 import { ROL_LABEL, useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -11,6 +11,45 @@ import { useAdmin } from './AdminLayout';
 import { exportXlsx } from './excel';
 
 // ── Clientes ─────────────────────────────────────────────────────────────
+/** Turistas que Booking registró en /api/v3/clientes: cada persona aparece una sola vez. */
+export function TuristasAdmin() {
+  const [q, setQ] = useState('');
+  const dq = useDebounce(q, 300);
+  const { data, loading, error, reload } = useAsync(() => Turistas.list({ q: dq, limit: 100 }), [dq]);
+  const rows = data?.data ?? [];
+
+  return (
+    <>
+      <div className="adm-module-head">
+        <div><h2>Turistas de Booking</h2><p>{data ? `${data.total} persona(s) registradas, sin duplicados.` : 'Personas registradas desde Booking y la web.'}</p></div>
+      </div>
+      <div className="adm-toolbar">
+        <div className="input-icon"><Search size={18} aria-hidden="true" /><input className="input" type="search" maxLength={LIMITES.busqueda} placeholder="Nombre, correo o documento" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar turistas" data-shortcut-search /></div>
+      </div>
+      {error ? <ErrorState error={error} onRetry={reload} /> : loading && !data ? <div className="skeleton" style={{ height: 300 }} /> : rows.length === 0 ? <EmptyState icon={Users} title="Sin turistas que coincidan" /> : (
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
+          <table className="table">
+            <caption className="sr-only">Turistas registrados</caption>
+            <thead><tr><th scope="col">ID de cliente</th><th scope="col">Turista</th><th scope="col">Contacto</th><th scope="col">Documento</th><th scope="col">Origen</th><th scope="col">Registro</th></tr></thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.client_id}>
+                  <td><code>{c.client_id}</code></td>
+                  <td><strong>{c.nombre}</strong></td>
+                  <td className="small">{c.email}<br /><span className="muted">{c.telefono ?? '—'}</span></td>
+                  <td className="small">{c.identificacion ?? '—'}</td>
+                  <td className="small">{c.origen === 'BOOKING' ? 'Booking' : 'Web'}</td>
+                  <td className="small">{fmtRelative(c.creado_en)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function ClientesAdmin() {
   const { data, loading, error, reload } = useAsync(() => Reportes.clientes(), []);
   const [q, setQ] = useState('');

@@ -91,7 +91,7 @@ async function main() {
     console.log('ms_location:', loc);
 
     // ── ms_catalog ──
-    const cat = await enTransaccion(pools.catalog, async (c) => {
+    const cat = !FORZAR && (await pools.catalog.query('SELECT 1 FROM atraccion LIMIT 1')).rowCount ? 'ya tiene datos propios; no se copia (MIGRAR_FORZAR=true para forzar)' : await enTransaccion(pools.catalog, async (c) => {
       await c.query(`TRUNCATE tarifa_vigente, atraccion_itinerario, atraccion_foto, atraccion_inclusion, atraccion_idioma, atraccion_categoria,
                               atraccion, operador_usuario, operador, categoria, idioma, inclusion RESTART IDENTITY CASCADE`);
       const n = {};
@@ -138,7 +138,7 @@ async function main() {
     console.log('ms_catalog:', cat);
 
     // ── ms_review ── (regla del script: con usu_id, ren_autor_nombre va NULL)
-    const rev = await enTransaccion(pools.review, async (c) => {
+    const rev = !FORZAR && (await pools.review.query('SELECT 1 FROM resena LIMIT 1')).rowCount ? 'ya tiene datos propios; no se copia (MIGRAR_FORZAR=true para forzar)' : await enTransaccion(pools.review, async (c) => {
       await c.query('TRUNCATE resena RESTART IDENTITY');
       const n = {
         resena: await insertar(c, 'resena', await t(`SELECT ren_id, atr_id, usu_id, CASE WHEN usu_id IS NULL THEN ren_autor_nombre END AS ren_autor_nombre,

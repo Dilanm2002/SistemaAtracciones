@@ -106,7 +106,7 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
   }
 
   /** POST /reservas del contrato: 201 confirmada o 409 OUT_OF_STOCK (activa la compensación de la saga de Booking). */
-  async crear(dto: CreateReservaRequestV2, key: string) {
+  async crear(dto: CreateReservaRequestV2, key: string, ctx: { origen: 'WEB' | 'BOOKING'; usuId: string | null } = { origen: 'BOOKING', usuId: null }) {
     if (dto.idempotency_key && dto.idempotency_key !== key) throw new BadRequestException('idempotency_key del cuerpo no coincide con la cabecera Idempotency-Key.');
     const hora = parseHora(dto.hora);
     if (!hora) throw new BadRequestException('hora no es válida: usa HH:mm:ss (24 h) o el formato del turno, p. ej. «10:30 a.m.».');
@@ -131,13 +131,13 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
     if ((dto.passengers?.length ?? 0) > tickets - 1) throw new BadRequestException('passengers tiene más acompañantes que boletos (el titular ya ocupa uno).');
     const a = await this.catalogo.atraccion(dto.atraccion_id);
     if (a.atr_estado !== 'PUBLICADA' || a.atr_eliminado_en) throw new NotFoundException('La atracción no existe o ya no está disponible.');
-    const sujeto = await this.usuarioBooking();
-    return this.idem.ejecutar(key, `v2:reserve:${a.atr_uuid}`, 'booking', { ...dto, atraccion_id: a.atr_uuid }, () => this.saga(dto, a, hora, n, tickets, sujeto), this.porReferencia);
+    const sujeto = ctx.usuId ?? (await this.usuarioBooking());
+    return this.idem.ejecutar(key, `v2:reserve:${a.atr_uuid}`, 'booking', { ...dto, atraccion_id: a.atr_uuid }, () => this.saga(dto, a, hora, n, tickets, sujeto, ctx), this.porReferencia);
   }
 
   private async saga(
     dto: CreateReservaRequestV2, a: Awaited<ReturnType<CatalogoClient['atraccion']>>, hora: string,
-    n: Record<(typeof TIPOS)[number]['clave'], number>, tickets: number, sujeto: string,
+    n: Record<(typeof TIPOS)[number]['clave'], number>, tickets: number, sujeto: string, ctx: { origen: 'WEB' | 'BOOKING'; usuId: string | null },
   ) {
     const fecha = dto.fecha.slice(0, 10);
     // Booking lo envía en la raíz y en customer (contrato v3.1): si vienen los dos deben coincidir
@@ -207,9 +207,9 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
                                 res_numero_tickets, res_precio_unitario, res_precio_nino, res_precio_senior, res_precio_estudiante, res_subtotal,
                                 res_observaciones, res_confirmado_en, res_fecha, res_hora, res_origen, res_saga_id, res_booking_ref,
                                 ord_id, ord_numero, pag_id, atr_id, atr_uuid, atr_nombre, res_punto_encuentro, res_guia,
-                                res_cancelacion_gratuita, res_horas_cancelacion, res_moneda, res_metodo_pago, res_pago_estado, res_factura_pendiente, res_client_id)
+                                res_cancelacion_gratuita, res_horas_cancelacion, res_moneda, res_metodo_pago, res_pago_estado, res_factura_pendiente, res_client_id, res_usu_id)
            VALUES ($1, $2, $3, $4, (SELECT est_id FROM estado WHERE est_codigo = 'CONFIRMADA'), $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-                   $16, now(), $17, $18::time, 'BOOKING', $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
+                   $16, now(), $17, $18::time, $36, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $37)
            RETURNING res_id::text`,
           [
             resUuid, `DEC-${suf}`, detPrincipal, turno.dis_id, n.adultos, n.ninos, n.seniors, n.estudiantes, n.infantes, tickets,
@@ -217,7 +217,7 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
             dinero(total), dto.special_requirements ?? null, fecha, hora, dto.saga_id ?? null, (dto as { booking_reservation_id?: string }).booking_reservation_id ?? null,
             ord.ord_id, ord.ord_numero, pago.pag_id, a.atr_id, a.atr_uuid, a.atr_nombre,
             a.atr_punto_encuentro ?? a.atr_direccion ?? (await this.catalogo.ciudad(a.ciu_id)), a.atr_guia,
-            a.atr_cancelacion_gratuita, a.atr_horas_cancelacion, moneda, metodo, pago.estado, pagada, clientId,
+            a.atr_cancelacion_gratuita, a.atr_horas_cancelacion, moneda, metodo, pago.estado, pagada, clientId, ctx.origen, ctx.usuId,
           ],
         );
         const c = dto.customer;
@@ -288,7 +288,7 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
    * 200 con su estado. SAGA_ORCHESTRATOR y ADMIN cancelan siempre con reembolso total; el CLIENTE solo dentro
    * de su plazo. Cada paso remoto es idempotente: si uno falla (503), reintentar lo completa.
    */
-  async cancelar(ref: string, dto: CancelReservationRequestV2, key: string) {
+  async cancelar(ref: string, dto: CancelReservationRequestV2, key: string, op: { aceptaSinReembolso?: boolean } = {}) {
     const r0 = await this.filaOr404(ref);
     return this.idem.ejecutar(key, `v2:cancel:${r0.id}`, 'booking', dto, async () => {
       const r = await this.filaOr404(r0.id);
@@ -299,14 +299,15 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
       if (solicitante === 'CLIENTE') {
         const pol = politicaCancelacion(r);
         if (pol.policy === 'NOT_ALLOWED') throw new BadRequestException(pol.motivo);
-        if (pol.policy === 'NO_REFUND') throw new BadRequestException(`${pol.motivo} Fuera del plazo de cancelación gratuita solo el orquestador (SAGA_ORCHESTRATOR) o un ADMIN pueden cancelarla.`);
+        if (pol.policy === 'NO_REFUND' && !op.aceptaSinReembolso) throw new BadRequestException(`${pol.motivo} Fuera del plazo de cancelación gratuita solo el orquestador (SAGA_ORCHESTRATOR) o un ADMIN pueden cancelarla.`);
       }
+      const sinReembolso = solicitante === 'CLIENTE' && politicaCancelacion(r).policy === 'NO_REFUND';
       const motivo = `[${solicitante}] ${dto.reason || (solicitante === 'SAGA_ORCHESTRATOR' ? 'Compensación de saga de Booking' : 'Cancelación solicitada en Booking')}`.slice(0, 255);
 
       await this.inventario.liberar({ dis_id: r.dis_id, cupos: r.tickets, referencia: r.id });
       let pago: Pago | null = r.pag_id ? await this.pagos.uno(Number(r.pag_id)) : null;
       let reembolso: { rem_numero: string; rem_monto: string } | null = null;
-      if (pago?.estado === 'APROBADO') {
+      if (pago?.estado === 'APROBADO' && !sinReembolso) {
         reembolso = await this.reembolsos.crear(pago.pag_id, motivo);
         if (r.ord_id) {
           // La orden pasa a PAGADA después de responder la compra: si la cancelación llega antes, se completa aquí
@@ -334,6 +335,26 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
       });
       return reservaContrato(await this.filaOr404(r.id));
     }, this.porReferencia);
+  }
+
+  /** Confirma un pago pendiente (transferencia, en sitio) desde el panel. Idempotente. */
+  async confirmarPago(ref: string): Promise<void> {
+    const r = await this.filaOr404(ref);
+    if (r.estado === 'CANCELADA') throw new ConflictException({ message: 'La reserva está cancelada.', code: 'RESERVATION_CANCELLED' });
+    if (r.pago_estado === 'APROBADO' || !r.pag_id) return;
+    const pago = await this.pagos.aprobar(Number(r.pag_id));
+    await this.db.query('UPDATE reserva SET res_pago_estado = $2, res_factura_pendiente = TRUE WHERE res_id = $1', [r.res_id, pago.estado]);
+    setImmediate(() => void this.emitirFactura(r.res_id).catch((e: Error) => this.logger.warn(`Factura de ${r.id} pendiente: ${e.message}`)));
+  }
+
+  /** Reservas para la web y el panel, con filtros por dueño y atracción. */
+  filas(f: { usuId?: string; atrUuids?: string[]; atrUuid?: string; limite?: number }) {
+    return this.db.query<FilaReserva>(
+      `${SELECT_RESERVA}
+        WHERE ($1::text IS NULL OR r.res_usu_id = $1) AND ($2::uuid[] IS NULL OR r.atr_uuid = ANY($2::uuid[])) AND ($3::uuid IS NULL OR r.atr_uuid = $3)
+        ORDER BY r.res_id DESC LIMIT $4`,
+      [f.usuId ?? null, f.atrUuids ?? null, f.atrUuid ?? null, f.limite ?? 500],
+    );
   }
 
   private respuestaCheckin(r: FilaReserva) {

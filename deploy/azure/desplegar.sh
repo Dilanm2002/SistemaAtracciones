@@ -189,6 +189,10 @@ for s in "${SERVICIOS[@]}"; do
 done
 GW_URLS=(CATALOG_URL=http://descubre-catalog)
 for s in "${SERVICIOS[@]}"; do [ "$s" = catalog ] || GW_URLS+=("${s^^}_URL=http://descubre-$s"); done
+GW_URLS+=(BFF_URL=http://descubre-bff)
+# BFF de la web y el panel: sin base propia, no usa conexiones del pooler
+app descubre-bff internal 0.25 0.5Gi -- jwt-secret="$JWT_SECRET" -- SERVICIO=bff-web NODE_ENV=production PORT=8080 JWT_SECRET=secretref:jwt-secret \
+  FOTOS_BASE_URL="${FOTOS_BASE_URL:-https://sistemaatracciones-backend.vercel.app}" FRONTEND_URL="${FRONTEND_URL:-}" "${URLS[@]}"
 app descubre-gateway external 0.25 0.5Gi -- servicios-token="$SERVICIOS_TOKEN" -- \
   SERVICIO=gateway NODE_ENV=production PORT=8080 GATEWAY_TIMEOUT_MS=8000 NODE_CODE="${BOOKING_SERVICE_ID:-NODE_ATR_DILAN}" "${GW_URLS[@]}"
 

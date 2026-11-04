@@ -145,7 +145,7 @@ export class TarifasController {
 
   @Put(':atr_id')
   @UseGuards(JwtGuard)
-  @Roles('ADMIN')
+  @Roles('ADMIN', 'OPERADOR')
   cambiar(@Param('atr_id', ParseIntPipe) atrId: number, @Body() dto: CambiarTarifas) {
     return this.s.cambiar(atrId, dto);
   }

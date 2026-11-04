@@ -43,6 +43,7 @@ lanzar ms-payment   DATABASE_URL=$DB/ms_payment
 lanzar ms-refund    DATABASE_URL=$DB/ms_refund
 lanzar ms-invoicing DATABASE_URL=$DB/ms_invoicing
 lanzar ms-identity  DATABASE_URL=$DB/ms_identity
+lanzar bff-web
 lanzar gateway
 
 echo "Esperando a que todo responda…"

@@ -92,6 +92,11 @@ export class ParadaEntrada {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(150) iti_lugar?: string;
 }
 
+export class InclusionTexto {
+  @IsIn(['INCLUYE', 'NO_INCLUYE', 'RECOMENDACION']) inc_tipo: 'INCLUYE' | 'NO_INCLUYE' | 'RECOMENDACION';
+  @Transform(trim) @IsString() @MinLength(2) @MaxLength(120) inc_nombre: string;
+}
+
 /** Campos editables de la atracción (crear: los obligatorios del script; actualizar: todos opcionales). */
 export class AtraccionCampos {
   @IsOptional() @Transform(trim) @IsString() @MinLength(3) @MaxLength(200) atr_nombre?: string;
@@ -121,6 +126,7 @@ export class AtraccionCampos {
   @IsOptional() @IsArray() @ArrayMaxSize(10) @IsInt({ each: true }) cat_ids?: number[];
   @IsOptional() @IsArray() @ArrayMaxSize(10) @IsInt({ each: true }) idi_ids?: number[];
   @IsOptional() @IsArray() @ArrayMaxSize(50) @IsInt({ each: true }) inc_ids?: number[];
+  @IsOptional() @IsArray() @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => InclusionTexto) inclusiones_texto?: InclusionTexto[];
   @IsOptional() @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => FotoEntrada) fotos?: FotoEntrada[];
   @IsOptional() @IsArray() @ArrayMaxSize(30) @ValidateNested({ each: true }) @Type(() => ParadaEntrada) itinerario?: ParadaEntrada[];
 }

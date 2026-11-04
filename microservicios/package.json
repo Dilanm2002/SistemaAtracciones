@@ -16,6 +16,7 @@
     "ms-refund",
     "ms-invoicing",
     "ms-identity",
+    "bff-web",
     "gateway"
   ],
   "scripts": {

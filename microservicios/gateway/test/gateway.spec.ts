@@ -52,6 +52,7 @@ describe('tabla de ruteo (cada ruta del contrato v3 a su microservicio)', () => 
     ['GET', `/api/v3/atracciones/${uuid}/disponibilidad?date=2026-11-01`, 'inventory'],
     ['GET', '/api/v3/clientes?email=a@b.com', 'identity'],
     ['POST', '/api/v3/clientes', 'identity'],
+    ['POST', '/bff/v1/atracciones/search', 'bff'],
     ['POST', '/api/v3/atracciones/reservas', 'booking'],
     ['GET', '/api/v3/atracciones/reservas/DEC-7F3K9Q', 'booking'],
     ['POST', '/api/v3/atracciones/reservas/x/cancel', 'booking'],

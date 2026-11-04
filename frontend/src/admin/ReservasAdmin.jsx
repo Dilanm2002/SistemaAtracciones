@@ -17,6 +17,8 @@ const TABS = [
   ['all', 'Todas'],
 ];
 
+const AVISO = { PENDIENTE: 'Aviso a Booking pendiente', ENVIADO: 'Booking avisado', FALLIDO: 'Booking no recibió el aviso' };
+
 export default function ReservasAdmin() {
   const toast = useToast();
   const confirm = useConfirm();
@@ -144,7 +146,11 @@ export default function ReservasAdmin() {
                   <td className="num">{r.ticket_count}</td>
                   <td className="num">{fmtMoney(r.total_price.total)}</td>
                   <td className="small">{PAYMENT[r.payment_method]}</td>
-                  <td><StatusBadge status={estadoVisible(r)} /></td>
+                  <td>
+                    <StatusBadge status={estadoVisible(r)} />
+                    {r.origin === 'BOOKING' && <div className="muted tiny">Reservada en Booking</div>}
+                    {r.booking_notice && <div className="muted tiny">{AVISO[r.booking_notice]}</div>}
+                  </td>
                   <td>
                     <div className="actions">
                       <button className="icon-btn sm" onClick={() => setDetail(r)} aria-label={`Ver ${r.code}`} data-tip="Ver detalle"><Eye size={17} /></button>
@@ -176,9 +182,9 @@ export default function ReservasAdmin() {
           r={checkin}
           onClose={() => setCheckin(null)}
           onDone={(u) => {
-            replace({ ...checkin, checked_in_at: u.hora_checkin });
+            replace({ ...checkin, checked_in_at: u.hora_checkin, ...(checkin.origin === 'BOOKING' ? { booking_notice: 'PENDIENTE' } : {}) });
             setCheckin(null);
-            toast(`Check-in de ${u.titular_nombre} registrado`, 'success');
+            toast(checkin.origin === 'BOOKING' ? `Check-in de ${u.titular_nombre} registrado. Avisando a Booking.` : `Check-in de ${u.titular_nombre} registrado`, 'success');
           }}
         />
       )}

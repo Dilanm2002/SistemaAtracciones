@@ -24,6 +24,7 @@ const CategoriasAdmin = lazyRecarga(() => import('./admin/CatalogAdmin').then((m
 const DestinosAdmin = lazyRecarga(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.DestinosAdmin })));
 const OperadoresAdmin = lazyRecarga(() => import('./admin/CatalogAdmin').then((m) => ({ default: m.OperadoresAdmin })));
 const ClientesAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ClientesAdmin })));
+const TuristasAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.TuristasAdmin })));
 const UsuariosAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.UsuariosAdmin })));
 const ResenasAdmin = lazyRecarga(() => import('./admin/PeopleAdmin').then((m) => ({ default: m.ResenasAdmin })));
 const IntegracionAdmin = lazyRecarga(() => import('./admin/IntegracionAdmin'));
@@ -98,6 +99,7 @@ export default function App() {
           <Route path="reservas" element={<ReservasAdmin />} />
           <Route path="disponibilidad" element={<DisponibilidadAdmin />} />
           <Route path="clientes" element={<ClientesAdmin />} />
+          <Route path="turistas" element={<TuristasAdmin />} />
           <Route path="usuarios" element={<UsuariosAdmin />} />
           <Route path="reportes" element={<ReportesAdmin />} />
           <Route path="resenas" element={<ResenasAdmin />} />

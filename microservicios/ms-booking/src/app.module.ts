@@ -8,9 +8,10 @@ import { ReservasBaseController, ReservasBookingController, ReservasPropiasContr
 import { EventosService } from './eventos';
 import { Idempotencia } from './idempotencia';
 import { ReservaGrpc, ReservasService } from './reservas';
+import { ReservasWebController } from './web.controller';
 
 @Module({
-  controllers: [ReservasBookingController, ReservasBaseController, ReservasPropiasController, SaludController],
+  controllers: [ReservasBookingController, ReservasBaseController, ReservasPropiasController, ReservasWebController, SaludController],
   providers: [
     DbService, Idempotencia, EventosService, ReservasService, ReservaGrpc, AvisoCheckin,
     CatalogoClient, PricingClient, InventarioClient, OrdenClient, PagoClient, ReembolsoClient, FacturacionClient,

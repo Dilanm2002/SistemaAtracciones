@@ -16,6 +16,7 @@ COPY ms-payment/package.json ms-payment/
 COPY ms-refund/package.json ms-refund/
 COPY ms-invoicing/package.json ms-invoicing/
 COPY ms-identity/package.json ms-identity/
+COPY bff-web/package.json bff-web/
 COPY gateway/package.json gateway/
 RUN npm ci
 COPY . .

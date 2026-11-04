@@ -389,6 +389,16 @@ export class CatalogoService {
     await reemplazar(d.cat_ids, 'atraccion_categoria', 'cat_id');
     await reemplazar(d.idi_ids, 'atraccion_idioma', 'idi_id');
     await reemplazar(d.inc_ids, 'atraccion_inclusion', 'inc_id');
+    if (d.inclusiones_texto) {
+      // Reutiliza la inclusión si ya existe esa frase; si no, la crea
+      const ids: number[] = [];
+      for (const i of d.inclusiones_texto) {
+        const f = (await sql.one<{ inc_id: number }>('SELECT inc_id::int FROM inclusion WHERE inc_tipo = $1 AND lower(inc_nombre) = lower($2) LIMIT 1', [i.inc_tipo, i.inc_nombre]))
+          ?? (await sql.one<{ inc_id: number }>('INSERT INTO inclusion (inc_tipo, inc_nombre) VALUES ($1, $2) RETURNING inc_id::int', [i.inc_tipo, i.inc_nombre]));
+        ids.push(f!.inc_id);
+      }
+      await reemplazar(ids, 'atraccion_inclusion', 'inc_id');
+    }
     if (d.fotos) {
       await sql.query('DELETE FROM atraccion_foto WHERE atr_id = $1', [atrId]);
       for (const [i, f] of d.fotos.entries()) {

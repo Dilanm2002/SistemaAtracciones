@@ -40,6 +40,7 @@ export const NAV = [
     group: 'PERSONAS',
     items: [
       { to: '/admin/clientes', label: 'Clientes', icon: Users, scope: 'admin:full' },
+      { to: '/admin/turistas', label: 'Turistas de Booking', icon: Users, scope: 'admin:full' },
       { to: '/admin/usuarios', label: 'Usuarios y roles', icon: UserCog, scope: 'admin:full' },
     ],
   },

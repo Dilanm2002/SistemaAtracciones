@@ -30,6 +30,16 @@ export class CatalogoClient {
   /** 60 s en memoria: una compra no vuelve a pedir la ficha completa (cada consulta a la base cuesta un viaje). */
   private readonly cache = new Map<string, { a: Atraccion; hasta: number }>();
 
+  /** UUID de las atracciones de una empresa (claim `operador` del JWT = ope_codigo). */
+  async atraccionesDeOperador(opeCodigo: number | null | undefined): Promise<string[]> {
+    if (opeCodigo == null) return [];
+    const ops = await llamar<{ ope_id: number; ope_codigo: number }[]>('catalog', 'GET', '/api/v1/operadores');
+    const op = ops.find((o) => o.ope_codigo === opeCodigo);
+    if (!op) return [];
+    const r = await llamar<{ data: { atr_uuid: string }[] }>('catalog', 'GET', `/api/v1/atracciones?ope_id=${op.ope_id}&limit=100`);
+    return r.data.map((a) => a.atr_uuid);
+  }
+
   async atraccion(ref: string): Promise<Atraccion> {
     const c = this.cache.get(ref);
     if (c && c.hasta > Date.now()) return c.a;
@@ -108,6 +118,10 @@ export class PagoClient {
 
   uno(pagId: number) {
     return llamar<Pago>('payment', 'GET', `/api/v1/internal/pagos/${pagId}`);
+  }
+
+  aprobar(pagId: number) {
+    return llamar<Pago>('payment', 'POST', `/api/v1/internal/pagos/${pagId}/aprobar`, { cuerpo: {} });
   }
 
   rechazar(pagId: number, motivo: string) {
