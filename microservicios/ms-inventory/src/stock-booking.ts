@@ -53,9 +53,7 @@ export class StockBooking implements OnApplicationBootstrap, OnApplicationShutdo
   }
 
   get canal(): 'rest' | 'grpc' {
-    const v = process.env.BOOKING_STOCK_CANAL;
-    if (v === 'rest' || v === 'grpc') return v;
-    return process.env.BOOKING_GRPC_URL ? 'grpc' : 'rest';
+    return process.env.BOOKING_STOCK_CANAL === 'grpc' ? 'grpc' : 'rest';
   }
 
   private get urlRest(): string {
@@ -64,7 +62,8 @@ export class StockBooking implements OnApplicationBootstrap, OnApplicationShutdo
 
   get destino(): string {
     if (this.canal === 'rest') return this.urlRest;
-    return (process.env.BOOKING_GRPC_URL ?? 'booking-core-api.azurewebsites.net:50051').replace(/^grpcs?:\/\//, '');
+    // No BOOKING_GRPC_URL: en la nube esa variable es la dirección de nuestro ms-booking
+    return (process.env.BOOKING_STOCK_GRPC_URL ?? 'booking-core-api.azurewebsites.net:50051').replace(/^grpcs?:\/\//, '');
   }
 
   get habilitado(): boolean {

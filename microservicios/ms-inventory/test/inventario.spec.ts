@@ -80,7 +80,7 @@ describeDb('ms_inventory', () => {
     Object.assign(process.env, {
       JWT_SECRET: SECRETO, SERVICIOS_TOKEN: TOKEN, GRPC_PORT: String(GRPC), INVENTORY_GRPC_URL: `127.0.0.1:${GRPC}`,
       CATALOG_URL: catalogo.url, PRICING_GRPC_URL: `127.0.0.1:${GRPC_PRICING}`, EVENTOS_DESTINOS: 'http://127.0.0.1:9/no-se-usa',
-      BOOKING_GRPC_URL: `127.0.0.1:${GRPC_BOOKING}`, BOOKING_GRPC_ENABLED: 'true', BOOKING_SERVICE_ID: 'NODE_ATR_DILAN',
+      BOOKING_STOCK_CANAL: 'grpc', BOOKING_STOCK_GRPC_URL: `127.0.0.1:${GRPC_BOOKING}`, BOOKING_STOCK_ENABLED: 'true', BOOKING_SERVICE_ID: 'NODE_ATR_DILAN',
     });
     await baseVacia();
     app = await crearApp(AppModule, 'ms-inventory');
@@ -159,6 +159,18 @@ describeDb('ms_inventory', () => {
     expect((await inv<Turno>('ObtenerTurno', { dis_id: t.dis_id })).disponibles).toBe(17);
   });
 
+  it('BOOKING_GRPC_URL (nuestro ms-booking en la nube) no cambia el canal ni el destino del stock', () => {
+    const antes = { canal: process.env.BOOKING_STOCK_CANAL, url: process.env.BOOKING_GRPC_URL };
+    delete process.env.BOOKING_STOCK_CANAL;
+    process.env.BOOKING_GRPC_URL = 'descubre-booking:50048';
+    const stock = app.get(StockBooking);
+    expect(stock.canal).toBe('rest');
+    expect(stock.destino).toMatch(/\/api\/v3\/inventory\/stock$/);
+    process.env.BOOKING_STOCK_CANAL = antes.canal;
+    if (antes.url) process.env.BOOKING_GRPC_URL = antes.url;
+    else delete process.env.BOOKING_GRPC_URL;
+  });
+
   it('stock por REST: body exacto del contrato con la X-API-Key; si falla queda para reintentar', async () => {
     const recibidos: { url?: string; clave?: unknown; cuerpo: unknown }[] = [];
     let responder = 500;
@@ -188,7 +200,7 @@ describeDb('ms_inventory', () => {
       expect(await stock.reintentarPendientes()).toBe(1);
       expect(await estado()).toEqual({ e: 'ENVIADO', n: 2 });
     } finally {
-      delete process.env.BOOKING_STOCK_CANAL;
+      process.env.BOOKING_STOCK_CANAL = 'grpc';
       await new Promise((f) => falso.close(f));
     }
   });

@@ -4,7 +4,7 @@ import { DbService } from './db.service';
 
 export const NOMBRE_SERVICIO = 'NOMBRE_SERVICIO';
 
-/** Salud del servicio para el gateway y el semáforo: UP (< 200 ms), DEGRADED, DOWN (503 sin base). */
+/** Salud del servicio para el gateway y el semáforo: UP (< 1500 ms), DEGRADED, DOWN (503 sin base). */
 @Controller({ path: 'health', version: '1' })
 export class SaludController {
   private readonly inicio = Date.now();
@@ -25,7 +25,7 @@ export class SaludController {
       conectada = false;
     }
     const latencia = Date.now() - t;
-    const status = !conectada ? 'DOWN' : latencia < 200 ? 'UP' : 'DEGRADED';
+    const status = !conectada ? 'DOWN' : latencia < 1500 ? 'UP' : 'DEGRADED'; // suelta su conexión al estar inactivo: reabrirla tarda ~0,5 s
     if (status === 'DOWN') res.status(503);
     return {
       status,

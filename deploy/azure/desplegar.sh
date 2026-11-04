@@ -163,10 +163,10 @@ if existe descubre-tienda; then
 fi
 
 paso "Aplicaciones"
-# Stock y aviso de check-in a Booking: REST por defecto; con BOOKING_GRPC_URL el stock va por gRPC
+# Stock y aviso de check-in a Booking: REST por defecto; con BOOKING_GRPC_URL en .env el stock va por gRPC
 BOOKING_API_URL="${BOOKING_API_URL:-https://booking-core-api.azurewebsites.net}"
 STOCK=(BOOKING_STOCK_ENABLED=true BOOKING_SERVICE_ID="${BOOKING_SERVICE_ID:-NODE_ATR_DILAN}")
-[ -n "${BOOKING_GRPC_URL:-}" ] && STOCK+=(BOOKING_GRPC_URL="$BOOKING_GRPC_URL")
+[ -n "${BOOKING_GRPC_URL:-}" ] && STOCK+=(BOOKING_STOCK_CANAL=grpc BOOKING_STOCK_GRPC_URL="$BOOKING_GRPC_URL")
 MS_SECRETOS=(database-url="$MS_DATABASE_URL" jwt-secret="$JWT_SECRET" booking-key="$BOOKING_API_KEY" servicios-token="$SERVICIOS_TOKEN")
 URLS=()
 for s in "${SERVICIOS[@]}"; do URLS+=("${s^^}_URL=http://descubre-$s"); done
