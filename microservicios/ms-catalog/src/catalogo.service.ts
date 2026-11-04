@@ -2,7 +2,7 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException,
 import { randomUUID } from 'crypto';
 import { Usuario } from './comun/auth';
 import { DbService, Params, Sql } from './comun/db.service';
-import { LocationClient, TiendaClient } from './clientes';
+import { CuponClient, InventarioClient, LocationClient } from './clientes';
 import { AtraccionCampos, AtraccionesQuery, CrearAtraccion, EventoEntrante, ListAtraccionesQuery, OBLIGATORIOS_CREAR, SearchAtraccionesRequest } from './dto';
 import { MapperBooking } from './mapper-booking';
 import { AtraccionBD, SELECT_ATRACCION, sqlPrecio, VISIBLE } from './modelo';
@@ -77,7 +77,8 @@ export class CatalogoService {
   constructor(
     private readonly db: DbService,
     private readonly location: LocationClient,
-    private readonly tienda: TiendaClient,
+    private readonly inventario: InventarioClient,
+    private readonly cupones: CuponClient,
   ) {}
 
   // ── Categorías ──────────────────────────────────────────────────────────
@@ -320,7 +321,7 @@ export class CatalogoService {
     const conCupos: number[] = [];
     await Promise.all(
       candidatas.map(async (c) => {
-        for (const dia of dias) if (await this.tienda.hayCupos(c.uuid, dia, cupos)) return void conCupos.push(c.atr_id);
+        for (const dia of dias) if (await this.inventario.hayCupos(c.uuid, dia, cupos)) return void conCupos.push(c.atr_id);
       }),
     );
     const orden2 = candidatas.map((c) => c.atr_id).filter((id) => conCupos.includes(id));
@@ -329,7 +330,7 @@ export class CatalogoService {
 
   /** Contrato v3: GET /atracciones/{id} (UUID o slug). */
   async detalleBooking(ref: string) {
-    const [a, acuerdo] = await Promise.all([this.porRef(ref, true), this.tienda.acuerdo()]);
+    const [a, acuerdo] = await Promise.all([this.porRef(ref, true), this.cupones.acuerdo()]);
     const ciudad = await this.nombresCiudad([a]);
     return this.mapper.detalle(a, ciudad(a), acuerdo);
   }

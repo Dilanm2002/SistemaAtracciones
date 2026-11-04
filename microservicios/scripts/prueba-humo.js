@@ -5,8 +5,9 @@
  *
  *   GATEWAY_URL=http://localhost:8080 BOOKING_API_KEY=<clave> node scripts/prueba-humo.js
  *
- * Sin BOOKING_API_KEY se salta la reserva (todo lo demás es público). La reserva es REAL: crea una
- * reserva de 1 adulto en la base de la tienda y luego la cancela (compensación), dejando el cupo como estaba.
+ * Sin BOOKING_API_KEY se salta la compra (todo lo demás es público). La compra es REAL y pasa por toda la saga
+ * (ms_booking → inventory → order → payment → invoicing): crea una reserva de 1 adulto, la consulta, hace el
+ * check-in y crea otra que cancela como compensación (con reembolso).
  */
 const Ajv = require('ajv');
 const addFormats = require('ajv-formats');
@@ -77,40 +78,47 @@ async function llamar(metodo, ruta, cuerpo, headers = {}) {
     (f?.ok && /^image\//.test(f.headers.get('content-type') ?? '') ? ok : mal)(`foto principal → ${f?.status ?? 'sin respuesta'}`);
   }
 
-  if (process.env.SIN_TIENDA === 'true') {
-    // El nodo solo publica los microservicios de Dilan: lo demás debe responder 503 diciendo de quién es
-    console.log('\n3. Rutas de los compañeros (todavía no conectadas)');
-    for (const [m, ruta] of [['GET', `/api/v3/atracciones/${primera.id}/disponibilidad`], ['POST', '/api/v3/reservas']]) {
-      const r = await llamar(m, ruta, m === 'POST' ? {} : undefined, { 'idempotency-key': randomUUID() });
-      (r.status === 503 && r.json?.code === 'SERVICIO_NO_CONECTADO' ? ok : mal)(`${m} ${ruta.replace(primera.id, '{id}')} → ${r.status} · ${r.json?.detail ?? ''}`);
-    }
-    console.log(fallas ? `\n✖ ${fallas} problema(s)` : '\n✔ Mis microservicios listos para Booking');
-    process.exit(fallas ? 1 : 0);
-  }
-
-  console.log('\n3. Disponibilidad (la atiende la tienda; mismo UUID que el catálogo)');
+  console.log('\n3. Disponibilidad (la atiende ms_inventory; precios de ms_pricing por gRPC)');
   const fecha = new Date(Date.now() + 9 * 86400_000).toISOString().slice(0, 10);
   const disp = await llamar('GET', `/api/v3/atracciones/${primera.id}/disponibilidad?date=${fecha}`);
-  (disp.status === 200 && disp.por === 'tienda' ? ok : mal)(`disponibilidad ${fecha} → ${disp.status} (${disp.por})`);
+  (disp.status === 200 && disp.por === 'inventory' ? ok : mal)(`disponibilidad ${fecha} → ${disp.status} (${disp.por})`);
   if (disp.status === 200) esquema('DisponibilidadResponse', disp.json, 'disponibilidad');
 
-  console.log('\n4. Compra despachada por Booking a {baseUrlRest}/reservas (guía de integración)');
-  const slot = disp.json?.time_slots?.find((s) => s.available_slots > 0 || s.cupos_disponibles > 0);
-  if (!CLAVE) console.log('  – sin BOOKING_API_KEY: se salta la reserva');
-  else if (!slot) mal('No hay turnos con cupos para probar la reserva');
+  if (CLAVE) {
+    const acuerdo = await llamar('GET', '/api/v3/atracciones/promociones/contrato', undefined, { 'x-api-key': CLAVE });
+    (acuerdo.status === 200 && acuerdo.por === 'coupon' ? ok : mal)(`acuerdo de promociones → ${acuerdo.status} (${acuerdo.por})`);
+    if (acuerdo.status === 200) esquema('PromocionesContratoResponse', acuerdo.json, 'acuerdo');
+  }
+
+  console.log('\n4. Compra despachada por Booking a {baseUrlRest}/reservas (saga en ms_booking)');
+  const slot = disp.json?.time_slots?.find((s) => s.available_slots > 1);
+  if (!CLAVE) console.log('  – sin BOOKING_API_KEY: se salta la compra');
+  else if (!slot) mal('No hay turnos con 2 cupos para probar la compra');
   else {
-    const r = await llamar('POST', '/api/v3/reservas', {
+    const pedido = () => ({
       attraction_id: primera.id, date: fecha, time: slot.time, slot_id: slot.slot_id, adult_count: 1, total_tickets: 1,
       customer: { name: 'Prueba Humo', email: 'humo@descubre-ec.com', phone: '+593991234567', document_id: '1710034065' },
       booking_reservation_id: `HUMO-${Date.now()}`,
-    }, { 'x-api-key': CLAVE, 'idempotency-key': randomUUID() });
-    (r.status === 201 && r.json?.success ? ok : mal)(`reserva → ${r.status} ${r.json?.reservation_code ?? r.json?.detail ?? ''} en ${r.ms} ms`);
+    });
+    const auth = () => ({ 'x-api-key': CLAVE, 'idempotency-key': randomUUID() });
+    const r = await llamar('POST', '/api/v3/reservas', pedido(), auth());
+    (r.status === 201 && r.json?.success && r.por === 'booking' ? ok : mal)(`reserva → ${r.status} ${r.json?.reservation_code ?? r.json?.detail ?? ''} en ${r.ms} ms (${r.por})`);
     if (r.status === 201) {
       esquema('ReservaConfirmadaResponseV2', r.json, 'reserva');
-      const c = await llamar('POST', `/api/v3/reservas/${r.json.reservation_id}/cancel`, { reason: 'Prueba de humo', solicitante: 'SAGA_ORCHESTRATOR' },
-        { 'x-api-key': CLAVE, 'idempotency-key': randomUUID() });
-      (c.status === 200 && c.json?.status === 'CANCELLED' ? ok : mal)(`compensación (cancelación) → ${c.status} ${c.json?.status ?? ''}`);
+      (r.json.payment_status === 'PAID' ? ok : mal)(`pago ${r.json.payment_status} y orden ${r.json.external_order_id}`);
+      const una = await llamar('GET', `/api/v3/atracciones/reservas/${r.json.reservation_code}`, undefined, { 'x-api-key': CLAVE });
+      (una.status === 200 ? ok : mal)(`consulta por PNR → ${una.status}`);
+      const ci = await llamar('POST', `/api/v3/atracciones/reservas/${r.json.reservation_id}/checkin`, { documento_identidad: '1710034065', codigo_voucher_qr: r.json.voucher_qr_payload }, auth());
+      (ci.status === 200 && ci.json?.estado === 'CHECKED_IN' ? ok : mal)(`check-in → ${ci.status} ${ci.json?.estado ?? ci.json?.detail ?? ''}`);
+      if (ci.status === 200) esquema('CheckinResponse', ci.json, 'check-in');
     }
+    const r2 = await llamar('POST', '/api/v3/reservas', pedido(), auth());
+    if (r2.status === 201) {
+      const c = await llamar('POST', `/api/v3/reservas/${r2.json.reservation_id}/cancel`, { reason: 'Prueba de humo', solicitante: 'SAGA_ORCHESTRATOR' }, auth());
+      (c.status === 200 && c.json?.status === 'CANCELLED' && c.json?.payment_status === 'REFUNDED' ? ok : mal)(`compensación (cancelación) → ${c.status} ${c.json?.status ?? ''} ${c.json?.reembolso_id ?? ''}`);
+    } else mal(`segunda reserva → ${r2.status} ${r2.json?.detail ?? ''}`);
+    const ev = await llamar('GET', '/api/v3/atracciones/eventos?limit=5', undefined, { 'x-api-key': CLAVE });
+    (ev.status === 200 && Array.isArray(ev.json) ? ok : mal)(`feed de eventos → ${ev.status} (${ev.json?.length ?? 0} eventos)`);
     const sin = await llamar('POST', '/api/v3/reservas', {}, { 'idempotency-key': randomUUID() });
     (sin.status === 401 ? ok : mal)(`sin X-API-Key → ${sin.status}`);
   }

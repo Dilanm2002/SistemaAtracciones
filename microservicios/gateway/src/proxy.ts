@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { ClientRequest } from 'http';
-import { duenoDe, esSalud, rutear, sinTienda, urlDe } from './rutas';
+import { esSalud, rutear, urlDe } from './rutas';
 
 type Peticion = Request & { destino?: string; rutaDestino?: string; correlationId?: string };
 
@@ -24,22 +24,21 @@ function problema(res: Response, status: number, detalle: string, req: Peticion,
 /** Decide el destino, fija X-Correlation-Id y deja una línea de log por petición. */
 export function preparar(req: Peticion, res: Response, next: NextFunction) {
   const r = rutear(req.method, req.originalUrl);
-  req.destino = r.destino;
+  req.destino = r.destino ?? undefined;
   req.rutaDestino = r.ruta;
   const entrante = (req.header('x-correlation-id') ?? '').trim();
   req.correlationId = /^[\w.:-]{1,100}$/.test(entrante) ? entrante : randomUUID();
   req.headers['x-correlation-id'] = req.correlationId;
   res.setHeader('X-Correlation-Id', req.correlationId);
-  res.setHeader('X-Atendido-Por', r.destino);
+  res.setHeader('X-Atendido-Por', r.destino ?? 'gateway');
   const inicio = Date.now();
   res.on('finish', () => {
     if (process.env.NODE_ENV === 'test') return;
     console.log(JSON.stringify({ servicio: 'gateway', metodo: req.method, ruta: req.originalUrl, destino: r.destino, status: res.statusCode, ms: Date.now() - inicio, correlation_id: req.correlationId }));
   });
-  if (r.destino === 'tienda' && sinTienda() && !esSalud(req.originalUrl)) {
-    const dueno = duenoDe(req.originalUrl);
-    res.setHeader('X-Atendido-Por', `pendiente: ${dueno}`);
-    return problema(res, 503, `Esta ruta la atiende ${dueno}, que todavía no está conectado a este nodo.`, req, 'SERVICIO_NO_CONECTADO');
+  if (!r.destino && !esSalud(req.originalUrl)) {
+    res.setHeader('X-Atendido-Por', 'gateway');
+    return problema(res, 404, `La ruta ${req.method} ${req.originalUrl.split('?')[0]} no es parte del contrato de este nodo.`, req, 'NOT_FOUND');
   }
   next();
 }

@@ -13,7 +13,8 @@ import { fabricaDeErroresDeValidacion, ProblemasFilter } from './problemas';
  */
 export async function crearApp(modulo: unknown, servicio: string): Promise<NestExpressApplication> {
   const app = await NestFactory.create<NestExpressApplication>(modulo as never, {
-    logger: process.env.NODE_ENV === 'test' ? false : ['error', 'warn', 'log'],
+    // En pruebas, sin logs (LOGS_EN_PRUEBAS=1 los enciende para depurar)
+    logger: process.env.NODE_ENV === 'test' && !process.env.LOGS_EN_PRUEBAS ? false : ['error', 'warn', 'log'],
   });
   app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });

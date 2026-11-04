@@ -1,0 +1,126 @@
+openapi: 3.0.3
+info:
+  title: Refund Service (ms_refund) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 13 del equipo (**REST**): reembolsos (`reembolso` del script).
+
+    - Regla del script (antes `trg_reembolso_no_excede`): nunca se reembolsa más de lo cobrado. Antes de procesar
+      se consulta a ms_payment (`GET /api/v1/internal/pagos/{pag_id}`): el pago debe estar APROBADO.
+    - Un pago tiene a lo sumo un reembolso total (`REM-<pag_id>`, 9 dígitos): repetir la solicitud devuelve el mismo.
+    - Simulación del prototipo: la pasarela confirma al instante (`rem_procesado_en`, referencia `SIM-REM-…`).
+    - Rutas internas (`X-Servicio-Token`), las usa ms_booking al cancelar; no se publican en el gateway.
+servers:
+  - url: http://localhost:4010/api/v1
+    description: Local
+tags:
+  - name: Reembolsos
+  - name: Salud
+paths:
+  /internal/reembolsos:
+    post:
+      tags: [Reembolsos]
+      summary: Reembolsar un pago aprobado (total si no se indica monto)
+      operationId: crearReembolso
+      security: [{ ServicioToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pag_id, motivo]
+              properties:
+                pag_id: { type: integer, minimum: 1 }
+                monto: { type: string, pattern: '^\d+\.\d{2}$' }
+                motivo: { type: string, minLength: 3, maxLength: 300 }
+      responses:
+        '201':
+          description: Reembolso procesado (o el ya existente)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reembolso' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '404': { $ref: '#/components/responses/Problema' }
+        '409': { $ref: '#/components/responses/Problema' }
+        '503': { $ref: '#/components/responses/Problema' }
+    get:
+      tags: [Reembolsos]
+      summary: Reembolsos de un pago
+      operationId: reembolsosDePago
+      security: [{ ServicioToken: [] }]
+      parameters:
+        - { name: pag_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Reembolsos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reembolso' }
+  /health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    ServicioToken: { type: apiKey, in: header, name: X-Servicio-Token }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Reembolso:
+      type: object
+      additionalProperties: false
+      required: [rem_id, pag_id, rem_numero, rem_monto, rem_motivo, rem_referencia, rem_solicitado_en, rem_procesado_en]
+      properties:
+        rem_id: { type: integer }
+        pag_id: { type: integer }
+        rem_numero: { type: string, pattern: '^REM-\d{9}$' }
+        rem_monto: { type: string, pattern: '^\d+\.\d{2}$' }
+        rem_motivo: { type: string, nullable: true }
+        rem_referencia: { type: string, nullable: true }
+        rem_solicitado_en: { type: string, format: date-time }
+        rem_procesado_en: { type: string, format: date-time, nullable: true }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        invalid_params:
+          type: array
+          items: { type: object }

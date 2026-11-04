@@ -1,5 +1,14 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
+
+const contexto = new AsyncLocalStorage<string>();
+
+/** X-Correlation-Id de la petición en curso (lo usa comun/http.ts al llamar a otro servicio). */
+export const correlacionActual = (): string | undefined => contexto.getStore();
+
+/** Ejecuta `fn` con ese X-Correlation-Id (llamadas gRPC entrantes, tareas de fondo). */
+export const conCorrelacion = <T>(id: string | undefined, fn: () => Promise<T>): Promise<T> => contexto.run(id ?? randomUUID(), fn);
 
 /**
  * X-Correlation-Id (contrato con Booking): se respeta el que llega o se crea uno, se devuelve en la
@@ -17,6 +26,6 @@ export function correlacion(servicio: string) {
       const ms = Number(process.hrtime.bigint() - inicio) / 1e6;
       console.log(JSON.stringify({ servicio, metodo: req.method, ruta: req.originalUrl, status: res.statusCode, ms: Math.round(ms), correlation_id: id }));
     });
-    next();
+    contexto.run(id, next);
   };
 }

@@ -1,0 +1,177 @@
+openapi: 3.0.3
+info:
+  title: Pricing Service (ms_pricing) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 6 del equipo: **tarifas versionadas** por atracción y tipo de boleto (ADULTO, NINO, MAYOR,
+    ESTUDIANTE, GRUPO). Según el script del equipo es un servicio **gRPC**: la consulta que usan los demás
+    servicios es `descubre.pricing.v1.PricingService/ObtenerTarifas` (`proto/pricing.proto`, puerto 50044).
+    Esta API REST es para el panel y la depuración.
+
+    - Base propia `ms_pricing` (tabla `tarifa` del script + tipo ESTUDIANTE y outbox `evento`, `sql/002`).
+    - Una tarifa nueva cierra la anterior el día previo (`tar_vigente_hasta`): el historial no se borra.
+    - Al cambiar tarifas publica `PRECIO_ACTUALIZADO` (CloudEvents) a ms_catalog `POST /api/v1/internal/eventos`.
+    - Montos en texto con 2 decimales (`"25.00"`), igual que por gRPC; vacío = sin tarifa de ese tipo.
+servers:
+  - url: http://localhost:4004/api/v1
+    description: Local
+tags:
+  - name: Tarifas
+  - name: Salud
+paths:
+  /tarifas:
+    get:
+      tags: [Tarifas]
+      summary: Tarifas vigentes de una atracción (hoy o en `fecha`)
+      operationId: tarifasVigentes
+      parameters:
+        - { name: atr_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: fecha, in: query, required: false, schema: { type: string, format: date } }
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '200':
+          description: Tarifas vigentes (mismo mensaje `Tarifas` del proto)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Tarifas' }
+        '400': { $ref: '#/components/responses/Problema' }
+  /tarifas/{atr_id}/historial:
+    get:
+      tags: [Tarifas]
+      summary: Todas las versiones de las tarifas de una atracción
+      operationId: historialTarifas
+      parameters:
+        - { name: atr_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Historial
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tarifa' }
+  /tarifas/{atr_id}:
+    put:
+      tags: [Tarifas]
+      summary: Nuevas tarifas desde una fecha (ADMIN)
+      operationId: cambiarTarifas
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: atr_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CambiarTarifas' }
+      responses:
+        '200':
+          description: Historial actualizado
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Tarifa' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+  /health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema: { type: string }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Monto:
+      type: string
+      description: Texto decimal con 2 decimales; vacío si no hay tarifa de ese tipo
+      pattern: '^(\d+\.\d{2})?$'
+    Tarifas:
+      type: object
+      additionalProperties: false
+      required: [atr_id, moneda, adulto, nino, mayor, estudiante, grupo]
+      properties:
+        atr_id: { type: string, pattern: '^\d+$' }
+        moneda: { type: string, pattern: '^[A-Z]{3}$' }
+        adulto: { $ref: '#/components/schemas/Monto' }
+        nino: { $ref: '#/components/schemas/Monto' }
+        mayor: { $ref: '#/components/schemas/Monto' }
+        estudiante: { $ref: '#/components/schemas/Monto' }
+        grupo: { $ref: '#/components/schemas/Monto' }
+    Tarifa:
+      type: object
+      additionalProperties: false
+      required: [tar_id, atr_id, tar_tipo, tar_precio, tar_moneda, tar_vigente_desde, tar_vigente_hasta]
+      properties:
+        tar_id: { type: integer }
+        atr_id: { type: integer }
+        tar_tipo: { type: string, enum: [ADULTO, NINO, MAYOR, ESTUDIANTE, GRUPO] }
+        tar_precio: { type: number, minimum: 0 }
+        tar_moneda: { type: string, pattern: '^[A-Z]{3}$' }
+        tar_vigente_desde: { type: string, format: date }
+        tar_vigente_hasta: { type: string, format: date, nullable: true }
+    CambiarTarifas:
+      type: object
+      required: [tarifas]
+      properties:
+        vigente_desde: { type: string, format: date }
+        tarifas:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: object
+            required: [tar_tipo, tar_precio]
+            properties:
+              tar_tipo: { type: string, enum: [ADULTO, NINO, MAYOR, ESTUDIANTE, GRUPO] }
+              tar_precio: { type: number, minimum: 0 }
+              tar_moneda: { type: string, pattern: '^[A-Z]{3}$' }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        invalid_params:
+          type: array
+          items: { type: object }

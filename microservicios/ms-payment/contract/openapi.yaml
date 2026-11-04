@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: Payment Service (ms_payment) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 12 del equipo (**REST**): pagos de las órdenes (`metodo_pago`, `estado`, `pago`, `pago_tarjeta`,
+    `pago_transferencia` del script + método `SOA_BOOKING_GATEWAY`, `sql/002`).
+
+    - Pagos **simulados** del prototipo: TARJETA, SOA_BOOKING_GATEWAY y PAYPHAL se aprueban al instante (referencia
+      `SIM-…`); TRANSFERENCIA y EN_SITIO quedan PENDIENTE hasta que el operador los verifique.
+    - Nunca se guarda el número de tarjeta ni el CVV (PCI-DSS): solo marca, últimos 4 dígitos y titular.
+    - `POST /internal/pagos` es idempotente por número (`PAG-<sufijo>`, el mismo sufijo de DEC-/ORD-).
+    - Las rutas `/internal/*` exigen `X-Servicio-Token` y no se publican en el gateway.
+servers:
+  - url: http://localhost:4009/api/v1
+    description: Local
+tags:
+  - name: Pagos
+  - name: Salud
+paths:
+  /metodos-pago:
+    get:
+      tags: [Pagos]
+      summary: Métodos de pago
+      operationId: metodosPago
+      responses:
+        '200':
+          description: Métodos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [mpa_id, mpa_codigo, mpa_nombre, mpa_requiere_datos, mpa_activo]
+                  properties:
+                    mpa_id: { type: integer }
+                    mpa_codigo: { type: string }
+                    mpa_nombre: { type: string }
+                    mpa_requiere_datos: { type: boolean }
+                    mpa_activo: { type: boolean }
+  /internal/pagos:
+    post:
+      tags: [Pagos]
+      summary: Registrar el pago de una orden (interno, ms_booking)
+      operationId: crearPago
+      security: [{ ServicioToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CrearPago' }
+      responses:
+        '201':
+          description: Pago registrado (APROBADO o PENDIENTE según el método)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pago' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '409': { $ref: '#/components/responses/Problema' }
+    get:
+      tags: [Pagos]
+      summary: Pagos de una orden (interno)
+      operationId: pagosDeOrden
+      security: [{ ServicioToken: [] }]
+      parameters:
+        - { name: ord_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Pagos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Pago' }
+  /internal/pagos/{pag_id}:
+    get:
+      tags: [Pagos]
+      summary: Un pago (interno; ms_refund lo consulta antes de reembolsar)
+      operationId: obtenerPago
+      security: [{ ServicioToken: [] }]
+      parameters:
+        - { name: pag_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Pago
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pago' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /internal/pagos/{pag_id}/aprobar:
+    post:
+      tags: [Pagos]
+      summary: Verificación manual de un pago pendiente (idempotente)
+      operationId: aprobarPago
+      security: [{ ServicioToken: [] }]
+      parameters:
+        - { name: pag_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Pago aprobado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pago' }
+        '409': { $ref: '#/components/responses/Problema' }
+  /internal/pagos/{pag_id}/rechazar:
+    post:
+      tags: [Pagos]
+      summary: Anular un pago aún no cobrado (idempotente)
+      operationId: rechazarPago
+      security: [{ ServicioToken: [] }]
+      parameters:
+        - { name: pag_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [motivo]
+              properties:
+                motivo: { type: string, minLength: 3, maxLength: 300 }
+      responses:
+        '200':
+          description: Pago rechazado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pago' }
+        '409': { $ref: '#/components/responses/Problema' }
+  /health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    ServicioToken: { type: apiKey, in: header, name: X-Servicio-Token }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    CrearPago:
+      type: object
+      required: [ord_id, mpa_codigo, monto, sufijo]
+      properties:
+        ord_id: { type: integer, minimum: 1 }
+        mpa_codigo: { type: string, enum: [TARJETA, TRANSFERENCIA, EN_SITIO, PAYPHAL, SOA_BOOKING_GATEWAY] }
+        monto: { type: string, pattern: '^\d+\.\d{2}$' }
+        sufijo: { type: string, pattern: '^[A-Z0-9]{6}$' }
+        tarjeta:
+          type: object
+          required: [marca, ultimos4, titular, mes, anio]
+          properties:
+            marca: { type: string, enum: [VISA, MASTERCARD, AMEX, DINERS, OTRA] }
+            ultimos4: { type: string, pattern: '^\d{4}$' }
+            titular: { type: string }
+            mes: { type: integer, minimum: 1, maximum: 12 }
+            anio: { type: integer }
+    Pago:
+      type: object
+      additionalProperties: false
+      required: [pag_id, pag_numero, ord_id, mpa_codigo, estado, pag_monto, pag_referencia, pag_autorizacion, pag_fecha, pag_aprobado_en, pag_rechazado_en, pag_motivo_rechazo, tarjeta]
+      properties:
+        pag_id: { type: integer }
+        pag_numero: { type: string, pattern: '^PAG-[A-Z0-9]{6}$' }
+        ord_id: { type: integer }
+        mpa_codigo: { type: string }
+        estado: { type: string, enum: [PENDIENTE, APROBADO, RECHAZADO, FALLIDO] }
+        pag_monto: { type: string, pattern: '^\d+\.\d{2}$' }
+        pag_referencia: { type: string, nullable: true }
+        pag_autorizacion: { type: string, nullable: true }
+        pag_fecha: { type: string, format: date-time }
+        pag_aprobado_en: { type: string, format: date-time, nullable: true }
+        pag_rechazado_en: { type: string, format: date-time, nullable: true }
+        pag_motivo_rechazo: { type: string, nullable: true }
+        tarjeta:
+          type: object
+          nullable: true
+          additionalProperties: false
+          required: [marca, ultimos4]
+          properties:
+            marca: { type: string }
+            ultimos4: { type: string, pattern: '^\d{4}$' }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        invalid_params:
+          type: array
+          items: { type: object }

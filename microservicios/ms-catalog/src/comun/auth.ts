@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable, SetMetadata, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import { Request } from 'express';
 
 /** Claims del JWT que emite Identity (hoy, la tienda): HS256 firmado con JWT_SECRET. */
@@ -75,6 +75,42 @@ export class ServicioGuard implements CanActivate {
     const enviado = req.header('x-servicio-token') ?? '';
     const ok = esperado.length >= 16 && enviado.length === esperado.length && timingSafeEqual(Buffer.from(enviado), Buffer.from(esperado));
     if (!ok) throw new UnauthorizedException({ message: 'Llamada interna sin X-Servicio-Token válido.', code: 'UNAUTHORIZED' });
+    return true;
+  }
+}
+
+const huella = (v: string) => createHash('sha256').update(v).digest();
+
+/**
+ * Seguridad del contrato con Booking (`security: [BearerAuth, ApiKeyAuth]`): basta con UNA de las dos.
+ * - `X-API-Key`: clave precompartida con Booking (BOOKING_API_KEY, 24+ caracteres), en tiempo constante.
+ * - `Authorization: Bearer <JWT>` de un ADMIN.
+ * Sin ninguna → 401; JWT válido sin rol de administrador → 403.
+ */
+@Injectable()
+export class SocioGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext): boolean {
+    const req = ctx.switchToHttp().getRequest<Request & { usuario?: Usuario; socio?: string }>();
+    const clave = req.header('x-api-key');
+    if (clave) {
+      const esperada = process.env.BOOKING_API_KEY?.trim();
+      if (!esperada || esperada.length < 24 || !timingSafeEqual(huella(clave.trim()), huella(esperada))) {
+        throw new UnauthorizedException({ message: 'La X-API-Key no es válida.', code: 'UNAUTHORIZED' });
+      }
+      req.socio = 'booking-prototipo';
+      return true;
+    }
+    const [tipo, token] = (req.header('authorization') ?? '').split(' ');
+    if (!token) {
+      throw new UnauthorizedException({ message: 'Esta operación requiere la cabecera X-API-Key (Booking Prototipo) o un token JWT de administrador.', code: 'UNAUTHORIZED' });
+    }
+    const secreto = process.env.JWT_SECRET;
+    const u = secreto && /^(Bearer|DPoP)$/i.test(tipo) ? verificarJwt(token, secreto) : null;
+    if (!u) throw new UnauthorizedException({ message: 'Se requiere un token JWT válido (Authorization: Bearer).', code: 'UNAUTHORIZED' });
+    if (![u.rol, ...(u.roles ?? [])].includes('ADMIN')) {
+      throw new ForbiddenException({ message: 'No cuenta con el rol de administración ni con credenciales de socio para esta acción.', code: 'FORBIDDEN' });
+    }
+    req.usuario = u;
     return true;
   }
 }

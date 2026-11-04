@@ -1,0 +1,31 @@
+// Pricing Service (gRPC, script del equipo §6). Tarifas vigentes por atracción y tipo de boleto.
+// Montos como texto decimal con 2 decimales ("25.00"), como en el resto de contratos internos.
+syntax = "proto3";
+
+package descubre.pricing.v1;
+
+service PricingService {
+  // Tarifas vigentes hoy (hora de Ecuador) de una o varias atracciones.
+  rpc ObtenerTarifas (ObtenerTarifasRequest) returns (ObtenerTarifasResponse);
+}
+
+message ObtenerTarifasRequest {
+  repeated int64 atr_ids = 1;
+  // AAAA-MM-DD; vacío = hoy
+  string fecha = 2;
+}
+
+message Tarifas {
+  int64 atr_id = 1;
+  string moneda = 2;
+  // Vacío = sin tarifa vigente de ese tipo (se usa la de adulto)
+  string adulto = 3;
+  string nino = 4;
+  string mayor = 5;
+  string estudiante = 6;
+  string grupo = 7;
+}
+
+message ObtenerTarifasResponse {
+  repeated Tarifas tarifas = 1;
+}

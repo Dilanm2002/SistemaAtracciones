@@ -1,0 +1,262 @@
+openapi: 3.0.3
+info:
+  title: Inventory & Availability Service (ms_inventory) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 7 del equipo: **horarios, cupos por turno y fechas bloqueadas**. Según el script es un
+    servicio **gRPC**: ms_booking retiene y libera cupos con `descubre.inventario.v1.InventarioService`
+    (`proto/inventario.proto`, puerto 50045). `RetenerCupos` bloquea la fila del turno (sin sobreventa) y es
+    idempotente por `referencia`; sin cupos responde FAILED_PRECONDITION con `OUT_OF_STOCK`.
+
+    - Booking consulta la disponibilidad por el gateway (`GET /api/v3/atracciones/{id}/disponibilidad`), con el
+      esquema **oficial** `DisponibilidadResponse` del contrato v3. Los precios de cada turno vienen de ms_pricing (gRPC).
+    - Cada cambio de cupos se envía a Booking con `inventory.InventoryStockService/PushStockUpdate` (su
+      `inventory.proto`) y se publica `STOCK_ACTUALIZADO` al feed de eventos (ms_booking).
+    - Base propia `ms_inventory`: tablas del script + `atraccion_ref`, `retencion`, `sync_stock` y `evento` (`sql/002`).
+servers:
+  - url: http://localhost:4005
+    description: Local (las rutas propias van bajo /api/v1)
+tags:
+  - name: Booking
+  - name: Inventario
+  - name: Salud
+paths:
+  /api/v3/atracciones/{id}/disponibilidad:
+    get:
+      tags: [Booking]
+      summary: Turnos de un día con cupos y precios (contrato v3 con Booking; también en /api/v2)
+      operationId: disponibilidad
+      parameters:
+        - { name: id, in: path, required: true, description: UUID, slug o id, schema: { type: string } }
+        - { name: date, in: query, required: false, schema: { type: string, format: date } }
+        - { name: fecha, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Disponibilidad
+          content:
+            application/json:
+              schema:
+                $ref: 'booking-atracciones-v3.yaml#/components/schemas/DisponibilidadResponse'
+        '400': { $ref: '#/components/responses/Problema' }
+        '404': { $ref: '#/components/responses/Problema' }
+        '503': { $ref: '#/components/responses/Problema' }
+  /api/v1/horarios:
+    get:
+      tags: [Inventario]
+      summary: Horarios de una atracción
+      operationId: horarios
+      parameters:
+        - { name: atr_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Horarios
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Horario' } }
+  /api/v1/horarios/{atr_id}:
+    put:
+      tags: [Inventario]
+      summary: Reemplaza los horarios (ADMIN u OPERADOR); el cupo nuevo se aplica a los turnos futuros
+      operationId: cambiarHorarios
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: atr_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [horarios]
+              properties:
+                horarios:
+                  type: array
+                  maxItems: 24
+                  items:
+                    type: object
+                    required: [hor_hora, hor_cupo]
+                    properties:
+                      hor_hora: { type: string, pattern: '^\d{2}:\d{2}$' }
+                      hor_cupo: { type: integer, minimum: 1, maximum: 1000 }
+                      hor_activo: { type: boolean }
+      responses:
+        '200':
+          description: Horarios actualizados
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Horario' } }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+  /api/v1/disponibilidad:
+    get:
+      tags: [Inventario]
+      summary: Turnos abiertos (filas de disponibilidad) de una atracción
+      operationId: disponibilidadPropia
+      parameters:
+        - { name: atr_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: desde, in: query, required: false, schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Turnos
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Disponibilidad' } }
+  /api/v1/turnos/{dis_id}:
+    get:
+      tags: [Inventario]
+      summary: Un turno con sus cupos libres (mismo mensaje `Turno` del proto)
+      operationId: turno
+      parameters:
+        - { name: dis_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Turno
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Turno' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /api/v1/fechas-bloqueadas:
+    get:
+      tags: [Inventario]
+      summary: Fechas en que la atracción no opera
+      operationId: fechasBloqueadas
+      parameters:
+        - { name: atr_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Fechas
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/FechaBloqueada' } }
+    post:
+      tags: [Inventario]
+      summary: Bloquear una fecha (ADMIN u OPERADOR); sus turnos pasan a 0 cupos en Booking
+      operationId: bloquearFecha
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [atr_id, fb_fecha, fb_motivo]
+              properties:
+                atr_id: { type: integer, minimum: 1 }
+                fb_fecha: { type: string, format: date }
+                fb_motivo: { type: string, minLength: 3, maxLength: 200 }
+      responses:
+        '201':
+          description: Fecha bloqueada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FechaBloqueada' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+  /api/v1/fechas-bloqueadas/{fb_id}:
+    delete:
+      tags: [Inventario]
+      summary: Desbloquear (ADMIN u OPERADOR)
+      operationId: desbloquearFecha
+      security: [{ BearerAuth: [] }]
+      parameters:
+        - { name: fb_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '204': { description: Desbloqueada }
+        '404': { $ref: '#/components/responses/Problema' }
+  /api/v1/health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Horario:
+      type: object
+      additionalProperties: false
+      required: [hor_id, atr_id, hor_hora, hor_cupo, hor_activo]
+      properties:
+        hor_id: { type: integer }
+        atr_id: { type: integer }
+        hor_hora: { type: string, pattern: '^\d{2}:\d{2}$' }
+        hor_cupo: { type: integer, minimum: 1 }
+        hor_activo: { type: boolean }
+    Disponibilidad:
+      type: object
+      additionalProperties: false
+      required: [dis_id, atr_id, hor_id, dis_fecha, hor_hora, dis_cupo_total, dis_cupo_reservado, dis_cerrada]
+      properties:
+        dis_id: { type: integer }
+        atr_id: { type: integer }
+        hor_id: { type: integer }
+        dis_fecha: { type: string, format: date }
+        hor_hora: { type: string }
+        dis_cupo_total: { type: integer }
+        dis_cupo_reservado: { type: integer }
+        dis_cerrada: { type: boolean }
+    Turno:
+      type: object
+      additionalProperties: false
+      required: [dis_id, atr_id, fecha, hora, cupo_total, disponibles]
+      properties:
+        dis_id: { type: string }
+        atr_id: { type: string }
+        fecha: { type: string, format: date }
+        hora: { type: string }
+        cupo_total: { type: integer }
+        disponibles: { type: integer, minimum: 0 }
+    FechaBloqueada:
+      type: object
+      additionalProperties: false
+      required: [fb_id, atr_id, fb_fecha, fb_motivo, fb_creado_en]
+      properties:
+        fb_id: { type: integer }
+        atr_id: { type: integer }
+        fb_fecha: { type: string, format: date }
+        fb_motivo: { type: string }
+        fb_creado_en: { type: string, format: date-time }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        invalid_params:
+          type: array
+          items: { type: object }

@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Electronic Invoicing Service (ms_invoicing) — Descubre EC. Servicio 14 del script del equipo: SOAP.
+  Contrato document/literal, SOAP 1.1. La factura SIEMPRE lleva su detalle: una línea por cada línea de la
+  orden (factura_detalle.det_id es único), con su base, IVA y total. Montos en texto con 2 decimales.
+  Autenticación entre servicios: cabecera HTTP X-Servicio-Token (la valida el servidor antes de procesar).
+-->
+<definitions name="Facturacion"
+    targetNamespace="urn:descubre-ec:facturacion:v1"
+    xmlns="http://schemas.xmlsoap.org/wsdl/"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns:tns="urn:descubre-ec:facturacion:v1"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+  <types>
+    <xsd:schema targetNamespace="urn:descubre-ec:facturacion:v1" elementFormDefault="qualified">
+      <xsd:simpleType name="Monto">
+        <xsd:restriction base="xsd:string">
+          <xsd:pattern value="\d{1,10}\.\d{2}"/>
+        </xsd:restriction>
+      </xsd:simpleType>
+
+      <xsd:complexType name="Comprador">
+        <xsd:sequence>
+          <!-- CEDULA, RUC, PASAPORTE o CONSUMIDOR_FINAL (CHECK del script) -->
+          <xsd:element name="tipo_identificacion" type="xsd:string"/>
+          <xsd:element name="identificacion" type="xsd:string"/>
+          <xsd:element name="razon_social" type="xsd:string"/>
+          <xsd:element name="correo" type="xsd:string"/>
+          <xsd:element name="telefono" type="xsd:string" minOccurs="0"/>
+        </xsd:sequence>
+      </xsd:complexType>
+
+      <xsd:complexType name="LineaEntrada">
+        <xsd:sequence>
+          <xsd:element name="det_id" type="xsd:long"/>
+          <xsd:element name="codigo" type="xsd:string"/>
+          <xsd:element name="descripcion" type="xsd:string"/>
+          <xsd:element name="cantidad" type="xsd:int"/>
+          <xsd:element name="precio_unitario" type="tns:Monto"/>
+          <xsd:element name="descuento" type="tns:Monto" minOccurs="0"/>
+          <xsd:element name="iva_porcentaje" type="xsd:string" minOccurs="0"/>
+        </xsd:sequence>
+      </xsd:complexType>
+
+      <xsd:complexType name="Linea">
+        <xsd:sequence>
+          <xsd:element name="fde_id" type="xsd:long"/>
+          <xsd:element name="det_id" type="xsd:long"/>
+          <xsd:element name="codigo" type="xsd:string"/>
+          <xsd:element name="descripcion" type="xsd:string"/>
+          <xsd:element name="cantidad" type="xsd:int"/>
+          <xsd:element name="precio_unitario" type="tns:Monto"/>
+          <xsd:element name="descuento" type="tns:Monto"/>
+          <xsd:element name="subtotal" type="tns:Monto"/>
+          <xsd:element name="iva_porcentaje" type="xsd:string"/>
+          <xsd:element name="iva" type="tns:Monto"/>
+          <xsd:element name="total" type="tns:Monto"/>
+        </xsd:sequence>
+      </xsd:complexType>
+
+      <xsd:complexType name="Factura">
+        <xsd:sequence>
+          <xsd:element name="fac_id" type="xsd:long"/>
+          <xsd:element name="fac_numero" type="xsd:string"/>
+          <xsd:element name="ord_id" type="xsd:long"/>
+          <!-- NO_PAGADA, PAGADA o ANULADA -->
+          <xsd:element name="estado" type="xsd:string"/>
+          <xsd:element name="emitida_en" type="xsd:dateTime"/>
+          <xsd:element name="clave_acceso" type="xsd:string"/>
+          <xsd:element name="autorizacion_sri" type="xsd:string"/>
+          <xsd:element name="subtotal" type="tns:Monto"/>
+          <xsd:element name="descuento" type="tns:Monto"/>
+          <xsd:element name="iva" type="tns:Monto"/>
+          <xsd:element name="total" type="tns:Monto"/>
+          <xsd:element name="comprador" type="tns:Comprador"/>
+          <xsd:element name="lineas">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="linea" type="tns:Linea" minOccurs="1" maxOccurs="unbounded"/>
+              </xsd:sequence>
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:complexType>
+
+      <xsd:element name="EmitirFacturaRequest">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ord_id" type="xsd:long"/>
+            <xsd:element name="comprador" type="tns:Comprador"/>
+            <xsd:element name="lineas">
+              <xsd:complexType>
+                <xsd:sequence>
+                  <xsd:element name="linea" type="tns:LineaEntrada" minOccurs="1" maxOccurs="unbounded"/>
+                </xsd:sequence>
+              </xsd:complexType>
+            </xsd:element>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="ObtenerFacturaRequest">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ord_id" type="xsd:long"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="AnularFacturaRequest">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="ord_id" type="xsd:long"/>
+            <xsd:element name="motivo" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="FacturaResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="factura" type="tns:Factura"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+
+  <message name="EmitirFacturaInput"><part name="parameters" element="tns:EmitirFacturaRequest"/></message>
+  <message name="ObtenerFacturaInput"><part name="parameters" element="tns:ObtenerFacturaRequest"/></message>
+  <message name="AnularFacturaInput"><part name="parameters" element="tns:AnularFacturaRequest"/></message>
+  <message name="FacturaOutput"><part name="parameters" element="tns:FacturaResponse"/></message>
+
+  <portType name="FacturacionPortType">
+    <!-- Idempotente por orden: emitir dos veces la misma orden devuelve la misma factura -->
+    <operation name="EmitirFactura"><input message="tns:EmitirFacturaInput"/><output message="tns:FacturaOutput"/></operation>
+    <operation name="ObtenerFactura"><input message="tns:ObtenerFacturaInput"/><output message="tns:FacturaOutput"/></operation>
+    <!-- Conserva el detalle: anular solo cambia el estado (reembolso total de la orden) -->
+    <operation name="AnularFactura"><input message="tns:AnularFacturaInput"/><output message="tns:FacturaOutput"/></operation>
+  </portType>
+
+  <binding name="FacturacionBinding" type="tns:FacturacionPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="EmitirFactura">
+      <soap:operation soapAction="urn:descubre-ec:facturacion:v1#EmitirFactura"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+    <operation name="ObtenerFactura">
+      <soap:operation soapAction="urn:descubre-ec:facturacion:v1#ObtenerFactura"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+    <operation name="AnularFactura">
+      <soap:operation soapAction="urn:descubre-ec:facturacion:v1#AnularFactura"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+  </binding>
+
+  <service name="FacturacionService">
+    <port name="FacturacionPort" binding="tns:FacturacionBinding">
+      <soap:address location="http://localhost:4011/soap/facturacion"/>
+    </port>
+  </service>
+</definitions>

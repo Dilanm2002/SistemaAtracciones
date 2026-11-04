@@ -1,18 +1,17 @@
-import { Controller, Get, Module, Param, Res } from '@nestjs/common';
+import { Controller, Get, Module, Res } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { preparar, reenviar } from './proxy';
-import { duenoDe, esSalud, rutear, sinTienda } from './rutas';
+import { esSalud, rutear } from './rutas';
 import { saludAgregada } from './salud';
 
 /** Salud agregada en las dos rutas que usa el semáforo de Booking: /atracciones/health y la URL base /health. */
 @Controller()
 class SaludController {
   @Get(['api/v:version/atracciones/health', 'api/v:version/health'])
-  async salud(@Param('version') version: string, @Res() res: Response) {
-    const v = version === '3' ? '3' : '2';
-    const s = await saludAgregada(v);
+  async salud(@Res() res: Response) {
+    const s = await saludAgregada();
     res.status(s.status).setHeader('Cache-Control', 'no-store').json(s.body);
   }
 
@@ -22,12 +21,9 @@ class SaludController {
     const ejemplos = [
       ['GET', '/api/v3/atracciones'], ['POST', '/api/v3/atracciones/search'], ['GET', '/api/v3/atracciones/categorias/arbol'],
       ['GET', '/api/v3/atracciones/{id}'], ['GET', '/api/v3/atracciones/{id}/disponibilidad'], ['POST', '/api/v3/atracciones/reservas'],
-      ['POST', '/api/v3/reservas'], ['GET', '/api/v3/atracciones/eventos'], ['GET', '/ms/location/v1/ciudades'],
+      ['POST', '/api/v3/reservas'], ['GET', '/api/v3/atracciones/eventos'], ['GET', '/api/v3/atracciones/promociones/contrato'], ['GET', '/ms/location/v1/ciudades'],
     ];
-    res.json(ejemplos.map(([m, u]) => {
-      const destino = rutear(m, u.replace('{id}', 'quito-city-tour')).destino;
-      return { metodo: m, ruta: u, destino: destino === 'tienda' && sinTienda() ? `pendiente: ${duenoDe(u)}` : destino };
-    }));
+    res.json(ejemplos.map(([m, u]) => ({ metodo: m, ruta: u, destino: rutear(m, u.replace('{id}', 'quito-city-tour')).destino })));
   }
 }
 

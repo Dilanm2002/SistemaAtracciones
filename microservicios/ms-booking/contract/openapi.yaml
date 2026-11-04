@@ -1,0 +1,253 @@
+openapi: 3.0.3
+info:
+  title: Booking Service (ms_booking) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 11 del equipo: **reservas** (`estado`, `reserva`, `reserva_pasajero` del script + extras de
+    `sql/002`). Atiende por el gateway las rutas de reservas del **contrato v3 con Booking Prototipo** (también
+    `/api/v2` y la URL base `{baseUrlRest}/reservas` de la guía de socios), con los esquemas **oficiales**.
+
+    Es el **orquestador de la saga** de compra, cada paso por el protocolo que fija el script:
+    ms_catalog (REST) → ms_pricing (gRPC) → ms_inventory (gRPC, retener cupos; sin cupos → 409 OUT_OF_STOCK)
+    → ms_order (gRPC, una línea por tipo de boleto) → ms_payment (REST) → reserva y eventos → ms_invoicing (SOAP).
+    Si un paso falla se compensa en orden inverso (libera cupos, reembolsa o anula el pago, cancela la orden).
+    Cancelar: libera cupos → reembolso (ms_refund) si se cobró → orden REEMBOLSADA → factura ANULADA.
+
+    - Seguridad del contrato: `X-API-Key` de Booking o JWT de ADMIN; escrituras con `Idempotency-Key` (UUID).
+    - gRPC propio: `descubre.reserva.v1.ReservaService/ObtenerReserva` (`proto/reserva.proto`, puerto 50048).
+    - Feed `GET /atracciones/eventos` (CloudEvents): eventos de reservas + `STOCK_ACTUALIZADO` de ms_inventory.
+servers:
+  - url: http://localhost:4008
+    description: Local
+tags:
+  - name: Booking
+  - name: Interno
+  - name: Salud
+paths:
+  /api/v3/atracciones/reservas:
+    post:
+      tags: [Booking]
+      summary: Crear reserva (201 confirmada · 409 OUT_OF_STOCK activa la compensación de la saga de Booking)
+      operationId: crearReserva
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/CreateReservaRequestV3' }
+      responses:
+        '201':
+          description: Reserva confirmada
+          content:
+            application/json:
+              schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/ReservaConfirmadaResponseV2' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '404': { $ref: '#/components/responses/Problema' }
+        '409': { $ref: '#/components/responses/Problema' }
+        '422': { $ref: '#/components/responses/Problema' }
+        '503': { $ref: '#/components/responses/Problema' }
+  /api/v3/atracciones/reservas/{id}:
+    get:
+      tags: [Booking]
+      summary: Reserva por UUID o código PNR (DEC-XXXXXX)
+      operationId: obtenerReserva
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Reserva
+          content:
+            application/json:
+              schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/ReservaConfirmadaResponseV2' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /api/v3/atracciones/reservas/{id}/cancel:
+    post:
+      tags: [Booking]
+      summary: Cancelación o compensación de la saga (idempotente)
+      operationId: cancelarReserva
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/CancelReservationRequest' }
+      responses:
+        '200':
+          description: Reserva cancelada
+          content:
+            application/json:
+              schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/ReservaConfirmadaResponseV2' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '409': { $ref: '#/components/responses/Problema' }
+        '503': { $ref: '#/components/responses/Problema' }
+  /api/v3/atracciones/reservas/{id}/checkin:
+    post:
+      tags: [Booking]
+      summary: Check-in presencial (documento y/o QR del voucher)
+      operationId: checkin
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/CheckinRequest' }
+      responses:
+        '200':
+          description: Check-in registrado
+          content:
+            application/json:
+              schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/CheckinResponse' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '409': { $ref: '#/components/responses/Problema' }
+  /api/v3/atracciones/eventos:
+    get:
+      tags: [Booking]
+      summary: Feed de eventos (CloudEvents 1.0) desde `after`
+      operationId: eventos
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      parameters:
+        - { name: after, in: query, required: false, schema: { type: integer, minimum: 0 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+        - { name: type, in: query, required: false, schema: { type: string, enum: [RESERVA_CREADA, RESERVA_CONFIRMADA, STOCK_ACTUALIZADO, RESERVA_CANCELADA] } }
+      responses:
+        '200':
+          description: Eventos
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/OutboxEventItem' }
+  /api/v3/atracciones/vouchers/{codigo}/qr.png:
+    get:
+      tags: [Booking]
+      summary: Imagen PNG del QR del voucher (o del pase de abordar con ?tipo=pase)
+      operationId: qr
+      parameters:
+        - { name: codigo, in: path, required: true, schema: { type: string } }
+        - { name: tipo, in: query, required: false, schema: { type: string, enum: [pase] } }
+      responses:
+        '200':
+          description: PNG
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/Problema' }
+  /api/v1/calendario/{archivo}:
+    get:
+      tags: [Booking]
+      summary: Evento .ics de la reserva (enlace firmado de ics_calendar_url)
+      operationId: ics
+      parameters:
+        - { name: archivo, in: path, required: true, schema: { type: string, pattern: '^[0-9a-f-]{36}\.ics$' } }
+        - { name: t, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Calendario
+          content:
+            text/calendar:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/Problema' }
+  /api/v1/internal/eventos:
+    post:
+      tags: [Interno]
+      summary: STOCK_ACTUALIZADO de ms_inventory (CloudEvents, X-Servicio-Token; idempotente por event_id)
+      operationId: recibirEvento
+      security: [{ ServicioToken: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [specversion, event_id, event_type, source, timestamp, data]
+              properties:
+                specversion: { type: string, enum: ['1.0'] }
+                event_id: { type: string, format: uuid }
+                event_type: { type: string, enum: [STOCK_ACTUALIZADO] }
+                source: { type: string }
+                correlation_id: { type: string }
+                timestamp: { type: string, format: date-time }
+                data:
+                  type: object
+                  required: [attraction_id, date, time, available_units]
+                  properties:
+                    attraction_id: { type: string, format: uuid }
+                    date: { type: string, format: date }
+                    time: { type: string }
+                    available_units: { type: integer }
+                    total_units: { type: integer }
+                    reason: { type: string }
+      responses:
+        '200':
+          description: Recibido
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [procesado]
+                properties:
+                  procesado: { type: boolean }
+        '401': { $ref: '#/components/responses/Problema' }
+  /api/v1/health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    ApiKeyAuth: { type: apiKey, in: header, name: X-API-Key }
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    ServicioToken: { type: apiKey, in: header, name: X-Servicio-Token }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        invalid_params:
+          type: array
+          items: { type: object }

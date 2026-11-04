@@ -1,0 +1,42 @@
+// Inventory & Availability Service (gRPC interno, script del equipo §7). No confundir con
+// inventory.proto, que es el contrato de Booking para recibir el stock (PushStockUpdate).
+syntax = "proto3";
+
+package descubre.inventario.v1;
+
+service InventarioService {
+  // Descuenta cupos de un turno sin sobreventa (bloquea la fila). Errores:
+  //   FAILED_PRECONDITION + OUT_OF_STOCK: sin cupos, turno cerrado o fecha bloqueada
+  //   INVALID_ARGUMENT: fecha pasada, horario inexistente o salida que ya partió
+  rpc RetenerCupos (RetenerCuposRequest) returns (Turno);
+  // Devuelve cupos al turno (cancelación o compensación de la saga). Idempotente por referencia.
+  rpc LiberarCupos (LiberarCuposRequest) returns (Turno);
+  rpc ObtenerTurno (ObtenerTurnoRequest) returns (Turno);
+}
+
+message RetenerCuposRequest {
+  int64 atr_id = 1;
+  string fecha = 2;      // AAAA-MM-DD
+  string hora = 3;       // HH:MM (24 h)
+  int32 cupos = 4;
+  string referencia = 5; // id de la operación (reserva) para no descontar dos veces
+}
+
+message LiberarCuposRequest {
+  int64 dis_id = 1;
+  int32 cupos = 2;
+  string referencia = 3;
+}
+
+message ObtenerTurnoRequest {
+  int64 dis_id = 1;
+}
+
+message Turno {
+  int64 dis_id = 1;
+  int64 atr_id = 2;
+  string fecha = 3;
+  string hora = 4;
+  int32 cupo_total = 5;
+  int32 disponibles = 6;
+}

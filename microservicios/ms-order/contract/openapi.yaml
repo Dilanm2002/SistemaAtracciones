@@ -1,0 +1,142 @@
+openapi: 3.0.3
+info:
+  title: Order Management Service (ms_order) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 10 del equipo: **órdenes de compra** (`orden`, `orden_detalle`, `idempotencia`). Según el script
+    es un servicio **gRPC**: ms_booking crea y cambia órdenes con `descubre.orden.v1.OrdenService`
+    (`proto/orden.proto`, puerto 50047). Esta API REST es solo de consulta para el panel (ADMIN).
+
+    - `CrearOrden` es idempotente por `idempotency_key` (tabla `idempotencia` del script, en la misma transacción).
+    - Una línea por tipo de boleto (adulto, niño, adulto mayor, estudiante, infante a $0): cuadra la regla del script
+      `det_subtotal = det_cantidad × det_precio_unitario` y ms_invoicing factura cada línea una vez (`det_id` único).
+    - Estados del script: CREADA → PAGADA | CANCELADA; PAGADA → REEMBOLSADA. Otro cambio: 409 `INVALID_STATE`.
+servers:
+  - url: http://localhost:4007/api/v1
+    description: Local
+tags:
+  - name: Órdenes
+  - name: Salud
+security:
+  - BearerAuth: []
+paths:
+  /ordenes:
+    get:
+      tags: [Órdenes]
+      summary: Órdenes de un usuario (ADMIN)
+      operationId: listarOrdenes
+      parameters:
+        - { name: usu_id, in: query, required: true, schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 } }
+      responses:
+        '200':
+          description: Órdenes
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OrdenResumen' }
+        '401': { $ref: '#/components/responses/Problema' }
+        '403': { $ref: '#/components/responses/Problema' }
+  /ordenes/{ord_id}:
+    get:
+      tags: [Órdenes]
+      summary: Una orden con su detalle (ADMIN; mismo mensaje `Orden` del proto)
+      operationId: obtenerOrden
+      parameters:
+        - { name: ord_id, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: Orden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Orden' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /health:
+    get:
+      tags: [Salud]
+      security: []
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Monto: { type: string, pattern: '^\d+\.\d{2}$' }
+    Orden:
+      type: object
+      additionalProperties: false
+      required: [ord_id, ord_numero, estado, subtotal, descuento, iva, total, moneda, lineas]
+      properties:
+        ord_id: { type: string }
+        ord_numero: { type: string, pattern: '^ORD-[A-Z0-9]{6}$' }
+        estado: { type: string, enum: [CREADA, PAGADA, CANCELADA, REEMBOLSADA] }
+        subtotal: { $ref: '#/components/schemas/Monto' }
+        descuento: { $ref: '#/components/schemas/Monto' }
+        iva: { $ref: '#/components/schemas/Monto' }
+        total: { $ref: '#/components/schemas/Monto' }
+        moneda: { type: string, pattern: '^[A-Z]{3}$' }
+        lineas:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [det_id, atr_id, descripcion, cantidad, precio_unitario, subtotal]
+            properties:
+              det_id: { type: string }
+              atr_id: { type: string }
+              descripcion: { type: string }
+              cantidad: { type: integer, minimum: 1 }
+              precio_unitario: { $ref: '#/components/schemas/Monto' }
+              subtotal: { $ref: '#/components/schemas/Monto' }
+    OrdenResumen:
+      type: object
+      additionalProperties: false
+      required: [ord_id, ord_numero, estado, ord_fecha, ord_total, ord_moneda]
+      properties:
+        ord_id: { type: integer }
+        ord_numero: { type: string }
+        estado: { type: string }
+        ord_fecha: { type: string, format: date-time }
+        ord_total: { type: number }
+        ord_moneda: { type: string }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }

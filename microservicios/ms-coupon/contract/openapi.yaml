@@ -1,0 +1,180 @@
+openapi: 3.0.3
+info:
+  title: Coupon Service (ms_coupon) — Descubre EC
+  version: 1.0.0
+  description: |
+    Microservicio 9 del equipo (**REST**): cupones de descuento (`cupon` del script) y el **acuerdo B2B de
+    promociones** con Booking (`acuerdo_promocion` y `acuerdo_promocion_destino`, `sql/002`).
+
+    - Booking llama por el gateway `GET/PUT /api/v3/atracciones/promociones/contrato` (también `/api/v2`), con
+      `X-API-Key` o el JWT de un ADMIN; respuesta con el esquema **oficial** `PromocionesContratoResponse`.
+    - Si no se permiten promociones, el descuento máximo queda en 0 (CHECK del acuerdo, tope 50 %).
+    - `GET /api/v1/internal/acuerdo` (X-Servicio-Token): lo consulta ms_catalog para el descuento de paquete.
+servers:
+  - url: http://localhost:4006
+    description: Local (las rutas propias van bajo /api/v1)
+tags:
+  - name: Booking
+  - name: Cupones
+  - name: Salud
+paths:
+  /api/v3/atracciones/promociones/contrato:
+    get:
+      tags: [Booking]
+      summary: Acuerdo B2B de promociones vigente
+      operationId: acuerdoPromociones
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      responses:
+        '200':
+          description: Acuerdo
+          content:
+            application/json:
+              schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/PromocionesContratoResponse' }
+        '401': { $ref: '#/components/responses/Problema' }
+    put:
+      tags: [Booking]
+      summary: Responder el cuestionario B2B (permite promociones, % máximo, destinos, vigencia, condiciones)
+      operationId: actualizarAcuerdoPromociones
+      security: [{ ApiKeyAuth: [] }, { BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/ActualizarPromocionesContratoRequest' }
+      responses:
+        '200':
+          description: Acuerdo actualizado
+          content:
+            application/json:
+              schema: { $ref: 'booking-atracciones-v3.yaml#/components/schemas/PromocionesContratoResponse' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '401': { $ref: '#/components/responses/Problema' }
+  /api/v1/cupones:
+    get:
+      tags: [Cupones]
+      summary: Cupones (ADMIN)
+      operationId: listarCupones
+      security: [{ BearerAuth: [] }]
+      responses:
+        '200':
+          description: Cupones
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Cupon' } }
+        '401': { $ref: '#/components/responses/Problema' }
+    post:
+      tags: [Cupones]
+      summary: Crear un cupón (ADMIN)
+      operationId: crearCupon
+      security: [{ BearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cup_codigo, cup_tipo, cup_valor, cup_fecha_inicio]
+              properties:
+                cup_codigo: { type: string, pattern: '^[A-Za-z0-9_-]{3,30}$' }
+                cup_tipo: { type: string, enum: [PORCENTAJE, FIJO] }
+                cup_valor: { type: number, minimum: 0.01 }
+                cup_fecha_inicio: { type: string, format: date }
+                cup_fecha_fin: { type: string, format: date }
+                cup_usos_max: { type: integer, minimum: 1 }
+      responses:
+        '201':
+          description: Cupón creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cupon' }
+        '400': { $ref: '#/components/responses/Problema' }
+        '409': { $ref: '#/components/responses/Problema' }
+  /api/v1/cupones/{codigo}/validar:
+    get:
+      tags: [Cupones]
+      summary: ¿Aplica hoy? Descuento sobre un monto
+      operationId: validarCupon
+      parameters:
+        - { name: codigo, in: path, required: true, schema: { type: string } }
+        - { name: monto, in: query, required: true, schema: { type: string, pattern: '^\d+\.\d{2}$' } }
+      responses:
+        '200':
+          description: Resultado
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cup_id, cup_codigo, valido, descuento]
+                properties:
+                  cup_id: { type: integer }
+                  cup_codigo: { type: string }
+                  valido: { type: boolean }
+                  motivo: { type: string }
+                  descuento: { type: string, pattern: '^\d+\.\d{2}$' }
+        '404': { $ref: '#/components/responses/Problema' }
+  /api/v1/health:
+    get:
+      tags: [Salud]
+      summary: Salud del servicio (UP, DEGRADED o DOWN)
+      operationId: salud
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+        '503':
+          description: Sin base de datos
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Salud' }
+components:
+  securitySchemes:
+    ApiKeyAuth: { type: apiKey, in: header, name: X-API-Key }
+    BearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Problema:
+      description: Error RFC 7807
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+  schemas:
+    Cupon:
+      type: object
+      additionalProperties: false
+      required: [cup_id, cup_codigo, cup_tipo, cup_valor, cup_fecha_inicio, cup_fecha_fin, cup_usos_max, cup_activo]
+      properties:
+        cup_id: { type: integer }
+        cup_codigo: { type: string }
+        cup_tipo: { type: string, enum: [PORCENTAJE, FIJO] }
+        cup_valor: { type: number }
+        cup_fecha_inicio: { type: string, format: date }
+        cup_fecha_fin: { type: string, format: date, nullable: true }
+        cup_usos_max: { type: integer, nullable: true }
+        cup_activo: { type: boolean }
+    Salud:
+      type: object
+      required: [status, service, database_connected, latency_ms, timestamp]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        database_connected: { type: boolean }
+        latency_ms: { type: integer }
+        uptime_seconds: { type: integer }
+        timestamp: { type: string, format: date-time }
+    Problema:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { type: string }
+        correlation_id: { type: string }
+        invalid_params:
+          type: array
+          items: { type: object }

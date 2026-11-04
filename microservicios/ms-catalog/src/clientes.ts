@@ -1,4 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { llamar, urlServicio } from './comun/http';
 
 /** GET JSON con tiempo máximo (los servicios no se esperan más de 2 s entre sí). */
 async function getJson<T>(url: string, headers: Record<string, string> = {}, ms = 2000): Promise<T> {
@@ -74,43 +75,34 @@ export interface Acuerdo {
   maximo: number;
 }
 
-/**
- * Lo que todavía vive en la tienda (migración gradual): el acuerdo B2B de promociones y la
- * disponibilidad por turno (será de ms_inventory). Base: TIENDA_URL (p. ej. http://localhost:3000).
- */
+/** ms_coupon (REST interno): acuerdo B2B de promociones, para el descuento de paquete de la ficha. */
 @Injectable()
-export class TiendaClient {
+export class CuponClient {
   private acuerdoCache: { a: Acuerdo; hasta: number } | null = null;
-  private readonly logger = new Logger('TiendaClient');
+  private readonly logger = new Logger('CuponClient');
 
-  private get base() {
-    return (process.env.TIENDA_URL ?? 'http://localhost:3000').replace(/\/$/, '');
-  }
-
-  /** Acuerdo de promociones vigente (60 s en caché). Sin respuesta: PROMO_PERMITE / PROMO_DESCUENTO_MAXIMO. */
+  /** Acuerdo vigente (60 s en caché). Sin respuesta: PROMO_PERMITE / PROMO_DESCUENTO_MAXIMO. */
   async acuerdo(): Promise<Acuerdo> {
     if (this.acuerdoCache && this.acuerdoCache.hasta > Date.now()) return this.acuerdoCache.a;
     let a: Acuerdo = { permite: process.env.PROMO_PERMITE !== 'false', maximo: Number(process.env.PROMO_DESCUENTO_MAXIMO ?? 15) };
-    const clave = process.env.BOOKING_API_KEY;
-    if (clave) {
-      try {
-        const r = await getJson<{ permite_promociones: boolean; porcentaje_descuento_maximo: number }>(
-          `${this.base}/api/v2/atracciones/promociones/contrato`,
-          { 'x-api-key': clave },
-        );
-        a = { permite: r.permite_promociones, maximo: r.porcentaje_descuento_maximo };
-      } catch (e) {
-        this.logger.warn(`Acuerdo de promociones no disponible: ${(e as Error).message}`);
-      }
+    try {
+      const r = await llamar<{ permite_promociones: boolean; porcentaje_descuento_maximo: number }>('coupon', 'GET', '/api/v1/internal/acuerdo', { timeout: 2000 });
+      a = { permite: r.permite_promociones, maximo: r.porcentaje_descuento_maximo };
+    } catch (e) {
+      this.logger.warn(`Acuerdo de promociones no disponible: ${(e as Error).message}`);
     }
     this.acuerdoCache = { a, hasta: Date.now() + 60_000 };
     return a;
   }
+}
 
-  /** ¿Hay algún turno con al menos `cupos` libres ese día? (falso si la tienda no responde o la fecha no opera) */
+/** ms_inventory: cupos por turno, para la búsqueda por fechas (la misma ruta de disponibilidad del contrato). */
+@Injectable()
+export class InventarioClient {
+  /** ¿Hay algún turno con al menos `cupos` libres ese día? (falso si ms_inventory no responde o la fecha no opera) */
   async hayCupos(uuid: string, fecha: string, cupos: number): Promise<boolean> {
     try {
-      const r = await getJson<{ time_slots: { cupos_disponibles: number }[] }>(`${this.base}/api/v2/atracciones/${uuid}/disponibilidad?date=${fecha}`);
+      const r = await getJson<{ time_slots: { cupos_disponibles: number }[] }>(`${urlServicio('inventory')}/api/v2/atracciones/${uuid}/disponibilidad?date=${fecha}`);
       return r.time_slots.some((t) => t.cupos_disponibles >= cupos);
     } catch {
       return false;

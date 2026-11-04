@@ -1,0 +1,61 @@
+// Order Management Service (gRPC, script del equipo §10).
+syntax = "proto3";
+
+package descubre.orden.v1;
+
+service OrdenService {
+  rpc CrearOrden (CrearOrdenRequest) returns (Orden);
+  // CREADA → PAGADA | CANCELADA | REEMBOLSADA (estados finales del script)
+  rpc CambiarEstado (CambiarEstadoRequest) returns (Orden);
+  rpc ObtenerOrden (ObtenerOrdenRequest) returns (Orden);
+}
+
+// Una línea por tipo de boleto (adulto, niño, adulto mayor, estudiante, infante): así cuadra
+// subtotal = cantidad × precio (regla del script) y cada línea se factura una vez (factura_detalle.det_id único).
+message LineaOrden {
+  int64 atr_id = 1;
+  string descripcion = 2;
+  int32 cantidad = 3;
+  string precio_unitario = 4; // "40.00", congelado al comprar
+  string subtotal = 5;
+}
+
+message CrearOrdenRequest {
+  int64 usu_id = 1;          // dueño de la orden (para Booking, su usuario técnico)
+  int32 mpa_id = 2;          // método de pago (ms_payment)
+  string moneda = 3;
+  repeated LineaOrden lineas = 4;
+  string observaciones = 5;
+  string sufijo = 6;         // comparte sufijo con DEC-/PAG- (ORD-XXXXXX); si ya existe → 409 NUMERO_DUPLICADO
+  string idempotency_key = 7; // UUID (p. ej. el de la reserva): repetir la llamada devuelve la misma orden
+}
+
+message CambiarEstadoRequest {
+  int64 ord_id = 1;
+  string estado = 2;         // PAGADA | CANCELADA | REEMBOLSADA
+}
+
+message ObtenerOrdenRequest {
+  int64 ord_id = 1;
+}
+
+message Orden {
+  int64 ord_id = 1;
+  string ord_numero = 2;
+  string estado = 3;
+  string subtotal = 4;
+  string descuento = 5;
+  string iva = 6;
+  string total = 7;
+  string moneda = 8;
+  repeated LineaOrdenGuardada lineas = 9;
+}
+
+message LineaOrdenGuardada {
+  int64 det_id = 1;
+  int64 atr_id = 2;
+  string descripcion = 3;
+  int32 cantidad = 4;
+  string precio_unitario = 5;
+  string subtotal = 6;
+}

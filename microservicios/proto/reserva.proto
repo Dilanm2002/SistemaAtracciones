@@ -1,0 +1,26 @@
+// Booking Service (gRPC, script del equipo §11). Booking Prototipo usa la API REST del contrato v3
+// (por el gateway); esta interfaz es para los demás servicios del equipo.
+syntax = "proto3";
+
+package descubre.reserva.v1;
+
+service ReservaService {
+  rpc ObtenerReserva (ObtenerReservaRequest) returns (ReservaResumen);
+}
+
+message ObtenerReservaRequest {
+  // UUID de la reserva o código PNR (DEC-XXXXXX)
+  string referencia = 1;
+}
+
+message ReservaResumen {
+  string reservation_id = 1;
+  string reservation_code = 2;
+  string status = 3;
+  int64 atr_id = 4;
+  string fecha = 5;
+  string hora = 6;
+  int32 tickets = 7;
+  string total = 8;
+  string moneda = 9;
+}

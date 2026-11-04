@@ -13,14 +13,14 @@ const CONTRATO = join(__dirname, '..', 'contract');
 const SECRETO = 'secreto-de-pruebas-de-ms-catalog-0123456789';
 const TOKEN_SERVICIOS = 'token-servicios-pruebas-123';
 
-/** JWT HS256 como los que emite Identity (la tienda hoy). */
+/** JWT HS256 como los que emite Identity (hoy, la tienda con el mismo JWT_SECRET). */
 function jwt(claims: Record<string, unknown>) {
   const b = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
   const cuerpo = `${b({ alg: 'HS256', typ: 'JWT' })}.${b({ exp: Math.floor(Date.now() / 1000) + 600, ...claims })}`;
   return `${cuerpo}.${createHmac('sha256', SECRETO).update(cuerpo).digest('base64url')}`;
 }
 
-/** Servidor HTTP falso (ms_location o la tienda) que responde según la ruta. */
+/** Servidor HTTP falso (ms_location, ms_inventory o ms_coupon) que responde según la ruta. */
 async function falso(responder: (url: URL) => [number, unknown]) {
   const s: Server = createServer((req, res) => {
     const [status, cuerpo] = responder(new URL(req.url ?? '/', 'http://x'));
@@ -38,7 +38,7 @@ const CIUDADES = [
 describeDb('ms_catalog', () => {
   let app: NestExpressApplication;
   let location: Awaited<ReturnType<typeof falso>>;
-  let tienda: Awaited<ReturnType<typeof falso>>;
+  let dependencias: Awaited<ReturnType<typeof falso>>;
   let locationCaida = false;
   const propio = new Contrato(join(CONTRATO, 'openapi.yaml'), 'contrato', [join(CONTRATO, 'booking-atracciones-v3.yaml')]);
   const booking = new Contrato(join(CONTRATO, 'booking-atracciones-v3.yaml'), 'booking');
@@ -57,14 +57,14 @@ describeDb('ms_catalog', () => {
       const ids = u.searchParams.get('ids')?.split(',').map(Number);
       return [200, CIUDADES.filter((c) => (!ids || ids.includes(c.ciu_id)) && c.ciu_nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().includes(q))];
     });
-    tienda = await falso((u) => {
-      if (u.pathname.endsWith('/promociones/contrato')) return [200, { permite_promociones: true, porcentaje_descuento_maximo: 10 }];
+    dependencias = await falso((u) => {
+      if (u.pathname === '/api/v1/internal/acuerdo') return [200, { permite_promociones: true, porcentaje_descuento_maximo: 10 }];
       // Solo el 2030-01-15 tiene cupos (para la búsqueda por fechas)
       const fecha = u.searchParams.get('date');
       return [200, { time_slots: [{ cupos_disponibles: fecha === '2030-01-15' ? 8 : 0 }] }];
     });
     Object.assign(process.env, {
-      LOCATION_URL: location.url, TIENDA_URL: tienda.url, JWT_SECRET: SECRETO, SERVICIOS_TOKEN: TOKEN_SERVICIOS,
+      LOCATION_URL: location.url, INVENTORY_URL: dependencias.url, COUPON_URL: dependencias.url, JWT_SECRET: SECRETO, SERVICIOS_TOKEN: TOKEN_SERVICIOS,
       BOOKING_API_KEY: 'clave-de-booking-para-pruebas-1234', FOTOS_BASE_URL: 'http://fotos.local',
     });
     await baseVacia();
@@ -98,7 +98,7 @@ describeDb('ms_catalog', () => {
   afterAll(async () => {
     await app?.close();
     await location?.cerrar();
-    await tienda?.cerrar();
+    await dependencias?.cerrar();
   });
 
   describe('contrato con Booking (v2 y v3)', () => {
@@ -152,7 +152,7 @@ describeDb('ms_catalog', () => {
       expect(propio.respuesta('GET', '/v3/atracciones/{id}', 404, borrador.body)).toEqual([]);
     });
 
-    it('búsqueda: texto, precio, idioma, inclusiones y fechas (cupos consultados a la tienda)', async () => {
+    it('búsqueda: texto, precio, idioma, inclusiones y fechas (cupos consultados a ms_inventory)', async () => {
       const buscar = (b: object) => http().post('/api/v3/atracciones/search').send(b);
       const t = await buscar({ query: 'centro historico', idioma_guia: 'Inglés', precio_max: 40, incluye_guia: true });
       expect(t.status).toBe(200);
