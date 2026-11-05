@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { ClientRequest } from 'http';
+import { Agent, ClientRequest } from 'http';
 import { esSalud, rutear, urlDe } from './rutas';
 
 type Peticion = Request & { destino?: string; rutaDestino?: string; correlationId?: string };
@@ -47,6 +47,8 @@ export function preparar(req: Peticion, res: Response, next: NextFunction) {
 export const reenviar = createProxyMiddleware<Peticion, Response>({
   router: (req) => urlDe(req.destino as never),
   pathRewrite: (_path, req) => req.rutaDestino ?? req.originalUrl,
+  // Con Connection: close, la entrada interna de Azure deja colgadas las respuestas de más de ~64 KB
+  agent: new Agent({ keepAlive: true, maxSockets: 64, timeout: 60_000 }),
   changeOrigin: true,
   xfwd: true,
   // Booking corta a los 4 s (circuit breaker): mejor responder un 504 claro antes
