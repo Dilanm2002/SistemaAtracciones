@@ -504,8 +504,18 @@
 .auth-visual::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(8,26,24,0.1), rgba(8,26,24,0.8)); }
 .auth-visual h2 { color: #fff; font-size: 2rem; }
 .auth-visual p { color: #e4efed; max-width: 440px; }
-.auth-form-wrap { display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+/* El formulario se apoya en la foto (no flota en el centro) y las curvas de nivel ocupan el espacio libre */
+.auth-form-wrap { position: relative; display: flex; align-items: center; justify-content: flex-start; padding: 48px clamp(20px, 7vw, 112px); overflow: hidden; isolation: isolate; }
+.auth-form-wrap::after { content: ''; position: absolute; right: 0; bottom: 0; width: 340px; aspect-ratio: 1; z-index: -1; opacity: 0.18; pointer-events: none; display: none;
+  background: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%20600%20600'%20fill%3D'none'%20stroke%3D'%230f766e'%20stroke-width%3D'1.4'%20stroke-linejoin%3D'round'%3E%3Cpath%20d%3D'M530.0%20600.0%20L533.8%20593.0%20L537.1%20586.6%20L539.4%20580.3%20L540.8%20573.7%20L542.4%20566.8%20L545.0%20560.0%20L549.0%20554.1%20L554.3%20549.3%20L560.3%20545.3%20L566.2%20541.5%20L572.0%20537.2%20L578.0%20532.3%20L584.6%20527.4%20L592.0%20523.7%20L600.0%20522.3'%2F%3E%3Cpath%20d%3D'M479.7%20600.0%20L482.5%20587.7%20L483.1%20575.2%20L482.6%20561.9%20L483.0%20547.9%20L486.1%20534.2%20L492.5%20521.9%20L501.6%20511.4%20L512.0%20502.2%20L522.4%20493.2%20L532.7%20483.5%20L543.5%20473.2%20L555.8%20463.9%20L569.7%20457.6%20L584.9%20456.0%20L600.0%20459.4'%2F%3E%3Cpath%20d%3D'M426.3%20600.0%20L421.7%20581.3%20L416.5%20561.0%20L414.1%20539.6%20L416.9%20518.5%20L425.4%20499.2%20L438.1%20482.4%20L452.5%20467.2%20L467.0%20452.3%20L481.4%20436.7%20L496.8%20421.2%20L514.5%20407.9%20L535.0%20399.8%20L557.2%20398.5%20L579.4%20403.6%20L600.0%20412.3'%2F%3E%3Cpath%20d%3D'M353.1%20600.0%20L342.0%20572.9%20L336.6%20544.0%20L339.7%20515.4%20L351.0%20489.1%20L367.6%20465.8%20L386.0%20444.5%20L404.0%20423.5%20L421.8%20402.1%20L441.3%20381.5%20L464.1%20364.7%20L490.8%20354.7%20L519.7%20352.9%20L548.5%20357.6%20L575.3%20364.9%20L600.0%20370.3'%2F%3E%3Cpath%20d%3D'M262.5%20600.0%20L255.6%20563.8%20L260.6%20527.9%20L275.7%20494.6%20L296.4%20464.8%20L318.1%20437.3%20L338.6%20410.1%20L358.7%20382.7%20L381.1%20356.9%20L408.1%20335.8%20L439.9%20322.7%20L474.5%20318.1%20L508.7%20319.1%20L540.6%20320.6%20L570.4%20318.2%20L600.0%20310.3'%2F%3E%3Cpath%20d%3D'M179.4%20600.0%20L187.9%20556.7%20L207.2%20516.5%20L231.2%20480.2%20L254.5%20446.2%20L275.1%20412.4%20L295.1%20378.5%20L318.3%20346.3%20L347.5%20319.6%20L382.8%20301.0%20L421.2%20290.4%20L459.2%20283.6%20L494.5%20275.4%20L528.0%20261.4%20L562.4%20241.9%20L600.0%20221.3'%2F%3E%3Cpath%20d%3D'M129.2%20600.0%20L151.5%20552.9%20L176.0%20509.9%20L197.2%20469.1%20L214.2%20428.2%20L230.6%20386.7%20L251.7%20346.9%20L280.8%20312.6%20L317.3%20286.0%20L357.5%20266.2%20L397.1%20248.5%20L434.2%20227.6%20L470.1%20200.3%20L508.4%20168.9%20L551.6%20139.9%20L600.0%20121.4'%2F%3E%3Cpath%20d%3D'M109.8%20600.0%20L130.1%20550.6%20L143.9%20503.1%20L152.4%20454.6%20L161.4%20404.7%20L177.6%20356.1%20L204.2%20312.5%20L240.1%20275.9%20L280.3%20244.9%20L320.0%20214.6%20L357.6%20180.1%20L395.3%20140.2%20L437.1%2098.8%20L486.1%2064.3%20L541.7%2045.2%20L600.0%2045.5'%2F%3E%3C%2Fsvg%3E") no-repeat right bottom / contain; }
+/* Solo con espacio libre junto al formulario: nunca cruza el texto */
+@media (min-width: 1440px) { .auth-form-wrap::after { display: block; } }
 .auth-form { width: 100%; max-width: 420px; }
+.auth-lugar { position: absolute; top: 24px; left: 24px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 600; color: #fff; background: rgba(8, 26, 24, 0.55); backdrop-filter: blur(6px); }
+.auth-beneficios { list-style: none; margin: 32px 0 0; padding: 24px 0 0; border-top: 1px solid var(--border); display: grid; gap: 16px; }
+.auth-beneficios li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; font-size: 0.88rem; color: var(--muted); line-height: 1.45; }
+.auth-beneficios strong { display: block; color: var(--text); font-size: 0.92rem; margin-bottom: 1px; }
+.auth-beneficio-icono { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--primary-50); color: var(--primary); }
 .auth-form h1 { font-size: 1.9rem; }
 .demo-box { margin-top: 20px; font-size: 0.87rem; }
 /* Inicio de sesión con Google (como en Sal y Canela) */
@@ -522,7 +532,7 @@
 .pw-rules li.ok { color: var(--success); }
 .divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 0.85rem; margin: 18px 0; }
 .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
-@media (max-width: 900px) { .auth-page { grid-template-columns: 1fr; } .auth-visual { display: none; } }
+@media (max-width: 900px) { .auth-page { grid-template-columns: 1fr; } .auth-visual { display: none; } .auth-form-wrap { justify-content: center; padding: 32px 20px; } }
 
 /* ── Mis reservas ────────────────────────────────────────────────────── */
 .res-list { display: grid; gap: 16px; }

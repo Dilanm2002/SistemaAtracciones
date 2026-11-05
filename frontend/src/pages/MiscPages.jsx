@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { ChevronDown, Clock, Compass, Heart, Mail, MapPin, Phone, Send, User } from 'lucide-react';
+import { CalendarX2, ChevronDown, Clock, Compass, Heart, Mail, MapPin, Mountain, Phone, QrCode, Send, Star, User } from 'lucide-react';
 import { Atracciones, Auth, Destinos, Mensajes } from '../api/client';
 import AttractionCard, { onImgError } from '../components/AttractionCard';
 import { LoginForm, RegisterForm } from '../components/AuthForms';
@@ -239,12 +239,20 @@ export function Contact() {
 }
 
 // ── Ingresar / Registro ─────────────────────────────────────────────────
-function AuthLayout({ title, subtitle, children, footer }) {
+/** Lo que la cuenta permite hacer de verdad (Mis reservas, cancelación en línea, reseñas tras la visita). */
+const BENEFICIOS = [
+  [QrCode, 'Tus vouchers a mano', 'Muestra el código QR de cada reserva en el punto de encuentro.'],
+  [CalendarX2, 'Cancela sin llamar', 'Desde Mis reservas, dentro del plazo de cada experiencia.'],
+  [Star, 'Cuenta cómo te fue', 'Deja tu reseña después de vivir la experiencia.'],
+];
+
+function AuthLayout({ title, subtitle, children, footer, beneficios = false }) {
   return (
     <div className="auth-page">
       <div className="auth-visual">
         {/* Solo en escritorio (en celular .auth-visual se oculta y la imagen no se descarga: loading="lazy") */}
         <img className="auth-visual-img" src={AUTH_BG.w960} srcSet={AUTH_BG.srcSet} sizes="50vw" alt="" loading="lazy" decoding="async" />
+        <span className="auth-lugar"><Mountain size={15} aria-hidden="true" /> Sierra ecuatoriana</span>
         <div>
           <h2>Tu próxima aventura empieza aquí</h2>
           <p>Guarda tus reservas, cancela sin llamadas y recibe recomendaciones de viaje por todo el Ecuador.</p>
@@ -256,6 +264,16 @@ function AuthLayout({ title, subtitle, children, footer }) {
           <p className="muted">{subtitle}</p>
           {children}
           <p className="center small" style={{ marginTop: 20 }}>{footer}</p>
+          {beneficios && (
+            <ul className="auth-beneficios" aria-label="Con tu cuenta">
+              {BENEFICIOS.map(([Icono, titulo, texto]) => (
+                <li key={titulo}>
+                  <span className="auth-beneficio-icono" aria-hidden="true"><Icono size={18} /></span>
+                  <span><strong>{titulo}</strong>{texto}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </div>
@@ -291,7 +309,7 @@ export function Login() {
     );
   }
   return (
-    <AuthLayout title="Bienvenido de nuevo" subtitle="Ingresa para ver y gestionar tus reservas." footer={<>¿No tienes cuenta? <Link to="/registro" state={state}>Crea una gratis</Link></>}>
+    <AuthLayout beneficios title="Bienvenido de nuevo" subtitle="Ingresa para ver y gestionar tus reservas." footer={<>¿No tienes cuenta? <Link to="/registro" state={state}>Crea una gratis</Link></>}>
       {google?.error && <Alert tone="danger">{google.error}</Alert>}
       <LoginForm onSuccess={(u) => navigate(redirectFor(u, state?.from), { replace: true })} />
     </AuthLayout>
