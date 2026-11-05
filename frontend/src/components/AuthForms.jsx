@@ -100,7 +100,6 @@ export function LoginForm({ onSuccess, showDemo = true }) {
 
   return (
     <form ref={formRef} onSubmit={submit} className="stack" noValidate>
-      <GoogleButton />
         <RequiredLegend />
       {error && <Alert tone="danger">{error}</Alert>}
       <Field label="Correo electrónico" required error={errors.email}>
@@ -188,7 +187,6 @@ export function RegisterForm({ onSuccess }) {
 
   return (
     <form onSubmit={submit} className="stack" noValidate>
-      <GoogleButton texto="Registrarse con Google" />
         <RequiredLegend />
       {error && <Alert tone="danger">{error}</Alert>}
       <div className="form-grid">
