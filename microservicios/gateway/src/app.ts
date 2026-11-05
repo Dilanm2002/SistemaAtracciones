@@ -1,4 +1,5 @@
 import { Controller, Get, Module, Res } from '@nestjs/common';
+import compression from 'compression';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { Response } from 'express';
@@ -40,6 +41,9 @@ export async function crearGateway(): Promise<NestExpressApplication> {
     logger: process.env.NODE_ENV === 'test' ? false : ['error', 'warn', 'log'],
   });
   app.enableCors({ exposedHeaders: ['X-Correlation-Id', 'Location'] });
+  // Las respuestas de más de ~64 KB se quedan colgadas al salir por la entrada pública de Azure (causa sin
+  // identificar). Comprimidas no llegan a ese tamaño; las pequeñas de Booking no cambian.
+  app.use(compression({ threshold: 32 * 1024 }));
   app.use(preparar);
   app.use((req: Parameters<typeof reenviar>[0], res: Parameters<typeof reenviar>[1], next: () => void) =>
     esSalud(req.originalUrl) ? next() : reenviar(req, res, next),
