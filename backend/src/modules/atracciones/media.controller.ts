@@ -48,8 +48,9 @@ export class MediaController {
                         OR EXISTS (SELECT 1 FROM ciudad WHERE ciu_imagen = $1)`,
       [ruta],
     );
-    const firmada = !enUso && firmaValida(objeto, t, this.config.getOrThrow<string>('JWT_SECRET'));
-    if (!enUso && !firmada) throw new NotFoundException('La imagen no existe.');
+    const usada = enUso ?? (await this.enUsoEnMicroservicios(ruta));
+    const firmada = !usada && firmaValida(objeto, t, this.config.getOrThrow<string>('JWT_SECRET'));
+    if (!usada && !firmada) throw new NotFoundException('La imagen no existe.');
     const archivo = await this.storage.leer(objeto);
     if (!archivo) throw new NotFoundException('La imagen no existe.');
     const reducida = w ? await variante(archivo.cuerpo, Number(w)) : null;
@@ -57,8 +58,26 @@ export class MediaController {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader(
       'Cache-Control',
-      enUso ? 'public, max-age=86400, s-maxage=31536000, immutable' : 'private, max-age=7200',
+      usada ? 'public, max-age=86400, s-maxage=31536000, immutable' : 'private, max-age=7200',
     );
     res.send(reducida ?? archivo.cuerpo);
+  }
+
+  /**
+   * Las atracciones que se crean en el panel viven en el microservicio de catálogo (schema ms_catalog de la
+   * misma base), que guarda la URL de la foto completa o relativa. Solo se lee: sin ese schema (p. ej. en
+   * local) la foto se trata como no usada.
+   */
+  private async enUsoEnMicroservicios(ruta: string): Promise<boolean> {
+    try {
+      const r = await this.db.one(
+        `SELECT 1 AS ok FROM ms_catalog.atraccion_foto f JOIN ms_catalog.atraccion a ON a.atr_id = f.atr_id
+          WHERE (f.fot_url = $1 OR right(f.fot_url, length($1)) = $1) AND a.atr_eliminado_en IS NULL LIMIT 1`,
+        [ruta],
+      );
+      return !!r;
+    } catch {
+      return false;
+    }
   }
 }
