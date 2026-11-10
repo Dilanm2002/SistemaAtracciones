@@ -130,6 +130,11 @@ describeDb('ms_catalog', () => {
         photos: ['http://fotos.local/uploads/quito.jpg'],
       });
       expect((await http().get('/api/v3/atracciones?city=Ba%C3%B1os')).body.metadata.total_results).toBe(0); // la de Baños está en borrador
+      // Booking pide limit=100 (el contrato admite 50): se responden 50, no un 400
+      const cien = await http().get('/api/v3/atracciones?limit=100');
+      expect(cien.status).toBe(200);
+      expect(cien.body.metadata.limit).toBe(50);
+      expect((await http().post('/api/v3/atracciones/search').send({ limit: 100 })).status).toBe(200);
       const todas = await http().get('/api/v2/atracciones?sort=PRICE_DESC&limit=5');
       expect(todas.body.data).toHaveLength(1);
     });

@@ -31,6 +31,9 @@ export const TIPOS_TARIFA = ['ADULTO', 'NINO', 'MAYOR', 'ESTUDIANTE', 'GRUPO'] a
 
 // ── Contrato con Booking (v2/v3): mismos nombres y límites que atracciones-openapi-v3.yaml ──
 
+/** El contrato fija un máximo de 50 por página; Booking pide limit=100: se responde con 50 en lugar de un 400. */
+const hasta50 = ({ value }: { value: unknown }) => (value === undefined || value === '' ? value : Math.min(Number(value), 50));
+
 export class CategoriasQuery {
   @IsOptional() @IsString() @MaxLength(80) padre_id?: string;
 }
@@ -42,7 +45,7 @@ export class ListAtraccionesQuery {
   @IsOptional() @Transform(bool) @IsBoolean() incluye_transporte?: boolean;
   @IsOptional() @Transform(bool) @IsBoolean() incluye_guia?: boolean;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number = 1;
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit?: number = 10;
+  @IsOptional() @Type(() => Number) @Transform(hasta50) @IsInt() @Min(1) @Max(50) limit?: number = 10;
   @IsOptional() @IsIn(SORTS) sort?: (typeof SORTS)[number] = 'POPULARITY';
 }
 
@@ -65,7 +68,7 @@ export class SearchAtraccionesRequest {
   @IsOptional() @IsInt() @Min(1) @Max(50) adult_count?: number;
   @IsOptional() @IsInt() @Min(1) @Max(50) cantidad_adultos?: number;
   @IsOptional() @IsInt() @Min(1) page?: number = 1;
-  @IsOptional() @IsInt() @Min(1) @Max(50) limit?: number = 10;
+  @IsOptional() @Transform(hasta50) @IsInt() @Min(1) @Max(50) limit?: number = 10;
 }
 
 // ── API propia (nombres de columna de la base) ──
