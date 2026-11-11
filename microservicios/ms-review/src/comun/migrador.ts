@@ -23,12 +23,15 @@ export async function aplicarMigraciones(pool: Pool, dir = join(__dirname, '..',
     for (const nombre of archivos) {
       const sql = readFileSync(join(dir, nombre), 'utf8');
       const huella = createHash('sha256').update(sql).digest('hex');
+      // El mismo archivo con saltos de línea LF o CRLF (git en Windows los cambia al cambiar de rama) no es un cambio
+      const lf = sql.replace(/\r\n/g, '\n');
+      const variantes = new Set([huella, ...[lf, lf.replace(/\n/g, '\r\n')].map((v) => createHash('sha256').update(v).digest('hex'))]);
       await c.query('BEGIN');
       try {
         await c.query(`SELECT pg_advisory_xact_lock(hashtext('migracion'))`);
         const previa = await c.query<{ mig_huella: string }>('SELECT mig_huella FROM migracion WHERE mig_nombre = $1', [nombre]);
         if (previa.rows[0]) {
-          if (previa.rows[0].mig_huella !== huella) throw new Error(`La migración ${nombre} cambió después de aplicarse: crea una nueva.`);
+          if (!variantes.has(previa.rows[0].mig_huella)) throw new Error(`La migración ${nombre} cambió después de aplicarse: crea una nueva.`);
         } else {
           await c.query(sql);
           await c.query('INSERT INTO migracion (mig_nombre, mig_huella) VALUES ($1, $2)', [nombre, huella]);
