@@ -184,7 +184,8 @@ export default function ReservasAdmin() {
           onDone={(u) => {
             replace({ ...checkin, checked_in_at: u.hora_checkin, ...(checkin.origin === 'BOOKING' ? { booking_notice: 'PENDIENTE' } : {}) });
             setCheckin(null);
-            toast(checkin.origin === 'BOOKING' ? `Check-in de ${u.titular_nombre} registrado. Avisando a Booking.` : `Check-in de ${u.titular_nombre} registrado`, 'success');
+            const parcial = u.asistentes < checkin.ticket_count ? ` (${u.asistentes} de ${checkin.ticket_count} personas)` : '';
+            toast(checkin.origin === 'BOOKING' ? `Check-in de ${u.titular_nombre} registrado${parcial}. Avisando a Booking.` : `Check-in de ${u.titular_nombre} registrado${parcial}`, 'success');
           }}
         />
       )}
@@ -206,16 +207,19 @@ export default function ReservasAdmin() {
  */
 function CheckinModal({ r, onClose, onDone }) {
   const [doc, setDoc] = useState('');
+  const [llegaron, setLlegaron] = useState(String(r.ticket_count));
   const [err, setErr] = useState(null);
   const [saving, setSaving] = useState(false);
   const enviar = async (e) => {
     e.preventDefault();
     const d = doc.trim().toUpperCase();
     if (d.length < 5) { setErr('Escribe el número de documento que presenta el titular'); return; }
+    const n = Number(llegaron);
+    if (!Number.isInteger(n) || n < 1 || n > r.ticket_count) { setErr(`Las personas que llegaron deben ser de 1 a ${r.ticket_count}`); return; }
     setSaving(true);
     setErr(null);
     try {
-      onDone(await Reservas.checkin(r.reservation_id, d));
+      onDone({ ...(await Reservas.checkin(r.reservation_id, d, n)), asistentes: n });
     } catch (e2) {
       setErr(e2.message);
     } finally {
@@ -235,7 +239,10 @@ function CheckinModal({ r, onClose, onDone }) {
         <Field label="Documento que presenta el titular" required error={err} hint={r.customer?.document ? 'Cédula, pasaporte o RUC: debe coincidir con el registrado en la reserva' : `Esta reserva no tiene documento registrado: verifica que el voucher del cliente diga ${r.code}`}>
           {(p) => <input {...p} className="input" autoComplete="off" maxLength={20} value={doc} onChange={(e) => setDoc(e.target.value.replace(/[^0-9A-Za-z]/g, ''))} autoFocus />}
         </Field>
-        <Alert tone="info">Al registrar el check-in la reserva ya no se puede cancelar.</Alert>
+        <Field label="Personas que llegaron" required hint={`Reservó ${r.ticket_count}. Si llegan menos, no hay reembolso por los ausentes.`}>
+          {(p) => <input {...p} type="number" className="input" min={1} max={r.ticket_count} value={llegaron} onChange={(e) => setLlegaron(e.target.value)} style={{ maxWidth: 120 }} />}
+        </Field>
+        <Alert tone="info">Al registrar el check-in la reserva ya no se puede cancelar{r.origin === 'BOOKING' ? ' y se avisa a Booking con las personas que llegaron' : ''}.</Alert>
       </form>
     </Modal>
   );

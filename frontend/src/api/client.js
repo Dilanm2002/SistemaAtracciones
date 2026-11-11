@@ -211,7 +211,7 @@ export const Reservas = {
     apiBff(`/atracciones/reservations/${id}/cancel`, { method: 'POST', body: { reason, ...(acceptNoRefund ? { accept_no_refund: true } : {}) }, idempotencyKey }),
   confirm: (id, idempotencyKey) => apiBff(`/atracciones/reservations/${id}/confirm`, { method: 'POST', idempotencyKey }),
   /** Check-in presencial desde el panel (operador o admin) */
-  checkin: (id, documento) => apiBff(`/atracciones/reservations/${id}/checkin`, { method: 'POST', body: { documento_identidad: documento }, idempotencyKey: newIdempotencyKey() }),
+  checkin: (id, documento, asistentes) => apiBff(`/atracciones/reservations/${id}/checkin`, { method: 'POST', body: { documento_identidad: documento, ...(asistentes ? { asistentes_reales: asistentes } : {}) }, idempotencyKey: newIdempotencyKey() }),
   /** Imagen del QR del voucher (contrato v2) */
   qrUrl: (codigo) => `${BFF_URL ? BFF_URL.replace(/\/bff\/v1$/, '/api/v3') : API_URL_V2}/atracciones/vouchers/${codigo}/qr.png`,
 };

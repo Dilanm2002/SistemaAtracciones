@@ -425,3 +425,11 @@ a.adm-kpi:hover { transform: translateY(-5px); }
   .iti-quitar { grid-column: -2 / -1; grid-row: 1; }
 }
 
+
+/* Cupos en vivo: un punto que late indica que la tabla se actualiza sola; la fila que cambió se resalta */
+.cupos-vivo { margin-bottom: 16px; }
+.cupos-vivo-punto { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--success, #15803d); margin-right: 8px; vertical-align: 1px; box-shadow: 0 0 0 0 rgba(21, 128, 61, 0.5); animation: cupos-latido 2s infinite; }
+@keyframes cupos-latido { 0% { box-shadow: 0 0 0 0 rgba(21, 128, 61, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(21, 128, 61, 0); } 100% { box-shadow: 0 0 0 0 rgba(21, 128, 61, 0); } }
+.cupos-vivo-cambio td { background: #fef3c7; transition: background 0.4s; }
+.cupos-vivo-cambio .cupos-vivo-num { color: var(--danger, #b91c1c); }
+@media (prefers-reduced-motion: reduce) { .cupos-vivo-punto { animation: none; } .cupos-vivo-cambio td { transition: none; } }

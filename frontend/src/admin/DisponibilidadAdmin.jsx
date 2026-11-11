@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDate, fmtMonth, todayEc } from '../utils/format';
 import { enDias, fecha as validarFecha, limpiar, texto } from '../utils/validation';
+import CuposEnVivo from './CuposEnVivo';
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const shift = (m, n) => {
@@ -92,6 +93,8 @@ export default function DisponibilidadAdmin() {
           {isAdmin && <> <Link to="/admin/atracciones">Editar horarios y cupos</Link></>}
         </p>
       )}
+
+      <CuposEnVivo atraccionId={sel} onCambio={loadCal} />
 
       <div className="adm-split" style={{ gridTemplateColumns: '1fr 320px' }}>
         <section className="card card-pad" aria-label="Ocupación del mes">
