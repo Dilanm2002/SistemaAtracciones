@@ -240,13 +240,11 @@ export default function Checkout() {
     }
   };
 
-  // Política de cancelación que tendrá ESTA reserva (misma lógica que la API: plazo + 1 h de arrepentimiento)
-  const ultimoMomento = a.free_cancellation && Date.now() > new Date(`${fecha}T${hora}:00-05:00`).getTime() - a.cancellation_hours * 3600000;
-  const politica = !a.free_cancellation
-    ? 'Sin cancelación gratuita: tendrás 1 hora después de reservar para arrepentirte con reembolso total; luego puedes cancelar, pero sin reembolso.'
-    : ultimoMomento
-      ? `Reserva de último momento: el plazo de cancelación gratuita (${a.cancellation_hours} h antes) ya pasó. Tendrás 1 hora después de reservar para cancelar con reembolso total; luego, solo sin reembolso.`
-      : `Cancelación gratis hasta ${a.cancellation_hours} h antes de la salida; después, sin reembolso.`;
+  // Política de cancelación que tendrá ESTA reserva (la misma regla que la API: hasta 24 h antes de la salida)
+  const ultimoMomento = Date.now() > new Date(`${fecha}T${hora}:00-05:00`).getTime() - 24 * 3600000;
+  const politica = ultimoMomento
+    ? 'Reserva para dentro de menos de 24 h: no podrás cancelarla.'
+    : 'Cancelación con reembolso del 100 % hasta 24 h antes de la salida; después ya no se puede cancelar.';
 
   const Summary = (
     <aside className={`order-summary card${verResumen ? '' : ' colapsado'}`} aria-label="Resumen de tu reserva">

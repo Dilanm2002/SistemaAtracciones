@@ -22,9 +22,9 @@ export function politicaTexto(r) {
   const hasta = r.free_cancellation_until ? fmtDateTime(r.free_cancellation_until) : null;
   switch (r.cancellation_policy) {
     case 'FULL_REFUND':
-      return { tone: 'ok', texto: `Cancelación gratuita hasta el ${hasta}.` };
+      return { tone: 'ok', texto: `Cancelación con reembolso del 100 % hasta el ${hasta} (24 h antes de la salida).` };
     case 'NO_CHARGE':
-      return { tone: 'ok', texto: `Aún no has pagado: puedes cancelar sin costo hasta el ${hasta} (1 hora antes de la salida).` };
+      return { tone: 'ok', texto: `Aún no has pagado: puedes cancelar sin costo hasta el ${hasta} (24 h antes de la salida).` };
     case 'NO_REFUND':
       return {
         tone: 'warn',
@@ -35,9 +35,11 @@ export function politicaTexto(r) {
     default:
       return {
         tone: 'warn',
-        texto: r.status === 'PENDING' && Date.now() < salidaEc(r.date, r.time)
-          ? 'Falta menos de 1 hora para la salida: tu cupo sigue reservado y ya no puede cancelarse en línea.'
-          : 'La experiencia ya comenzó; ya no puede cancelarse en línea.',
+        texto: r.checked_in_at
+          ? 'Check-in realizado (servicio iniciado, no cancelable).'
+          : Date.now() < salidaEc(r.date, r.time)
+            ? 'Cancelación no disponible: faltan menos de 24 h para el inicio de la actividad. La cancelación gratuita aplica hasta 24 h antes.'
+            : 'La experiencia ya comenzó; ya no puede cancelarse.',
       };
   }
 }
@@ -50,6 +52,7 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
   const [sending, setSending] = useState(false);
   const [key] = useState(newIdempotencyKey);
   const [acepto, setAcepto] = useState(false);
+  const [hecha, setHecha] = useState(null);
   const r = reservation;
   // Fuera de plazo el cliente puede cancelar, pero debe aceptar que no hay reembolso (la empresa siempre reembolsa)
   const sinReembolso = !staff && r.cancellation_policy === 'NO_REFUND';
@@ -65,13 +68,33 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
       const reason = motivo === 'Otro' ? detalle.trim() : `${motivo}${detalle.trim() ? `: ${detalle.trim()}` : ''}`;
       const updated = await Reservas.cancel(r.reservation_id, reason, key, sinReembolso);
       toast(`Reserva ${r.code} cancelada`, 'success');
-      onDone(updated);
+      // El cliente ve su comprobante antes de cerrar; la empresa vuelve directo a la lista
+      if (staff) onDone(updated);
+      else setHecha(updated);
     } catch (err) {
       setError(err.message);
     } finally {
       setSending(false);
     }
   };
+
+  if (hecha) {
+    const cobrado = r.cancellation_policy !== 'NO_CHARGE';
+    return (
+      <Modal open onClose={() => onDone(hecha)} title="Reserva cancelada" description={`${r.attraction.name} · ${fmtDate(r.date)} ${r.time}`}
+        footer={<button className="btn btn-primary" onClick={() => onDone(hecha)}>Listo</button>}>
+        <div className="stack">
+          <Alert tone="success" title={cobrado ? '¡Cancelación y reembolso exitosos!' : '¡Cancelación exitosa!'}>Tu reserva {r.code} quedó cancelada y los cupos volvieron a estar disponibles.</Alert>
+          <dl className="detail-list">
+            <dt>Código de reembolso</dt><dd><strong>REF-ATR-{r.code.replace(/^DEC-/, '')}</strong></dd>
+            <dt>Monto reembolsado</dt><dd>{cobrado ? <>{fmtMoney(r.total_price.total)} (100 %)</> : 'No se te cobró nada'}</dd>
+            <dt>Cupos</dt><dd>{r.ticket_count} {r.ticket_count === 1 ? 'cupo liberado' : 'cupos liberados'}</dd>
+          </dl>
+          {cobrado && <p className="small muted" style={{ margin: 0 }}>El reembolso llega a tu método de pago en 5 a 10 días hábiles.</p>}
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal
@@ -92,7 +115,7 @@ export function CancelModal({ reservation, onClose, onDone, staff = false }) {
         ) : r.cancellation_policy === 'NO_CHARGE' ? (
           <Alert tone="success" title="Sin costo">Aún no se te cobró nada: se anula el pago pendiente y se libera tu cupo.</Alert>
         ) : r.cancellation_policy === 'FULL_REFUND' ? (
-          <Alert tone="success" title="Cancelación gratuita">Se reembolsará el total de {fmtMoney(r.total_price.total)} a tu método de pago en 5 a 10 días hábiles.</Alert>
+          <Alert tone="success" title="Reembolso del 100 %">Se anulará tu reserva, se liberarán tus cupos y se reembolsará el total de {fmtMoney(r.total_price.total)}.</Alert>
         ) : (
           <Alert tone="warning" title="Cancelación sin reembolso">{politicaTexto(r).texto} No se devolverán los {fmtMoney(r.total_price.total)} pagados.</Alert>
         )}
@@ -225,7 +248,7 @@ export default function MyReservations() {
                     <button className="btn btn-sm" onClick={() => setCalendario(r)}><CalendarPlus size={16} /> Calendario</button>
                     {r.can_cancel ? (
                       <button className="btn btn-sm btn-outline-danger" onClick={() => setCancel(r)} aria-describedby={`politica-${r.reservation_id}`}>
-                        <XCircle size={16} /> {r.refundable ? 'Cancelar' : 'Cancelar sin reembolso'}
+                        <XCircle size={16} /> Cancelar reserva
                       </button>
                     ) : (
                       <Link to={`/contacto?asunto=CANCELACION&codigo=${r.code}`} className="btn btn-sm btn-primary">Solicitar ayuda</Link>

@@ -218,6 +218,29 @@ describeSaga('saga de reserva con los 7 microservicios reales', () => {
     expect(await libres()).toBe(4);
   });
 
+  it('cancelación como Booking (sin solicitante): comprobante de reembolso y cupos devueltos; con check-in → 409', async () => {
+    await sql('ms_inventory', 'UPDATE disponibilidad SET dis_cupo_total = dis_cupo_total + 5 WHERE dis_fecha = $1', [dia]);
+    const r = await reservar(pedido({ adult_count: 1, child_count: 0, infant_count: 0, total_tickets: 1 }));
+    expect(r.status).toBe(201);
+    const antes = await libres();
+    const c = await http().post(`/api/v3/atracciones/reservas/${r.body.reservation_id}/cancel`).set('X-API-Key', CLAVE).set('Idempotency-Key', randomUUID()).send({ reason: 'Cambio de planes' });
+    expect(c.status).toBe(200);
+    expect(contrato.respuesta('POST', '/api/v3/atracciones/reservas/{id}/cancel', 200, c.body)).toEqual([]);
+    const codigo = `REF-ATR-${r.body.reservation_code.replace('DEC-', '')}`;
+    expect(c.body).toMatchObject({
+      status: 'CANCELLED', cancel_code: codigo, monto_reembolsado: r.body.total_price, message: 'Reserva cancelada exitosamente y cupos restituidos.',
+      refund: { status: 'PROCESSED', amount: r.body.total_price, currency: 'USD', message: 'Reembolso simulado del 100% procesado.' },
+      stock_restoration: { status: 'RESTORED', restored_spots: 1 },
+    });
+    expect(await libres()).toBe(antes + 1);
+
+    const otra = await reservar(pedido({ adult_count: 1, child_count: 0, infant_count: 0, total_tickets: 1 }));
+    await http().post(`/api/v3/atracciones/reservas/${otra.body.reservation_id}/checkin`).set('X-API-Key', CLAVE).set('Idempotency-Key', randomUUID()).send({ documento_identidad: '1724589633' }).expect(200);
+    const no = await http().post(`/api/v3/atracciones/reservas/${otra.body.reservation_id}/cancel`).set('X-API-Key', CLAVE).set('Idempotency-Key', randomUUID()).send({});
+    expect(no.status).toBe(409);
+    expect(no.body).toMatchObject({ title: 'Cancelación No Permitida', detail: 'No se puede cancelar una reserva que ya realizó check-in o fue asistida.', status: 409 });
+  });
+
   it('transferencia: reserva CONFIRMED con pago PENDING y sin factura; al cancelar el pago se RECHAZA y la orden se CANCELA', async () => {
     const r = await reservar(pedido({ adult_count: 1, child_count: 0, infant_count: 0, total_tickets: 1, payment_method: 'TRANSFERENCIA' }));
     expect(r.body).toMatchObject({ status: 'CONFIRMED', payment_status: 'PENDING' });

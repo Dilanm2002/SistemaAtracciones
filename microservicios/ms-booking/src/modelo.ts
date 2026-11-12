@@ -69,36 +69,49 @@ export const SELECT_RESERVA = `SELECT r.res_id::text, r.res_uuid::text AS id, r.
   LEFT JOIN reserva_pasajero p ON p.res_id = r.res_id AND p.pax_es_titular`;
 
 /** Plazo de arrepentimiento tras comprar y corte de las pendientes de pago (los mismos de la tienda). */
-export const PERIODO_ARREPENTIMIENTO_MS = 60 * 60 * 1000;
-export const CORTE_PENDIENTE_MS = 60 * 60 * 1000;
 
 export type Politica =
   | { policy: 'FULL_REFUND' | 'NO_CHARGE'; freeUntil: Date }
   | { policy: 'NO_REFUND' | 'NOT_ALLOWED'; freeUntil: null; motivo: string };
 
 /** Política de cancelación (idéntica a la tienda): gratis dentro del plazo o de la hora de arrepentimiento. */
+/** Regla oficial de la cátedra (RDA2): se cancela con reembolso del 100 % solo hasta 24 h antes de la salida. */
+export const HORAS_MIN_CANCELACION = 24;
+export const MOTIVO_FUERA_DE_PLAZO = 'La cancelación y reembolso solo están permitidos con al menos 24 horas de anticipación al horario reservado.';
+
 export function politicaCancelacion(r: FilaReserva, ahora = Date.now()): Politica {
   if (r.estado === 'CANCELADA') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'Esta reserva ya estaba cancelada.' };
-  if (r.estado === 'COMPLETADA') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya se realizó; no puede cancelarse.' };
-  if (r.estado === 'CHECKED_IN') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'El titular ya hizo el check-in: la experiencia está en curso.' };
+  if (r.estado === 'COMPLETADA' || r.estado === 'CHECKED_IN') return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'No se puede cancelar una reserva que ya realizó check-in o fue asistida.' };
   const salida = fechaHoraEc(r.fecha, r.hora).getTime();
-  if (ahora >= salida) return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'La experiencia ya comenzó; ya no puede cancelarse.' };
-  if (r.estado === 'PENDIENTE_PAGO') {
-    const corte = salida - CORTE_PENDIENTE_MS;
-    return ahora < corte
-      ? { policy: 'NO_CHARGE', freeUntil: new Date(corte) }
-      : { policy: 'NOT_ALLOWED', freeUntil: null, motivo: 'Las reservas pendientes de pago se cancelan hasta 1 hora antes de la salida.' };
-  }
-  const limite = r.cancelacion_gratuita ? salida - r.horas_cancelacion * 3_600_000 : null;
-  const arrepentimiento = Math.min(new Date(r.creado_en).getTime() + PERIODO_ARREPENTIMIENTO_MS, salida);
-  const gratisHasta = Math.max(limite ?? 0, arrepentimiento);
-  if (ahora < gratisHasta) return { policy: 'FULL_REFUND', freeUntil: new Date(gratisHasta) };
+  const corte = salida - HORAS_MIN_CANCELACION * 3_600_000;
+  if (ahora >= corte) return { policy: 'NOT_ALLOWED', freeUntil: null, motivo: ahora >= salida ? 'La experiencia ya comenzó; ya no puede cancelarse.' : MOTIVO_FUERA_DE_PLAZO };
+  // Sin cobro todavía (transferencia o pago en sitio): se anula el pago pendiente; si se cobró, reembolso del 100 %
+  const pendiente = r.estado === 'PENDIENTE_PAGO' || r.pago_estado === 'PENDIENTE';
+  return { policy: pendiente ? 'NO_CHARGE' : 'FULL_REFUND', freeUntil: new Date(corte) };
+}
+
+/**
+ * Respuesta de la cancelación: la reserva del contrato v3 más el comprobante de reembolso y la restitución de
+ * cupos (formato acordado con Booking). Solo agrega campos.
+ */
+export function respuestaCancelacion(r: FilaReserva) {
+  const codigo = `REF-ATR-${r.codigo.replace(/^DEC-/, '')}`;
+  const reembolsado = !!r.reembolso_numero;
+  const monto = r.reembolso_monto ?? 0;
   return {
-    policy: 'NO_REFUND',
-    freeUntil: null,
-    motivo: r.cancelacion_gratuita
-      ? `Ya pasó el plazo de cancelación gratuita (${r.horas_cancelacion} h antes de la salida): puedes cancelar, pero sin reembolso.`
-      : 'Esta experiencia no admite cancelación gratuita: puedes cancelar, pero sin reembolso.',
+    ...reservaContrato(r),
+    cancel_code: codigo,
+    reembolso_id: r.reembolso_numero ?? codigo,
+    monto_reembolsado: monto,
+    refund: {
+      refund_id: r.reembolso_numero ?? codigo,
+      status: reembolsado ? 'PROCESSED' : 'NOT_APPLICABLE',
+      amount: monto,
+      currency: r.moneda,
+      message: reembolsado ? 'Reembolso simulado del 100% procesado.' : 'No hubo cobro que reembolsar: se anuló el pago pendiente.',
+    },
+    stock_restoration: { status: 'RESTORED', restored_spots: r.tickets, message: 'Cupos reincorporados a la disponibilidad del operador local.' },
+    message: 'Reserva cancelada exitosamente y cupos restituidos.',
   };
 }
 

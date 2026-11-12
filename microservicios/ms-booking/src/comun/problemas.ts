@@ -60,7 +60,7 @@ export class ProblemasFilter implements ExceptionFilter {
       .type('application/problem+json')
       .json({
         type: `https://descubre-ec.com/errores/${String((datos.code as string) ?? CODIGOS[status] ?? status).toLowerCase().replace(/_/g, '-')}`,
-        title: TITULOS[status] ?? 'Error',
+        title: (datos.title as string | undefined) ?? TITULOS[status] ?? 'Error',
         status,
         detail: status >= 500 ? 'Ocurrió un error inesperado. Intenta de nuevo.' : mensaje ?? TITULOS[status] ?? 'Error',
         instance: req.originalUrl,

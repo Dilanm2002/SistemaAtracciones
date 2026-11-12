@@ -11,7 +11,7 @@ import { CancelReservationRequestV2, CheckinRequestV2, CreateReservaRequestV2 } 
 import { icsReserva } from './enlaces';
 import { EVENTOS, EventosService } from './eventos';
 import { Idempotencia, Referencia } from './idempotencia';
-import { FilaReserva, politicaCancelacion, qrUrl, reservaContrato, SELECT_RESERVA, voucher } from './modelo';
+import { FilaReserva, MOTIVO_FUERA_DE_PLAZO, politicaCancelacion, qrUrl, reservaContrato, respuestaCancelacion, SELECT_RESERVA, voucher } from './modelo';
 import { esCedulaEc } from './validadores';
 import { leerVoucher } from './voucher';
 
@@ -292,13 +292,15 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
     const r0 = await this.filaOr404(ref);
     return this.idem.ejecutar(key, `v2:cancel:${r0.id}`, 'booking', dto, async () => {
       const r = await this.filaOr404(r0.id);
-      if (r.estado === 'CANCELADA') return reservaContrato(r);
-      if (r.estado === 'CHECKED_IN') throw new ConflictException({ message: 'El titular ya hizo el check-in: la experiencia está en curso y no puede cancelarse.', code: 'INVALID_STATE' });
-      if (r.estado === 'COMPLETADA') throw new ConflictException({ message: 'La experiencia ya se realizó; no puede cancelarse.', code: 'INVALID_STATE' });
+      if (r.estado === 'CANCELADA') return respuestaCancelacion(r);
+      if (r.estado === 'CHECKED_IN' || r.estado === 'COMPLETADA') {
+        throw new ConflictException({ title: 'Cancelación No Permitida', message: 'No se puede cancelar una reserva que ya realizó check-in o fue asistida.', code: 'INVALID_STATE' });
+      }
       const solicitante = dto.solicitante ?? 'CLIENTE';
       if (solicitante === 'CLIENTE') {
         const pol = politicaCancelacion(r);
-        if (pol.policy === 'NOT_ALLOWED') throw new BadRequestException(pol.motivo);
+        // Booking (X-API-Key) y la web cancelan como CLIENTE: menos de 24 h antes → 409. La empresa y la compensación de la saga, siempre.
+        if (pol.policy === 'NOT_ALLOWED') throw new ConflictException({ title: 'Cancelación Fuera de Plazo', message: pol.motivo ?? MOTIVO_FUERA_DE_PLAZO, code: 'CANCELLATION_WINDOW_CLOSED' });
         if (pol.policy === 'NO_REFUND' && !op.aceptaSinReembolso) throw new BadRequestException(`${pol.motivo} Fuera del plazo de cancelación gratuita solo el orquestador (SAGA_ORCHESTRATOR) o un ADMIN pueden cancelarla.`);
       }
       const sinReembolso = solicitante === 'CLIENTE' && politicaCancelacion(r).policy === 'NO_REFUND';
@@ -333,7 +335,7 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
         await this.eventos.reserva(tx, EVENTOS.RESERVA_CANCELADA, r.res_id, { reason: motivo, refunded: !!reembolso });
         if (reembolso) await this.eventos.reserva(tx, EVENTOS.PAGO_REEMBOLSADO, r.res_id, { refund_amount: Number(reembolso.rem_monto) });
       });
-      return reservaContrato(await this.filaOr404(r.id));
+      return respuestaCancelacion(await this.filaOr404(r.id));
     }, this.porReferencia);
   }
 
