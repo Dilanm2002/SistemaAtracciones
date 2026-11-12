@@ -10,6 +10,7 @@ import { Alert, Breadcrumbs, ErrorState, Field, RequiredLegend, Spinner, usePage
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { fmtDateLong, fmtMoney } from '../utils/format';
+import { igual, useSondeo } from '../utils/sondeo';
 import { correo, documento as validarDocumento, enDias, fecha as validarFecha, hora as validarHora, hoyEc, LIMITES, limpiar, mascaraCorreo, nombrePersona, RE_NOMBRE_PERSONA, soloDigitos, soloNombre, telefono, texto } from '../utils/validation';
 import { fotoProps, SIZES } from '../utils/fotos';
 
@@ -74,6 +75,13 @@ export default function Checkout() {
   const [progreso, setProgreso] = useState(null);
   // Una sola clave por intento de compra: reintentos o doble clic no crean dos reservas
   const idemKey = useRef(newIdempotencyKey());
+
+  // Cupos en vivo del turno elegido: no reinicia el formulario; si ya no alcanzan, aparece el aviso
+  useSondeo(async () => {
+    const r = await Atracciones.availability(id, fecha);
+    const nuevo = r.slots?.find((s) => s.time === hora) ?? null;
+    setSlot((prev) => (igual(prev, nuevo) ? prev : nuevo));
+  }, 4000, !!fecha && !!hora && !sending);
 
   useEffect(() => {
     Atracciones.get(id).then(setA).catch(setLoadError);

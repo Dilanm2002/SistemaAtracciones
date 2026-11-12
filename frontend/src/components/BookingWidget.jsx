@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { igual, useSondeo } from '../utils/sondeo';
 import { useNavigate } from 'react-router-dom';
 import { CalendarCheck, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Info, ShieldCheck, Users } from 'lucide-react';
 import { Atracciones } from '../api/client';
@@ -147,6 +148,23 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
       .finally(() => setLoadingAvail(false));
   }, [a.id, date]);
 
+  // Cupos en vivo: si alguien reserva o cancela (en la web o desde Booking), los cupos se actualizan solos
+  // sin reiniciar lo elegido; un turno sin cupos queda «Agotado». Las salidas que cambiaron se resaltan.
+  const [turnosCambiados, setTurnosCambiados] = useState(() => new Set());
+  useSondeo(async () => {
+    const r = await Atracciones.availability(a.id, date);
+    setAvail((prev) => {
+      if (!prev || igual(prev, r)) return prev ?? r;
+      const antes = new Map((prev.slots ?? []).map((s) => [s.time, s.available]));
+      const cambio = new Set((r.slots ?? []).filter((s) => antes.has(s.time) && antes.get(s.time) !== s.available).map((s) => s.time));
+      if (cambio.size) {
+        setTurnosCambiados(cambio);
+        setTimeout(() => setTurnosCambiados(new Set()), 2000);
+      }
+      return r;
+    });
+  }, 4000, !!date && !loadingAvail);
+
   const slot = avail?.slots?.find((s) => s.time === time);
   // Al elegir un horario con menos cupos que los participantes ya elegidos, se ajustan solos al cupo
   // (antes se podía quedar en 30 con solo 10 cupos) y se avisa del cambio
@@ -237,7 +255,7 @@ export default function BookingWidget({ a, initialDate, initialPeople }) {
                   <button
                     key={s.time}
                     type="button"
-                    className={`slot ${s.available > 0 && s.available <= 5 ? 'low' : ''}`}
+                    className={`slot ${s.available > 0 && s.available <= 5 ? 'low' : ''} ${turnosCambiados.has(s.time) ? 'cupo-cambio' : ''}`}
                     aria-pressed={time === s.time}
                     disabled={s.available === 0}
                     onClick={() => setTime(s.time)}

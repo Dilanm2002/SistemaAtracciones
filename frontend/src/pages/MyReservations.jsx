@@ -11,6 +11,7 @@ import { useToast } from '../context/ToastContext';
 import { estadoVisible, fmtDate, fmtDateLong, fmtDateTime, fmtMoney, participantes, PAYMENT, salidaEc } from '../utils/format';
 import AnadirCalendario from '../components/AnadirCalendario';
 import { fotoProps, SIZES } from '../utils/fotos';
+import { igual, useSondeo } from '../utils/sondeo';
 
 const MOTIVOS = ['Cambio de planes', 'Problemas con mi vuelo o transporte', 'Motivos de salud', 'Clima o seguridad', 'Encontré otra opción', 'Otro'];
 
@@ -178,6 +179,32 @@ export default function MyReservations() {
   const [detail, setDetail] = useState(null);
   const [calendario, setCalendario] = useState(null);
   const [review, setReview] = useState(null);
+  // Reservas cuyo estado acaba de cambiar (check-in en el punto de encuentro, cancelación desde Booking…)
+  const [cambiadas, setCambiadas] = useState(() => new Set());
+
+  // Consulta silenciosa cada 5 s: sin «cargando»; las reservas que no cambiaron conservan su objeto,
+  // así React solo vuelve a pintar las tarjetas que cambiaron
+  useSondeo(async () => {
+    const nuevas = await Reservas.list();
+    const distintas = new Set();
+    setData((previas) => {
+      if (!previas) return nuevas;
+      const porId = new Map(previas.map((r) => [r.reservation_id, r]));
+      let hayCambio = previas.length !== nuevas.length;
+      const lista = nuevas.map((n) => {
+        const p = porId.get(n.reservation_id);
+        if (p && igual(p, n)) return p;
+        hayCambio = true;
+        if (p && (p.status !== n.status || p.checked_in_at !== n.checked_in_at)) distintas.add(n.reservation_id);
+        return n;
+      });
+      return hayCambio ? lista : previas;
+    });
+    if (distintas.size) {
+      setCambiadas(distintas);
+      setTimeout(() => setCambiadas(new Set()), 2500);
+    }
+  }, 5000, !loading && !error);
 
   const groups = useMemo(() => {
     const all = data ?? [];
@@ -224,7 +251,7 @@ export default function MyReservations() {
               <img {...fotoProps(r.attraction.photo, SIZES.resumen)} alt="" loading="lazy" decoding="async" onError={onImgError} />
               <div>
                 <div className="row" style={{ gap: 8 }}>
-                  <StatusBadge status={estadoVisible(r)} />
+                  <span className={cambiadas.has(r.reservation_id) ? 'estado-cambio' : undefined}><StatusBadge status={estadoVisible(r)} /></span>
                   <span className="badge">{r.code}</span>
                 </div>
                 <h2 className="res-title"><Link to={`/atraccion/${r.attraction.id}`}>{r.attraction.name}</Link></h2>
