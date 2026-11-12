@@ -241,6 +241,8 @@ export const Resenas = {
 /** Turistas registrados por Booking (contrato v3.1), para el panel. */
 export const Turistas = {
   list: (params = {}) => apiBff(`/turistas${qs(params)}`),
+  /** Registra o completa la cuenta propia en ms_identity (Booking la reconoce por cédula o correo) */
+  sincronizar: (u) => apiBff('/turistas/mi-cuenta', { method: 'PUT', body: { nombres: u.nombres, apellidos: u.apellidos, documento: u.documento ?? undefined, telefono: u.telefono ?? undefined } }),
 };
 
 export const Reportes = {

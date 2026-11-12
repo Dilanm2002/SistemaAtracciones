@@ -81,7 +81,7 @@ export default function Checkout() {
   }, [id, fecha, hora]);
 
   useEffect(() => {
-    if (user) setForm((f) => ({ ...f, nombre: f.nombre || user.nombre, email: f.email || user.email, telefono: user.rol === 'CLIENTE' && user.telefono ? user.telefono : f.telefono || user.telefono || '' }));
+    if (user) setForm((f) => ({ ...f, nombre: f.nombre || user.nombre, email: f.email || user.email, telefono: user.rol === 'CLIENTE' && user.telefono ? user.telefono : f.telefono || user.telefono || '', documento: f.documento || user.documento || '' }));
   }, [user]);
 
   // Fecha y hora también vienen de la URL: deben tener formato válido y la fecha no puede ser pasada

@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
-import { Check, Eye, EyeOff, Lock, Mail, Phone, User, X } from 'lucide-react';
+import { Check, Eye, EyeOff, IdCard, Lock, Mail, Phone, User, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Alert, Field, RequiredLegend, Spinner } from './ui';
 import { iniciarConGoogle } from '../utils/google';
-import { correo, LIMITES, limpiar, mascaraCorreo, nombrePersona, password, soloDigitos, soloNombre, telefono } from '../utils/validation';
+import { correo, documento, LIMITES, limpiar, mascaraCorreo, nombrePersona, password, soloDigitos, soloNombre, telefono } from '../utils/validation';
 
 
 function PasswordInput({ value, onChange, autoComplete, ...p }) {
@@ -133,7 +133,7 @@ export function LoginForm({ onSuccess, showDemo = true }) {
 export function RegisterForm({ onSuccess }) {
   const { register } = useAuth();
   const toast = useToast();
-  const [form, setForm] = useState({ nombre: '', apellido: '', email: '', telefono: '', password: '', terms: false });
+  const [form, setForm] = useState({ nombre: '', apellido: '', documento: '', email: '', telefono: '', password: '', terms: false });
   const [errors, setErrors] = useState({});
   const [error, setError] = useState(null);
   const [sending, setSending] = useState(false);
@@ -147,6 +147,7 @@ export function RegisterForm({ onSuccess }) {
   const validar = (k, f) => ({
     nombre: () => nombrePersona(f.nombre, { que: 'Tus nombres' }),
     apellido: () => nombrePersona(f.apellido, { que: 'Tus apellidos' }),
+    documento: () => documento(f.documento, { requerido: true }),
     email: () => correo(f.email),
     telefono: () => telefono(f.telefono, { requerido: true }),
     password: () => (f.password.length >= 8 && /[A-Za-z]/.test(f.password) && /\d/.test(f.password) ? password(f.password) : 'La contraseña no cumple los requisitos'),
@@ -161,7 +162,7 @@ export function RegisterForm({ onSuccess }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    const errs = limpiar(Object.fromEntries(['nombre', 'apellido', 'email', 'telefono', 'password'].map((k) => [k, validar(k, form)])));
+    const errs = limpiar(Object.fromEntries(['nombre', 'apellido', 'documento', 'email', 'telefono', 'password'].map((k) => [k, validar(k, form)])));
     if (!form.terms) errs.terms = 'Debes aceptar los términos para continuar';
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -171,6 +172,7 @@ export function RegisterForm({ onSuccess }) {
       const u = await register({
         nombre: form.nombre.trim(),
         apellido: form.apellido.trim(),
+        documento: form.documento,
         email: form.email.trim(),
         password: form.password,
         telefono: form.telefono,
@@ -201,6 +203,13 @@ export function RegisterForm({ onSuccess }) {
           {(p) => <input {...p} className="input" autoComplete="family-name" maxLength={LIMITES.nombrePersona} value={form.apellido} onChange={cambiar('apellido', soloNombre)} onBlur={alSalir('apellido')} />}
         </Field>
       </div>
+      <Field label="Cédula" required error={errors.documento} hint="10 dígitos. Se usa en tus reservas y para validar tu identidad en el punto de encuentro">
+        {(p) => (
+          <div className="input-icon"><IdCard size={18} aria-hidden="true" />
+            <input {...p} className="input" inputMode="numeric" autoComplete="off" maxLength={LIMITES.documento} value={form.documento} onChange={cambiar('documento', soloDigitos)} onBlur={alSalir('documento')} />
+          </div>
+        )}
+      </Field>
       <Field label="Correo electrónico" required error={errors.email} hint="Aquí te enviaremos la confirmación de tus reservas">
         {(p) => (
           <div className="input-icon"><Mail size={18} aria-hidden="true" />

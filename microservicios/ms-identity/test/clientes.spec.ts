@@ -9,9 +9,9 @@ import { baseVacia, describeDb } from './helpers';
 const SECRETO = 'secreto-de-pruebas-de-ms-identity-0123456789';
 const CLAVE = 'clave-de-booking-para-pruebas-123456';
 
-function jwt(rol: string) {
+function jwt(rol: string, email?: string) {
   const b = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
-  const cuerpo = `${b({ alg: 'HS256', typ: 'JWT' })}.${b({ sub: '1', rol, exp: Math.floor(Date.now() / 1000) + 600 })}`;
+  const cuerpo = `${b({ alg: 'HS256', typ: 'JWT' })}.${b({ sub: '1', rol, ...(email ? { email } : {}), exp: Math.floor(Date.now() / 1000) + 600 })}`;
   return `${cuerpo}.${createHmac('sha256', SECRETO).update(cuerpo).digest('base64url')}`;
 }
 
@@ -88,5 +88,20 @@ describeDb('ms-identity · /clientes (contrato v3.1)', () => {
     await http().get('/api/v1/clientes').set('Authorization', `Bearer ${jwt('CLIENTE')}`).expect(403);
     const r = await http().get('/api/v1/clientes?q=ana').set('Authorization', `Bearer ${jwt('ADMIN')}`).expect(200);
     expect(r.body.data.map((c: { nombre: string }) => c.nombre)).toEqual(['Ana']);
+  });
+  it('cuenta web: se crea una vez; si Booking ya tenía esa cédula con otro correo, es la misma persona', async () => {
+    const yo = (email: string) => http().put('/api/v1/clientes/mi-cuenta').set('Authorization', 'Bearer ' + jwt('CLIENTE', email));
+    await http().put('/api/v1/clientes/mi-cuenta').send({ nombres: 'Sin', apellidos: 'Token' }).expect(401);
+    const nueva = await yo('lucia@web.com').send({ nombres: 'Lucía', apellidos: 'Andrade', documento: '1724589633', telefono: '0991234567' }).expect(200);
+    expect(nueva.body).toEqual({ client_id: expect.stringMatching(/^DEC-USR-\d+$/), creado: true });
+    const otraVez = await yo('lucia@web.com').send({ nombres: 'Lucía', apellidos: 'Andrade', documento: '1724589633' }).expect(200);
+    expect(otraVez.body).toEqual({ client_id: nueva.body.client_id, creado: false });
+    // Booking la encuentra por la cédula de la web
+    const b = await conClave(http().get('/api/v3/clientes?identificacion=1724589633')).expect(200);
+    expect(b.body.client_id).toBe(nueva.body.client_id);
+    // Pepito se registró primero en Booking; luego crea su cuenta web con otro correo y la misma cédula
+    const web = await yo('pepito.web@gmail.com').send({ nombres: 'Pepito', apellidos: 'Evaluador', documento: '1710034065' }).expect(200);
+    const enBooking = await conClave(http().get('/api/v3/clientes?identificacion=1710034065')).expect(200);
+    expect(web.body).toEqual({ client_id: enBooking.body.client_id, creado: false });
   });
 });

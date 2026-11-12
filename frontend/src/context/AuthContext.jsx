@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Auth, sesionInicial, tokenStore, usuarioDelToken } from '../api/client';
+import { Auth, BFF_URL, sesionInicial, tokenStore, Turistas, usuarioDelToken } from '../api/client';
 import { useToast } from './ToastContext';
 
 const AuthCtx = createContext(null);
@@ -43,6 +43,13 @@ export function AuthProvider({ children }) {
     window.addEventListener('auth:expired', onExpired);
     return () => window.removeEventListener('auth:expired', onExpired);
   }, [logout, toast]);
+
+  // Cada cuenta de cliente queda también en ms_identity (con su cédula), para que Booking la encuentre y no la
+  // duplique. Se hace al iniciar sesión, al registrarse y al cambiar el perfil; si falla no afecta a la sesión.
+  useEffect(() => {
+    if (!user || user._provisional || user.rol !== 'CLIENTE' || !user.nombres || !BFF_URL) return;
+    Turistas.sincronizar(user).catch(() => {});
+  }, [user?.id, user?.documento, user?.telefono]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const applySession = (res) => {
     tokenStore.set(res.access_token);

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, CanActivate, Controller, Delete, ExecutionContext, ForbiddenException, Get, Headers, HttpCode, HttpException, Injectable, NotFoundException, Param, Patch, Post, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, CanActivate, Controller, Delete, ExecutionContext, ForbiddenException, Get, Headers, HttpCode, HttpException, Injectable, NotFoundException, Param, Patch, Post, Put, Query, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { randomUUID } from 'crypto';
 import { Usuario, verificarJwt } from './comun/auth';
@@ -462,6 +462,22 @@ export class AtraccionesWebController {
 /** Turistas de Booking para el panel (los datos son de ms_identity). */
 @Controller({ path: 'turistas', version: '1' })
 export class TuristasWebController {
+  /** La cuenta web del usuario en ms_identity, para que Booking la reconozca por cédula o correo. */
+  @Put('mi-cuenta')
+  @UseGuards(ConSesion)
+  async miCuenta(@Body() b: Record<string, unknown>, @Req() req: Peticion) {
+    const u = (process.env.IDENTITY_URL ?? 'http://localhost:4012').replace(/\/$/, '');
+    const r = await fetch(`${u}/api/v1/clientes/mi-cuenta`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: req.header('authorization') ?? '' },
+      body: JSON.stringify({ nombres: b.nombres, apellidos: b.apellidos, documento: b.documento || undefined, telefono: b.telefono || undefined }),
+      signal: AbortSignal.timeout(7000),
+    });
+    const d = (await r.json().catch(() => null)) as { detail?: string } | null;
+    if (!r.ok) throw new HttpException({ message: d?.detail ?? 'No se pudo sincronizar la cuenta.' }, r.status);
+    return d;
+  }
+
   @Get()
   @UseGuards(ConSesion)
   listar(@Query() q: Record<string, string>, @Req() req: Peticion) {

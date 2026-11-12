@@ -1,8 +1,8 @@
-import { BadRequestException, Body, Controller, Get, Injectable, NotFoundException, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, NotFoundException, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import { Allow, IsEmail, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { Response } from 'express';
-import { JwtGuard, Roles, SocioGuard } from './comun/auth';
+import { Request, Response } from 'express';
+import { JwtGuard, Roles, SocioGuard, Usuario } from './comun/auth';
 import { DbService, Sql } from './comun/db.service';
 
 const normalizarCorreo = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v);
@@ -38,6 +38,14 @@ export class CrearCliente {
   @IsOptional() @Allow() name?: string;
   @IsOptional() @Allow() identification?: string;
   @IsOptional() @Allow() phone?: string;
+}
+
+/** PUT /api/v1/clientes/mi-cuenta: los datos de la cuenta web que inició sesión (el correo sale del JWT). */
+export class MiCuenta {
+  @Transform(({ value }) => recortar(value)) @IsString() @MinLength(2) @MaxLength(120) nombres: string;
+  @Transform(({ value }) => recortar(value)) @IsString() @MinLength(2) @MaxLength(120) apellidos: string;
+  @IsOptional() @Transform(({ value }) => (value ? normalizarDocumento(value) : undefined)) @Matches(/^[A-Z0-9]{5,20}$/, { message: 'documento no es válido' }) documento?: string;
+  @IsOptional() @Transform(({ value }) => (value ? normalizarTelefono(value) : undefined)) @Matches(/^\+?[0-9]{7,15}$/, { message: 'telefono no es válido' }) telefono?: string;
 }
 
 export class ListaClientes {
@@ -121,6 +129,35 @@ export class ClientesService {
     return f;
   }
 
+  /**
+   * Cuenta web que inició sesión: si ya existe (por correo, o por cédula si Booking la registró antes con otro
+   * correo) se completan sus datos y se reutiliza; si no, se crea. Así Booking la encuentra sin duplicarla.
+   */
+  async miCuenta(email: string, d: MiCuenta) {
+    const correo = normalizarCorreo(email) as string;
+    const porCorreo = await this.db.one<FilaCliente>(`SELECT ${COLUMNAS} FROM usuario WHERE usu_correo = $1`, [correo]);
+    const porDoc = !porCorreo && d.documento ? await this.db.one<FilaCliente>(`SELECT ${COLUMNAS} FROM usuario WHERE usu_documento = $1`, [d.documento]) : null;
+    const f = porCorreo ?? porDoc;
+    if (f) {
+      await this.db.query(
+        `UPDATE usuario u SET usu_telefono = COALESCE(u.usu_telefono, $3),
+                usu_documento = COALESCE(u.usu_documento, CASE WHEN EXISTS (SELECT 1 FROM usuario o WHERE o.usu_documento = $2 AND o.usu_id <> u.usu_id) THEN NULL ELSE $2 END)
+          WHERE u.usu_id = $1`,
+        [f.usu_id, d.documento ?? null, d.telefono ?? null],
+      );
+      return { client_id: clientId(f.usu_id), creado: false };
+    }
+    const nueva = await this.db.one<{ usu_id: string }>(
+      `INSERT INTO usuario (usu_correo, usu_password, usu_nombre, usu_apellido, usu_documento, usu_telefono, usu_origen)
+       VALUES ($1, '!', $2, $3, $4, $5, 'WEB') ON CONFLICT DO NOTHING RETURNING usu_id::text`,
+      [correo, d.nombres, d.apellidos, d.documento ?? null, d.telefono ?? null],
+    );
+    if (nueva) return { client_id: clientId(nueva.usu_id), creado: true };
+    // Otra petición la creó a la vez (o la cédula ya era de otra persona): se busca de nuevo
+    const otra = await this.db.one<FilaCliente>(`SELECT ${COLUMNAS} FROM usuario WHERE usu_correo = $1`, [correo]);
+    return { client_id: otra ? clientId(otra.usu_id) : null, creado: false };
+  }
+
   /** Para el panel: las personas registradas, las más nuevas primero. */
   async listar(q: ListaClientes) {
     const page = q.page ?? 1;
@@ -158,15 +195,21 @@ export class ClientesBookingController {
   }
 }
 
-/** Panel de administración: ver a los turistas registrados. */
+/** Panel de administración: ver a los turistas registrados. La cuenta propia la sincroniza cualquier usuario. */
 @Controller({ path: 'clientes', version: '1' })
 @UseGuards(JwtGuard)
-@Roles('ADMIN')
 export class ClientesPanelController {
   constructor(private readonly s: ClientesService) {}
 
   @Get()
+  @Roles('ADMIN')
   listar(@Query() q: ListaClientes) {
     return this.s.listar(q);
+  }
+
+  @Put('mi-cuenta')
+  miCuenta(@Body() d: MiCuenta, @Req() req: Request & { usuario: Usuario }) {
+    if (!req.usuario.email) throw new BadRequestException('El token no trae el correo de la cuenta.');
+    return this.s.miCuenta(req.usuario.email, d);
   }
 }

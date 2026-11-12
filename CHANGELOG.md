@@ -7,6 +7,10 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+### Agregado
+- **Cédula en el registro:** obligatoria y validada (dígito verificador, sin repetirse). Se completa sola en el checkout.
+- **Cuentas web en ms-identity:** al registrarse, iniciar sesión o editar el perfil, la cuenta queda en ms_identity con su cédula. Booking la encuentra por cédula o correo; si ya la había registrado con otro correo, se reconoce como la misma persona.
+
 ## [3.0.0] - 2026-11-12
 
 La web y el panel pasan a usar los microservicios, y la cancelación sigue la regla de la cátedra (RDA2).

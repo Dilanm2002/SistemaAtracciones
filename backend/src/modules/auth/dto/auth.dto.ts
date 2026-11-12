@@ -45,6 +45,12 @@ export class RegisterDto {
   @Transform(trim)
   @Matches(RE_TELEFONO, { message: `telefono ${MSG_TELEFONO_EC}` })
   telefono?: string;
+
+  @ApiPropertyOptional({ example: '1724589633', description: 'Cédula ecuatoriana (10 dígitos con dígito verificador): con ella Booking reconoce al turista' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @EsDocumentoEc()
+  documento?: string;
 }
 
 export class GoogleLoginDto {

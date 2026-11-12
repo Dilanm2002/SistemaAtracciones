@@ -158,10 +158,13 @@ export class AuthService {
         throw new ConflictException('Ya existe una cuenta con ese correo. ¿Quieres iniciar sesión?');
       }
       await this.exigirTelefonoLibre(dto.telefono, undefined, tx);
+      if (dto.documento && (await tx.one('SELECT 1 FROM usuario WHERE usu_documento = $1', [dto.documento]))) {
+        throw new ConflictException('Esa cédula ya está registrada en otra cuenta. ¿Quieres iniciar sesión?');
+      }
       const u = await tx.one<{ id: string }>(
-        `INSERT INTO usuario (usu_correo, usu_password, usu_nombre, usu_apellido, usu_telefono)
-         VALUES ($1, $2, $3, $4, $5) RETURNING usu_id::text AS id`,
-        [dto.email, await bcrypt.hash(dto.password, BCRYPT_ROUNDS), dto.nombre, dto.apellido, dto.telefono ?? null],
+        `INSERT INTO usuario (usu_correo, usu_password, usu_nombre, usu_apellido, usu_telefono, usu_documento)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING usu_id::text AS id`,
+        [dto.email, await bcrypt.hash(dto.password, BCRYPT_ROUNDS), dto.nombre, dto.apellido, dto.telefono ?? null, dto.documento || null],
       );
       await this.asignarRol(tx, u!.id, Rol.CLIENTE, null, null);
       return u!.id;
