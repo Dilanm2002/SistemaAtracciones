@@ -7,7 +7,22 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+## [3.0.0] - 2026-11-12
+
+La web y el panel pasan a usar los microservicios, y la cancelación sigue la regla de la cátedra (RDA2).
+Versión mayor porque cambia la política de cancelación que ven los clientes y Booking.
+
 ### Agregado
+- **Contrato v3.1 con Booking** ([docs/CATALOGO-RUTAS-MICROSERVICIOS.md](docs/CATALOGO-RUTAS-MICROSERVICIOS.md)):
+  - `ms-identity` atiende `GET/POST /api/v3/clientes`: busca por correo o cédula (`identificacion` o `identification`) y no duplica turistas; el panel los muestra en «Turistas de Booking».
+  - Aviso de check-in a Booking (`POST /api/v3/reservas/{código}/checkin`, cuerpo v3.1) con reintentos cada 30 s durante una hora; el panel muestra si Booking recibió el aviso.
+  - Stock a Booking por REST (`POST /api/v3/inventory/stock`), el canal que recomienda Booking.
+- **BFF de la web y el panel** (`bff-web`, publicado en el gateway como `/bff/v1`): traduce el formato de la tienda a catálogo, precios, cupos, reservas, reseñas y turistas. Sin `VITE_BFF_URL`, la web vuelve a la API de la tienda.
+- **Cupos en vivo** en Disponibilidad: cada salida con sus cupos, actualizada cada 5 s y resaltando la que cambió (se ve al instante una compra hecha desde Booking).
+- **Check-in con las personas que llegaron:** se registra cuántas llegaron (nunca más de las reservadas) y se envía a Booking en `asistentes_reales`. No hay reembolso por los ausentes.
+- **Respuesta de cancelación** con `cancel_code`, `refund`, `stock_restoration` y `message`, además de los campos del contrato v3; la web muestra el comprobante de reembolso.
+- Catálogo de rutas de todos los microservicios ([docs/CATALOGO-RUTAS-MICROSERVICIOS.md](docs/CATALOGO-RUTAS-MICROSERVICIOS.md)) y ensayo de los dos flujos de la defensa (`microservicios/scripts/ensayo-defensa.js`).
+- Inicio de sesión con más contexto: el formulario junto a la foto y lo que permite hacer la cuenta.
 - **Contrato v3 de Booking Prototipo (semana 9)** sin romper v2 ([docs/INTEGRACION-BOOKING-V2.md §7](docs/INTEGRACION-BOOKING-V2.md)):
   - Las 14 rutas del contrato responden también en **`/api/v3`**; el test de cobertura verifica `contracts/atracciones-openapi-v3.yaml` (guardado tal como lo envió Booking).
   - **Rutas en la URL base** que Booking registra (guía de integración de socios): `POST {baseUrlRest}/reservas` (más consulta, cancelación y check-in) y `GET {baseUrlRest}/health`.
@@ -29,11 +44,19 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 - **Tarjeta de crédito simulada en el pago:** se llena mientras se escribe, detecta la marca y gira al escribir el CVV (sin animación con `prefers-reduced-motion`; decorativa para lectores de pantalla).
 
 ### Corregido
+- **Catálogo para Booking:** `GET /api/v3/atracciones?limit=100` respondía 400 (el contrato admite 50) y Booking no veía las atracciones nuevas. Ahora responde 50 por página.
+- **Fotos de las atracciones creadas en el panel:** desaparecían al guardar, en la web y en Booking. La tienda ahora también sirve las fotos que usa `ms_catalog`.
+- **Listas grandes en el panel:** las respuestas de más de unos 64 KB quedaban colgadas dentro de Azure. El gateway usa conexiones persistentes y comprime las listas grandes.
+- **Stock a Booking:** en la nube iba a nuestro propio `ms-booking` por un nombre de variable repetido.
+- **Semáforo de Booking:** `ms-identity` aparecía caído unos segundos cuando Azure cambiaba de versión otro servicio. Ahora reintenta la conexión una vez y registra el motivo.
+- **Migraciones:** git en Windows cambia los saltos de línea de los `.sql` y los servicios no arrancaban. El migrador acepta el mismo archivo con LF o CRLF.
 - **Ficha de atracción (escritorio):** el botón «Reservar ahora» solo se alcanzaba al final de la página porque la tarjeta de reserva, fija en pantalla, era más alta que ella. Sigue fija, pero ahora cabe: el calendario se resume en una línea al elegir la fecha («Cambiar fecha»), los participantes se despliegan al tocarlos y, si aun así no cabe, la tarjeta sube lo justo para que el botón siga a la vista.
 - **Calendario de disponibilidad:** al tocar «Cambiar fecha» todos los días se veían un momento como disponibles (verde) mientras se volvía a consultar la base. Ahora el mes ya consultado se reutiliza 60 s, los días que cargan se ven en gris y un día anterior a hoy nunca se ofrece.
 - **Imprimir el comprobante:** la página se imprimía tal cual (la cabecera fija caía sobre el código de reserva y salían el aviso flotante, los botones y el pie del sitio). Ahora hay hoja de impresión: cabecera propia del comprobante con el código, detalle, voucher y factura sin cortarse a mitad.
 
 ### Cambiado
+- **Cancelación (regla de la cátedra):** reembolso del 100 % solo con 24 h o más de anticipación. Después, o con check-in, la API responde 409 y la web no muestra el botón. La empresa y la compensación de la saga pueden cancelar siempre.
+- Se quitó el inicio de sesión con Google.
 - **«Añadir a mi calendario» dentro del sistema:** antes descargaba un `.ics` que en Windows sin app de calendario no se abría. Ahora abre una ventana con el evento (fecha, horario según la duración de la experiencia, punto de encuentro) y lo añade con un clic a **Google Calendar** u **Outlook** en la web; el `.ics` queda como opción para Apple Calendar y otras apps. En la confirmación y en «Mis reservas».
 - **Pulido de la interfaz** (pautas de la skill ui-ux-pro-max, sin tocar flujos): el paso actual del checkout va relleno y el tramo recorrido en color; las tarjetas de atracción y de categoría se elevan levemente al pasar el mouse (solo en equipos con mouse); los botones responden al presionar; el método de pago elegido lleva un anillo además del fondo. Todo respeta `prefers-reduced-motion`.
 - Microservicios: las conexiones a la base se mantienen abiertas para que el primer ping del semáforo de Booking tras un rato sin tráfico no salga `DEGRADED`.
@@ -441,5 +464,6 @@ Primera versión estable: sitio público, panel de administración y API de Atra
 ### Cambiado
 - La versión del backend pasa de `2.0.0` (heredada de la plantilla) a `1.0.0`, igual que el frontend. La versión del contrato OpenAPI (`info.version`) se mantiene aparte porque versiona el acuerdo con los otros equipos, no el producto.
 
-[Sin publicar]: https://github.com/Dilanm2002/SistemaAtracciones/compare/v1.0.0...HEAD
+[Sin publicar]: https://github.com/Dilanm2002/SistemaAtracciones/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/Dilanm2002/SistemaAtracciones/releases/tag/v3.0.0
 [1.0.0]: https://github.com/Dilanm2002/SistemaAtracciones/releases/tag/v1.0.0

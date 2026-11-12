@@ -10,9 +10,9 @@ Estado al **9 de noviembre de 2026**, commit `59129aa` de `main`. Las rutas sale
 | Contrato con Booking | **v3.1**: el v3.0.0 oficial (`backend/contracts/atracciones-openapi-v3.yaml`) más `/clientes` y el aviso de check-in | Nodo `NODE_ATR_DILAN` |
 | Microservicios (12 + BFF + gateway) | **1.0.0** (`microservicios/package.json`) | Azure Container Apps, `chilecentral` |
 | Imagen desplegada | `76f166b` en los servicios y `ba5cc17` en el gateway | Registro `descubreecdilan` |
-| Web y API de la tienda | **2.9.0** publicada, con cambios sin numerar desde entonces (ver `CHANGELOG.md`, «Sin publicar») | Vercel, desplegada desde `main` |
+| Sistema (web y API de la tienda) | **3.0.0** (`CHANGELOG.md`, etiqueta `v3.0.0`) | Vercel, desplegada desde `main` |
 
-La última etiqueta de git es `v2.0.0`: las versiones 2.1.0 a 2.9.0 están en el `CHANGELOG.md` pero no se etiquetaron.
+Las versiones 2.1.0 a 2.9.0 están en el `CHANGELOG.md` pero no se etiquetaron; desde la 3.0.0 cada versión tiene su etiqueta.
 
 ## Cómo se llega a cada ruta
 
