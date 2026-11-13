@@ -1,4 +1,4 @@
-import { aCampos, aHorarios, aPedido, aTarifas, aWeb, Atraccion, calendarioMes, disponibilidadDia, FilaReserva, horasDeIso, reservaAWeb } from '../src/mapper';
+import { aCampos, coincideBusqueda, aHorarios, aPedido, aTarifas, aWeb, Atraccion, calendarioMes, disponibilidadDia, FilaReserva, horasDeIso, reservaAWeb } from '../src/mapper';
 
 const BASE = {
   atr_id: 7, atr_uuid: '0aa62c9e-4aa3-44c2-aae4-964fa13b46fb', atr_nombre: 'Cotopaxi', atr_slug: 'cotopaxi', atr_descripcion: 'Una descripción larga del parque nacional', atr_descripcion_corta: null,
@@ -123,6 +123,12 @@ describe('reservas', () => {
       reservation_id: 'u1', code: 'DEC-ABC', status: 'CONFIRMED', ticket_count: 2, origin: 'BOOKING', client_id: 'DEC-USR-1', payment_method: 'TARJETA', can_cancel: true, refundable: true,
       customer: { name: 'Luis Andrade', document: '1724589633' }, total_price: { total: 110 }, free_cancellation_until: '2030-01-09T14:00:00.000Z',
     });
+  });
+
+  it('el buscador del panel encuentra por código, titular, correo, cédula o teléfono', () => {
+    const r = reservaAWeb(FILA);
+    for (const q of ['dec-abc', 'Luis', 'andrade', 'l@a.com', '1724589633', '172458963-3', '17245', undefined, '']) expect(coincideBusqueda(r, q)).toBe(true);
+    for (const q of ['9999999999', 'Pepito', '17']) expect(coincideBusqueda(r, q)).toBe(false);
   });
 
   it('pago pendiente = PENDING; cancelada = CANCELLED; con check-in muestra la hora', () => {

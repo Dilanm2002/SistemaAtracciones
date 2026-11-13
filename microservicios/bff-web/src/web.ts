@@ -2,7 +2,7 @@ import { BadRequestException, Body, CanActivate, Controller, Delete, ExecutionCo
 import { Request } from 'express';
 import { randomUUID } from 'crypto';
 import { Usuario, verificarJwt } from './comun/auth';
-import { aCampos, aHorarios, aPedido, aTarifas, aWeb, Atraccion, Bloqueo, calendarioMes, Ciudad, disponibilidadDia, FilaReserva, Horario, Referencias, reservaAWeb, TIPOS_DE, Turno } from './mapper';
+import { aCampos, coincideBusqueda, aHorarios, aPedido, aTarifas, aWeb, Atraccion, Bloqueo, calendarioMes, Ciudad, disponibilidadDia, FilaReserva, Horario, Referencias, reservaAWeb, TIPOS_DE, Turno } from './mapper';
 
 const PUERTOS: Record<string, [string, number]> = {
   location: ['LOCATION_URL', 4001], catalog: ['CATALOG_URL', 4002], review: ['REVIEW_URL', 4003], pricing: ['PRICING_URL', 4004], inventory: ['INVENTORY_URL', 4005], booking: ['BOOKING_URL', 4008],
@@ -228,7 +228,7 @@ export class AtraccionesWebController {
       if (q.when === 'past' && r.date >= hoy) return false;
       if (q.date && r.date !== q.date) return false;
       if (q.attraction_id && r.attraction.id !== q.attraction_id) return false;
-      return !texto || [r.code, r.customer.name, r.customer.email].some((t) => sinTildes(t).includes(texto));
+      return coincideBusqueda(r, texto ?? undefined);
     });
   }
 

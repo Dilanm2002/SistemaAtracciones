@@ -404,3 +404,18 @@ export function aPedido(atrUuid: string, b: Cuerpo, correo: string | undefined, 
     ...(b.notes ? { special_requirements: b.notes } : {}),
   };
 }
+
+const plano = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const soloAlfanumerico = (t: string) => t.replace(/[^0-9a-z]/gi, '').toLowerCase();
+
+/**
+ * Buscador del panel: código, titular, correo, cédula o teléfono. La cédula y el teléfono se comparan sin
+ * espacios ni guiones, así «171003406-5» encuentra 1710034065.
+ */
+export function coincideBusqueda(r: ReturnType<typeof reservaAWeb>, q: string | undefined): boolean {
+  if (!q?.trim()) return true;
+  const texto = plano(q.trim());
+  if ([r.code, r.customer.name, r.customer.email].some((t) => plano(t ?? '').includes(texto))) return true;
+  const digitos = soloAlfanumerico(q);
+  return digitos.length >= 4 && [r.customer.document, r.customer.phone].some((t) => !!t && soloAlfanumerico(t).includes(digitos));
+}
