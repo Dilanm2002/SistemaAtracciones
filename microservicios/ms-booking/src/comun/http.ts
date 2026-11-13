@@ -7,11 +7,11 @@ import { correlacionActual } from './correlacion';
  * - Un 4xx del otro servicio es parte de su contrato (p. ej. 409 OUT_OF_STOCK): se devuelve igual.
  * - Sin respuesta, timeout o 5xx → 503 DEPENDENCY_UNAVAILABLE (el llamador decide si compensa).
  */
-export type Servicio = 'catalog' | 'location' | 'review' | 'pricing' | 'inventory' | 'coupon' | 'order' | 'booking' | 'payment' | 'refund' | 'invoicing';
+export type Servicio = 'catalog' | 'location' | 'review' | 'pricing' | 'inventory' | 'coupon' | 'order' | 'booking' | 'payment' | 'refund' | 'invoicing' | 'identity';
 
 const PUERTOS: Record<Servicio, number> = {
   location: 4001, catalog: 4002, review: 4003, pricing: 4004, inventory: 4005, coupon: 4006,
-  order: 4007, booking: 4008, payment: 4009, refund: 4010, invoicing: 4011,
+  order: 4007, booking: 4008, payment: 4009, refund: 4010, invoicing: 4011, identity: 4012,
 };
 
 /** URL base de un servicio: <SERVICIO>_URL (p. ej. INVENTORY_URL) o localhost con su puerto. */

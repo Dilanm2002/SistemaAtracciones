@@ -26,6 +26,19 @@ export interface Atraccion {
 }
 
 @Injectable()
+export class IdentidadClient {
+  /** Cédula y client_id de la cuenta web (ms_identity). Si no responde, se sigue solo con el correo del token. */
+  async persona(email: string | undefined): Promise<{ documento: string | null; client_id: string | null }> {
+    if (!email) return { documento: null, client_id: null };
+    try {
+      return await llamar<{ documento: string | null; client_id: string | null }>('identity', 'GET', `/api/v1/internal/clientes?email=${encodeURIComponent(email)}`, { timeout: 2000 });
+    } catch {
+      return { documento: null, client_id: null };
+    }
+  }
+}
+
+@Injectable()
 export class CatalogoClient {
   /** 60 s en memoria: una compra no vuelve a pedir la ficha completa (cada consulta a la base cuesta un viaje). */
   private readonly cache = new Map<string, { a: Atraccion; hasta: number }>();

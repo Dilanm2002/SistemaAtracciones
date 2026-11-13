@@ -8,6 +8,7 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 ## [Sin publicar]
 
 ### Agregado
+- **Mis reservas incluye lo comprado en Booking:** la persona ve las reservas que hizo en Booking con su mismo correo, cédula o client_id. No las cancela desde la web (se cancelan en Booking, que si no no se enteraría); el personal sí puede.
 - **Alias en inglés en el gateway:** `/api/v3/atracciones/reservations/…` y `/api/v3/reservations/…` se atienden igual que `/reservas/` (consulta, cancelación y check-in).
 - **Actualización silenciosa en tiempo real:** «Mis reservas» se consulta cada 5 s y solo cambia la tarjeta cuyo estado cambió (check-in o cancelación, en rojo); el selector de turnos y el checkout consultan los cupos cada 4 s sin reiniciar lo elegido y marcan «Agotado» al llegar a 0. Sin pantalla de carga y en pausa si la pestaña no está visible.
 - **Cédula en el registro:** obligatoria y validada (dígito verificador, sin repetirse). Se completa sola en el checkout.

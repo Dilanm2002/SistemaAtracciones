@@ -38,9 +38,11 @@ export function politicaTexto(r) {
         tone: 'warn',
         texto: r.checked_in_at
           ? 'Check-in realizado (servicio iniciado, no cancelable).'
-          : Date.now() < salidaEc(r.date, r.time)
-            ? 'Cancelación no disponible: faltan menos de 24 h para el inicio de la actividad. La cancelación gratuita aplica hasta 24 h antes.'
-            : 'La experiencia ya comenzó; ya no puede cancelarse.',
+          : r.origin === 'BOOKING'
+            ? 'Reservada en Booking: si necesitas cancelarla, hazlo desde Booking. Presenta tu cédula en el punto de encuentro.'
+            : Date.now() < salidaEc(r.date, r.time)
+              ? 'Cancelación no disponible: faltan menos de 24 h para el inicio de la actividad. La cancelación gratuita aplica hasta 24 h antes.'
+              : 'La experiencia ya comenzó; ya no puede cancelarse.',
       };
   }
 }

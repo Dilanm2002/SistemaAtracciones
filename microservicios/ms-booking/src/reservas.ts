@@ -350,12 +350,13 @@ export class ReservasService implements OnApplicationBootstrap, OnApplicationShu
   }
 
   /** Reservas para la web y el panel, con filtros por dueño y atracción. */
-  filas(f: { usuId?: string; atrUuids?: string[]; atrUuid?: string; limite?: number }) {
+  filas(f: { usuId?: string; correo?: string | null; documento?: string | null; clientId?: string | null; atrUuids?: string[]; atrUuid?: string; limite?: number }) {
+    // Las de la persona: compradas con su cuenta web, o hechas en Booking con su correo, su cédula o su client_id
     return this.db.query<FilaReserva>(
       `${SELECT_RESERVA}
-        WHERE ($1::text IS NULL OR r.res_usu_id = $1) AND ($2::uuid[] IS NULL OR r.atr_uuid = ANY($2::uuid[])) AND ($3::uuid IS NULL OR r.atr_uuid = $3)
+        WHERE ($1::text IS NULL OR r.res_usu_id = $1 OR lower(p.pax_correo) = lower($5::text) OR p.pax_documento = $6::text OR r.res_client_id = $7::text) AND ($2::uuid[] IS NULL OR r.atr_uuid = ANY($2::uuid[])) AND ($3::uuid IS NULL OR r.atr_uuid = $3)
         ORDER BY r.res_id DESC LIMIT $4`,
-      [f.usuId ?? null, f.atrUuids ?? null, f.atrUuid ?? null, f.limite ?? 500],
+      [f.usuId ?? null, f.atrUuids ?? null, f.atrUuid ?? null, f.limite ?? 500, f.correo ?? null, f.documento ?? null, f.clientId ?? null],
     );
   }
 

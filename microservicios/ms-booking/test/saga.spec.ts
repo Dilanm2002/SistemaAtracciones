@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { randomUUID } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 import { createServer, Server } from 'http';
 import { AddressInfo } from 'net';
 import { join } from 'path';
@@ -239,6 +239,34 @@ describeSaga('saga de reserva con los 7 microservicios reales', () => {
     const no = await http().post(`/api/v3/atracciones/reservas/${otra.body.reservation_id}/cancel`).set('X-API-Key', CLAVE).set('Idempotency-Key', randomUUID()).send({});
     expect(no.status).toBe(409);
     expect(no.body).toMatchObject({ title: 'Cancelación No Permitida', detail: 'No se puede cancelar una reserva que ya realizó check-in o fue asistida.', status: 409 });
+  });
+
+  it('Mis reservas: una reserva hecha en Booking aparece a la cuenta web con el mismo correo, que no la cancela desde la web', async () => {
+    await sql('ms_inventory', 'UPDATE disponibilidad SET dis_cupo_total = dis_cupo_total + 5 WHERE dis_fecha = $1', [dia]);
+    const firmar = (email: string, rol = 'CLIENTE') => {
+      const b = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
+      const c = `${b({ alg: 'HS256', typ: 'JWT' })}.${b({ sub: `web-${email}`, rol, email, exp: Math.floor(Date.now() / 1000) + 600 })}`;
+      return `Bearer ${c}.${createHmac('sha256', 'secreto-de-pruebas-de-la-saga-0123456789').update(c).digest('base64url')}`;
+    };
+    const r = await reservar(pedido({ adult_count: 1, child_count: 0, infant_count: 0, total_tickets: 1 }));
+    expect(r.status).toBe(201);
+
+    const mias = await http().get('/api/v1/web/reservas').set('Authorization', firmar('LUIS@correo.com'));
+    expect(mias.status).toBe(200);
+    const esta = mias.body.find((x: { codigo: string }) => x.codigo === r.body.reservation_code);
+    expect(esta).toMatchObject({ origen: 'BOOKING', politica: { policy: 'NOT_ALLOWED' } });
+    expect((await http().get(`/api/v1/web/reservas/${r.body.reservation_id}`).set('Authorization', firmar('luis@correo.com'))).status).toBe(200);
+    const cancelar = await http().post(`/api/v1/web/reservas/${r.body.reservation_id}/cancelar`).set('Authorization', firmar('luis@correo.com')).set('Idempotency-Key', randomUUID()).send({});
+    expect(cancelar.status).toBe(409);
+    expect(cancelar.body.code).toBe('CANCEL_IN_BOOKING');
+
+    // Otra persona no la ve
+    const otra = await http().get('/api/v1/web/reservas').set('Authorization', firmar('otra@correo.com'));
+    expect(otra.body.some((x: { codigo: string }) => x.codigo === r.body.reservation_code)).toBe(false);
+    expect((await http().get(`/api/v1/web/reservas/${r.body.reservation_id}`).set('Authorization', firmar('otra@correo.com'))).status).toBe(403);
+    // El personal sí la cancela
+    const staff = await http().post(`/api/v1/web/reservas/${r.body.reservation_id}/cancelar`).set('Authorization', firmar('admin@descubre-ec.com', 'ADMIN')).set('Idempotency-Key', randomUUID()).send({});
+    expect(staff.status).toBe(200);
   });
 
   it('transferencia: reserva CONFIRMED con pago PENDING y sin factura; al cancelar el pago se RECHAZA y la orden se CANCELA', async () => {

@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Injectable, NotFoundExcepti
 import { Transform, Type } from 'class-transformer';
 import { Allow, IsEmail, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { Request, Response } from 'express';
-import { JwtGuard, Roles, SocioGuard, Usuario } from './comun/auth';
+import { JwtGuard, Roles, ServicioGuard, SocioGuard, Usuario } from './comun/auth';
 import { DbService, Sql } from './comun/db.service';
 
 const normalizarCorreo = (v: unknown) => (typeof v === 'string' ? v.trim().toLowerCase() : v);
@@ -158,6 +158,15 @@ export class ClientesService {
     return { client_id: otra ? clientId(otra.usu_id) : null, creado: false };
   }
 
+  /** Cédula y client_id de la cuenta con ese correo (para que ms-booking reconozca a la persona). */
+  async porCorreo(email: unknown) {
+    const correo = typeof email === 'string' ? (normalizarCorreo(email) as string) : '';
+    if (!correo) throw new BadRequestException('Indica el correo.');
+    const f = await this.db.one<FilaCliente>(`SELECT ${COLUMNAS} FROM usuario WHERE usu_correo = $1`, [correo]);
+    if (!f) throw new NotFoundException('No hay una cuenta con ese correo.');
+    return { client_id: clientId(f.usu_id), documento: f.usu_documento };
+  }
+
   /** Para el panel: las personas registradas, las más nuevas primero. */
   async listar(q: ListaClientes) {
     const page = q.page ?? 1;
@@ -192,6 +201,18 @@ export class ClientesBookingController {
     const { creado, client_id } = await this.s.crear(d);
     res.status(creado ? 201 : 200);
     return creado ? { client_id } : { client_id, mensaje: 'Turista ya existente reutilizado' };
+  }
+}
+
+/** Solo entre servicios (X-Servicio-Token); el gateway nunca publica /internal/. */
+@Controller({ path: 'internal/clientes', version: '1' })
+@UseGuards(ServicioGuard)
+export class ClientesInternoController {
+  constructor(private readonly s: ClientesService) {}
+
+  @Get()
+  porCorreo(@Query('email') email: unknown) {
+    return this.s.porCorreo(email);
   }
 }
 
