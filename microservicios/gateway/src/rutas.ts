@@ -35,7 +35,11 @@ export interface Ruta {
   ruta: string;
 }
 
+/** Booking y sus herramientas a veces usan «reservations» en inglés: se atiende igual que «reservas». */
+const ALIAS_RESERVAS = /^(\/api\/v[23](?:\/atracciones)?)\/reservations(?=\/|$)/;
+
 export function rutear(metodo: string, url: string): Ruta {
+  if (ALIAS_RESERVAS.test(url)) url = url.replace(ALIAS_RESERVAS, '$1/reservas');
   const [camino, consulta = ''] = url.split('?');
   const q = consulta ? `?${consulta}` : '';
 

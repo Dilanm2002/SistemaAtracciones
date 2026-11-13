@@ -55,6 +55,8 @@ describe('tabla de ruteo (cada ruta del contrato v3 a su microservicio)', () => 
     ['POST', '/bff/v1/atracciones/search', 'bff'],
     ['POST', '/api/v3/atracciones/reservas', 'booking'],
     ['GET', '/api/v3/atracciones/reservas/DEC-7F3K9Q', 'booking'],
+    ['POST', '/api/v3/atracciones/reservations/DEC-7F3K9Q/checkin', 'booking'],
+    ['POST', '/api/v3/reservations/DEC-7F3K9Q/cancel', 'booking'],
     ['POST', '/api/v3/atracciones/reservas/x/cancel', 'booking'],
     ['POST', '/api/v3/atracciones/reservas/x/checkin', 'booking'],
     ['GET', '/api/v3/atracciones/vouchers/DEC-7F3K9Q/qr.png', 'booking'],
@@ -84,6 +86,10 @@ describe('tabla de ruteo (cada ruta del contrato v3 a su microservicio)', () => 
 
   it('/ms/<servicio>/… se reescribe a /api/… del servicio', () => {
     expect(rutear('GET', '/ms/location/v1/ciudades?q=quito').ruta).toBe('/api/v1/ciudades?q=quito');
+    // «reservations» (inglés) llega a ms-booking como «reservas», la ruta que atiende
+    expect(rutear('POST', '/api/v3/atracciones/reservations/DEC-VTRLBL/checkin').ruta).toBe('/api/v3/atracciones/reservas/DEC-VTRLBL/checkin');
+    expect(rutear('GET', '/api/v3/reservations/DEC-VTRLBL?x=1').ruta).toBe('/api/v3/reservas/DEC-VTRLBL?x=1');
+    expect(rutear('POST', '/bff/v1/atracciones/reservations/x/checkin').ruta).toBe('/api/v1/atracciones/reservations/x/checkin');
   });
 });
 

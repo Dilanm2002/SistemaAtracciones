@@ -8,6 +8,7 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 ## [Sin publicar]
 
 ### Agregado
+- **Alias en inglés en el gateway:** `/api/v3/atracciones/reservations/…` y `/api/v3/reservations/…` se atienden igual que `/reservas/` (consulta, cancelación y check-in).
 - **Actualización silenciosa en tiempo real:** «Mis reservas» se consulta cada 5 s y solo cambia la tarjeta cuyo estado cambió (check-in o cancelación, en rojo); el selector de turnos y el checkout consultan los cupos cada 4 s sin reiniciar lo elegido y marcan «Agotado» al llegar a 0. Sin pantalla de carga y en pausa si la pestaña no está visible.
 - **Cédula en el registro:** obligatoria y validada (dígito verificador, sin repetirse). Se completa sola en el checkout.
 - **Cuentas web en ms-identity:** al registrarse, iniciar sesión o editar el perfil, la cuenta queda en ms_identity con su cédula. Booking la encuentra por cédula o correo; si ya la había registrado con otro correo, se reconoce como la misma persona.
