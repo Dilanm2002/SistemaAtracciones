@@ -107,6 +107,8 @@ describe('disponibilidad: los cupos reservados desde Booking se ven en la web', 
     expect(m[0].status).toBe('past');
     expect(m[9]).toEqual({ date: '2030-01-10', available_spots: 15, status: 'available' });
     expect(m[19]).toEqual({ date: '2030-01-20', available_spots: 0, status: 'blocked', reason: 'Feriado' });
+    // Hoy después de la última salida: día pasado, no «agotado»
+    expect(calendarioMes('2030-01', '2030-01-10', '23:00', H, T, [])[9]).toEqual({ date: '2030-01-10', available_spots: 0, status: 'past' });
   });
 });
 

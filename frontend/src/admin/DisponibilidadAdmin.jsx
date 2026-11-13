@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { fmtDate, fmtMonth, todayEc } from '../utils/format';
 import { enDias, fecha as validarFecha, limpiar, texto } from '../utils/validation';
 import CuposEnVivo from './CuposEnVivo';
+import { nombresUnicos } from './nombreAtraccion';
 
 const DOW = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const shift = (m, n) => {
@@ -83,7 +84,7 @@ export default function DisponibilidadAdmin() {
       <div className="adm-module-head">
         <div><h2>Disponibilidad y ocupación</h2><p>Revisa cupos ocupados por día y bloquea fechas en que no se opera.</p></div>
         <select className="select" value={sel} onChange={(e) => setSel(e.target.value)} aria-label="Atracción" style={{ maxWidth: 360 }}>
-          {list.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          {list.map((x) => <option key={x.id} value={x.id}>{nombresUnicos(list)(x)}</option>)}
         </select>
       </div>
 

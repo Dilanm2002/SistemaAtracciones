@@ -331,6 +331,11 @@ export class AtraccionesWebController {
     const horarios = aHorarios(b);
     if (!tarifas) throw new BadRequestException('Indica el precio de adulto.');
     if (!horarios?.length) throw new BadRequestException('Indica al menos un horario y los cupos por salida.');
+    // Dos atracciones con el mismo nombre confunden al panel y a Booking (las reservas quedan en una y se mira la otra)
+    const nombre = typeof b.name === 'string' ? sinTildes(b.name.trim()) : '';
+    if (nombre && (await this.c.todas()).some((x) => sinTildes(x.atr_nombre.trim()) === nombre)) {
+      throw new HttpException({ message: `Ya existe una atracción llamada «${b.name.trim()}». Usa otro nombre o edita la existente.`, code: 'DUPLICATE_NAME' }, 409);
+    }
     const a = await llamar<Atraccion>('catalog', 'POST', '/api/v1/atracciones', { auth, cuerpo: { ...aCampos(b, await this.c.referencias()), atr_estado: 'BORRADOR' } });
     try {
       await llamar('pricing', 'PUT', `/api/v1/tarifas/${a.atr_id}`, { auth, cuerpo: { tarifas } });

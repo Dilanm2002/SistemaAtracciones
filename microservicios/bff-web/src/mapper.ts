@@ -149,6 +149,7 @@ export function aWeb(a: Atraccion, c: Ciudad | undefined, horarios: Horario[] = 
     featured: a.atr_destacada,
     is_active: a.atr_estado === 'PUBLICADA',
     status: a.atr_estado,
+    created_at: a.atr_creado_en,
     ratings: { number_of_reviews: a.atr_numero_resenas, score: a.atr_calificacion_promedio },
     url: { web: `${frontend}/atraccion/${a.atr_uuid}`, app: `descubreec://attractions/${a.atr_uuid}` },
     _links: { self: { href: self }, availability: { href: `${self}/availability` }, reviews: { href: `${self}/reviews` } },
@@ -286,6 +287,8 @@ export function calendarioMes(mes: string, hoy: string, ahora: string, horarios:
     const b = bloqueos.find((x) => x.fb_fecha === fecha);
     if (b) return { date: fecha, available_spots: 0, status: 'blocked', reason: b.fb_motivo };
     const slots = salidas(fecha, hoy, ahora, horarios, turnos);
+    // Hoy, si ya partieron todas las salidas, el día cuenta como pasado (no como agotado)
+    if (fecha === hoy && slots.length === 0) return { date: fecha, available_spots: 0, status: 'past' };
     const capacidad = slots.reduce((s, x) => s + x.capacity, 0);
     const libres = slots.reduce((s, x) => s + x.available, 0);
     return { date: fecha, available_spots: libres, status: libres === 0 ? 'full' : libres <= Math.max(3, capacidad * 0.2) ? 'low' : 'available' };

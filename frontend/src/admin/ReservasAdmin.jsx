@@ -9,6 +9,7 @@ import { addDays, estadoVisible, fmtDate, fmtMoney, PAYMENT, STATUS, todayEc } f
 import { useAdmin } from './AdminLayout';
 import { exportXlsx } from './excel';
 import { igual, useSondeo } from '../utils/sondeo';
+import { nombresUnicos } from './nombreAtraccion';
 
 const TABS = [
   ['upcoming', 'Próximas'],
@@ -144,7 +145,7 @@ export default function ReservasAdmin() {
         </div>
         <select className="select" value={attr} onChange={(e) => setAttr(e.target.value)} aria-label="Filtrar por atracción" style={{ maxWidth: 280 }}>
           <option value="">Todas las atracciones</option>
-          {atracciones.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          {atracciones.map((a) => <option key={a.id} value={a.id}>{nombresUnicos(atracciones)(a)}</option>)}
         </select>
         <div className="date-nav" role="group" aria-label="Filtrar por día">
           <button className="icon-btn sm" onClick={() => setDay(addDays(day || todayEc(), -1))} aria-label="Día anterior"><ChevronLeft size={18} /></button>

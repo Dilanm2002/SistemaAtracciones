@@ -8,6 +8,8 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 ## [Sin publicar]
 
 ### Corregido
+- **Calendario de disponibilidad:** hoy, cuando ya partieron todas las salidas, el día se veía como agotado (20/20 en rojo). Ahora se ve como día pasado.
+- **Atracciones con el mismo nombre:** el panel ya no deja crear una atracción con un nombre que ya existe, y los selectores distinguen las repetidas por su fecha de creación.
 - **Cancelación desde Booking:** respondía 400 si Booking no enviaba la cabecera Idempotency-Key o mandaba campos de más, y la reserva seguía confirmada. Ahora la cabecera es opcional y del cuerpo se toma solo el motivo.
 
 ### Agregado
