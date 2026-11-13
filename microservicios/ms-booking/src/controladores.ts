@@ -10,6 +10,21 @@ import { CancelReservationRequestV2, CheckinRequestV2, CreateReservaRequestV2, E
 import { firmaValida } from './enlaces';
 import { EventoEntrante, EventosService } from './eventos';
 import { ReservasService } from './reservas';
+import { randomUUID } from 'crypto';
+
+const SOLICITANTES = ['CLIENTE', 'SAGA_ORCHESTRATOR', 'ADMIN'] as const;
+
+/**
+ * Cancelación tolerante, como la pide Booking: la Idempotency-Key es opcional (cancelar ya es idempotente por el
+ * estado de la reserva) y el cuerpo puede traer campos de más. Del cuerpo solo se toma el motivo y el solicitante.
+ */
+function pedidoCancelacion(cuerpo: unknown, clave: string | undefined): { dto: CancelReservationRequestV2; key: string } {
+  const b = (cuerpo && typeof cuerpo === 'object' ? cuerpo : {}) as Record<string, unknown>;
+  const motivo = [b.reason, b.motivo, b.cancellation_reason, b.razon].find((v): v is string => typeof v === 'string' && !!v.trim());
+  const solicitante = SOLICITANTES.find((s) => s === b.solicitante) ?? 'CLIENTE';
+  const k = typeof clave === 'string' && clave.trim() && clave.trim().length <= 80 ? clave.trim() : randomUUID();
+  return { dto: { reason: motivo?.trim().slice(0, 255), solicitante }, key: k };
+}
 
 const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -62,9 +77,10 @@ export class ReservasBookingController {
 
   @Post('reservas/:id/cancel')
   @HttpCode(200)
-  @UseGuards(SocioGuard, IdempotencyKeyGuard)
-  cancelar(@Param('id') id: string, @Body() dto: CancelReservationRequestV2, @Headers('idempotency-key') key: string) {
-    return this.s.cancelar(id, dto ?? {}, key);
+  @UseGuards(SocioGuard)
+  cancelar(@Param('id') id: string, @Body() cuerpo: Record<string, unknown>, @Headers('idempotency-key') clave?: string) {
+    const { dto, key } = pedidoCancelacion(cuerpo, clave);
+    return this.s.cancelar(id, dto, key);
   }
 
   @Post('reservas/:id/checkin')
@@ -106,9 +122,10 @@ export class ReservasBaseController {
 
   @Post('reservas/:id/cancel')
   @HttpCode(200)
-  @UseGuards(SocioGuard, IdempotencyKeyGuard)
-  cancelar(@Param('id') id: string, @Body() dto: CancelReservationRequestV2, @Headers('idempotency-key') key: string) {
-    return this.s.cancelar(id, dto ?? {}, key);
+  @UseGuards(SocioGuard)
+  cancelar(@Param('id') id: string, @Body() cuerpo: Record<string, unknown>, @Headers('idempotency-key') clave?: string) {
+    const { dto, key } = pedidoCancelacion(cuerpo, clave);
+    return this.s.cancelar(id, dto, key);
   }
 
   @Post('reservas/:id/checkin')

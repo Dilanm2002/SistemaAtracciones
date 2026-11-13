@@ -7,7 +7,11 @@ Cómo publicar una versión nueva: sección *Control de versiones* del [README](
 
 ## [Sin publicar]
 
+### Corregido
+- **Cancelación desde Booking:** respondía 400 si Booking no enviaba la cabecera Idempotency-Key o mandaba campos de más, y la reserva seguía confirmada. Ahora la cabecera es opcional y del cuerpo se toma solo el motivo.
+
 ### Agregado
+- **Panel de Reservas en tiempo real:** se actualiza solo cada 5 s; aparecen las reservas nuevas de Booking y cambia el estado de las canceladas o con check-in.
 - **Buscar reservas por cédula o teléfono** en el panel, además de código, titular y correo (sin importar espacios o guiones).
 - **Mis reservas incluye lo comprado en Booking:** la persona ve las reservas que hizo en Booking con su mismo correo, cédula o client_id. No las cancela desde la web (se cancelan en Booking, que si no no se enteraría); el personal sí puede.
 - **Alias en inglés en el gateway:** `/api/v3/atracciones/reservations/…` y `/api/v3/reservations/…` se atienden igual que `/reservas/` (consulta, cancelación y check-in).

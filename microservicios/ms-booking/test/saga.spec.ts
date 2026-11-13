@@ -269,6 +269,17 @@ describeSaga('saga de reserva con los 7 microservicios reales', () => {
     expect(staff.status).toBe(200);
   });
 
+  it('cancelación tolerante: sin Idempotency-Key y con campos de más en el cuerpo también cancela', async () => {
+    await sql('ms_inventory', 'UPDATE disponibilidad SET dis_cupo_total = dis_cupo_total + 5 WHERE dis_fecha = $1', [dia]);
+    const r = await reservar(pedido({ adult_count: 1, child_count: 0, infant_count: 0, total_tickets: 1 }));
+    const c = await http().post(`/api/v3/reservas/${r.body.reservation_code}/cancel`).set('X-API-Key', CLAVE)
+      .send({ motivo: 'El turista canceló en Booking', client_id: 'DEC-USR-7', external_order_id: r.body.reservation_code, cancelled_by: 'BOOKING' });
+    expect(c.status).toBe(200);
+    expect(c.body).toMatchObject({ status: 'CANCELLED', cancel_code: `REF-ATR-${r.body.reservation_code.replace('DEC-', '')}` });
+    const otra = await http().post(`/api/v3/atracciones/reservas/${r.body.reservation_id}/cancel`).set('X-API-Key', CLAVE).set('Idempotency-Key', 'cancel-desde-booking-1').send({});
+    expect(otra.status).toBe(200); // ya cancelada: responde igual, sin devolver cupos dos veces
+  });
+
   it('transferencia: reserva CONFIRMED con pago PENDING y sin factura; al cancelar el pago se RECHAZA y la orden se CANCELA', async () => {
     const r = await reservar(pedido({ adult_count: 1, child_count: 0, infant_count: 0, total_tickets: 1, payment_method: 'TRANSFERENCIA' }));
     expect(r.body).toMatchObject({ status: 'CONFIRMED', payment_status: 'PENDING' });

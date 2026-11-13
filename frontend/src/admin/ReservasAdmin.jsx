@@ -8,6 +8,7 @@ import { CancelModal, ReservationDetailModal } from '../pages/MyReservations';
 import { addDays, estadoVisible, fmtDate, fmtMoney, PAYMENT, STATUS, todayEc } from '../utils/format';
 import { useAdmin } from './AdminLayout';
 import { exportXlsx } from './excel';
+import { igual, useSondeo } from '../utils/sondeo';
 
 const TABS = [
   ['upcoming', 'Próximas'],
@@ -61,6 +62,32 @@ export default function ReservasAdmin() {
   useEffect(() => { if (params.toString()) setParams({}, { replace: true }); }, []); // eslint-disable-line
 
   const replace = (u) => setRows((list) => list.map((x) => (x.reservation_id === u.reservation_id ? u : x)));
+
+  // Consulta silenciosa cada 5 s: aparecen las reservas nuevas de Booking y cambia el estado de las que se
+  // cancelan o hacen check-in, sin «cargando». Una que se cancela sigue a la vista (en rojo) hasta refrescar.
+  const [cambiadas, setCambiadas] = useState(() => new Set());
+  useSondeo(async () => {
+    const nuevas = await Reservas.list(query);
+    const distintas = new Set();
+    setRows((previas) => {
+      if (!previas) return previas;
+      const porId = new Map(previas.map((r) => [r.reservation_id, r]));
+      const lista = nuevas
+        .filter((n) => tab !== 'upcoming' || n.status !== 'CANCELLED' || porId.has(n.reservation_id))
+        .map((n) => {
+          const p = porId.get(n.reservation_id);
+          if (p && igual(p, n)) return p;
+          if (p && (p.status !== n.status || p.checked_in_at !== n.checked_in_at || p.booking_notice !== n.booking_notice)) distintas.add(n.reservation_id);
+          if (!p) distintas.add(n.reservation_id);
+          return n;
+        });
+      return lista.length === previas.length && lista.every((x, i) => x === previas[i]) ? previas : lista;
+    });
+    if (distintas.size) {
+      setCambiadas(distintas);
+      setTimeout(() => setCambiadas(new Set()), 2500);
+    }
+  }, 5000, rows !== null && !error && !busy && !checkin && !cancel);
 
   const confirmPay = async (r) => {
     const ok = await confirm({
@@ -147,7 +174,7 @@ export default function ReservasAdmin() {
                   <td className="num">{fmtMoney(r.total_price.total)}</td>
                   <td className="small">{PAYMENT[r.payment_method]}</td>
                   <td>
-                    <StatusBadge status={estadoVisible(r)} />
+                    <span className={cambiadas.has(r.reservation_id) ? 'estado-cambio' : undefined}><StatusBadge status={estadoVisible(r)} /></span>
                     {r.origin === 'BOOKING' && <div className="muted tiny">Reservada en Booking</div>}
                     {r.booking_notice && <div className="muted tiny">{AVISO[r.booking_notice]}</div>}
                   </td>
