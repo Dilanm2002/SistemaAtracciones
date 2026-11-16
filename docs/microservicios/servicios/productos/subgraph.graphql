@@ -1,0 +1,82 @@
+# Subgrafo de MS Productos (Apollo Federation 2). Dueño de Atraccion, Ciudad, Categoria y Resena.
+# Stock le agrega `disponibilidad`; Reservas y Clientes la referencian por id.
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
+
+enum TipoTarifa {
+  ADULTO
+  NINO
+  MAYOR
+  ESTUDIANTE
+  GRUPO
+}
+
+type Tarifa {
+  tipo: TipoTarifa!
+  precio: String!
+  moneda: String!
+}
+
+type Horario {
+  hora24h: String!
+  capacidad: Int!
+}
+
+type Foto {
+  url: String!
+  alt: String
+}
+
+type Ciudad @key(fields: "id") {
+  id: ID!
+  nombre: String!
+  provincia: String!
+  latitud: Float
+  longitud: Float
+}
+
+type Categoria @key(fields: "id") {
+  id: ID!
+  nombre: String!
+}
+
+type Resena {
+  id: ID!
+  autor: String!
+  puntuacion: Int!
+  comentario: String!
+  creadaEn: String!
+}
+
+type Operador @key(fields: "codigo", resolvable: false) {
+  codigo: ID!
+}
+
+type Atraccion @key(fields: "id") {
+  id: ID!
+  nombre: String!
+  descripcion: String
+  duracion: String
+  tipoProducto: String!
+  cancelacionGratuita: Boolean!
+  "Precio desde (tarifa de adulto vigente)"
+  precio: Tarifa!
+  tarifas: [Tarifa!]!
+  horarios: [Horario!]!
+  ciudad: Ciudad!
+  categorias: [Categoria!]!
+  idiomas: [String!]!
+  incluye: [String!]!
+  fotos: [Foto!]!
+  operador: Operador!
+  puntuacion: Float
+  totalResenas: Int!
+  resenas(limite: Int = 10): [Resena!]!
+}
+
+type Query {
+  atraccion(id: ID!): Atraccion
+  atracciones(ciudad: ID, categoria: ID, texto: String, limite: Int = 20): [Atraccion!]!
+  destinos: [Ciudad!]!
+  categorias: [Categoria!]!
+}

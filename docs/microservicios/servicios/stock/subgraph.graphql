@@ -1,0 +1,33 @@
+# Subgrafo de MS Stock (Apollo Federation 2): agrega la disponibilidad a la atracción.
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
+
+enum EstadoTurno {
+  DISPONIBLE
+  ULTIMOS_CUPOS
+  AGOTADO
+}
+
+type Turno {
+  slotId: String!
+  fecha: String!
+  hora24h: String!
+  hora: String!
+  zonaHoraria: String!
+  cuposTotales: Int!
+  cuposDisponibles: Int!
+  estado: EstadoTurno!
+  revision: Int!
+}
+
+type Disponibilidad {
+  fecha: String!
+  motivoNoOpera: String
+  turnos: [Turno!]!
+}
+
+# La atracción (dueño: MS Productos) gana su disponibilidad por día
+type Atraccion @key(fields: "id") {
+  id: ID!
+  disponibilidad(fecha: String!): Disponibilidad!
+}

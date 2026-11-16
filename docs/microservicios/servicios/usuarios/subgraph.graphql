@@ -1,0 +1,29 @@
+# Subgrafo de MS Usuarios (Apollo Federation 2). Dueño del tipo Usuario.
+# Otros subgrafos le agregan campos: Clientes (perfil, favoritos), Reservas (reservas).
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
+
+enum Rol {
+  CLIENTE
+  OPERADOR
+  ADMIN
+}
+
+type Usuario @key(fields: "id") {
+  id: ID!
+  nombre: String!
+  apellido: String!
+  correo: String!
+  telefono: String
+  roles: [Rol!]!
+  activo: Boolean!
+  correoVerificado: Boolean!
+  creadoEn: String!
+}
+
+type Query {
+  "Usuario autenticado (token del encabezado)"
+  yo: Usuario
+  "Solo ADMIN"
+  usuario(id: ID!): Usuario
+}

@@ -1,0 +1,54 @@
+// Contrato gRPC interno de MS Stock (consultas rápidas desde MS Reservas y el router GraphQL).
+// El contrato de stock con Booking es otro: inventory.proto (InventoryStockService), del que MS Stock
+// es CLIENTE (PushStockUpdate). Aquí MS Stock es SERVIDOR. Mismo modelo canónico del turno
+// (docs/CONTRATO-SCHEMA-FIRST.md §4 y §8): slot_id, date, time_24h, timezone, total_units,
+// available_units, revision.
+syntax = "proto3";
+
+package descubre.stock.v1;
+
+option go_package = "descubre-ec/servicios/stock/v1;stockv1";
+
+service StockService {
+  // Turnos de una atracción en un día.
+  rpc GetDisponibilidad (GetDisponibilidadRequest) returns (GetDisponibilidadResponse);
+  // Un turno concreto por su clave canónica (NOT_FOUND si no existe el horario).
+  rpc GetTurno (GetTurnoRequest) returns (Turno);
+}
+
+enum EstadoTurno {
+  ESTADO_TURNO_UNSPECIFIED = 0;
+  DISPONIBLE = 1;
+  ULTIMOS_CUPOS = 2;   // <= 3 cupos
+  AGOTADO = 3;         // 0 cupos, turno cerrado o fecha bloqueada
+}
+
+message Turno {
+  string slot_id = 1;          // slot-AAAAMMDD-HHMM
+  string item_id = 2;          // atr_uuid
+  string date = 3;             // YYYY-MM-DD
+  string time_24h = 4;         // HH:mm
+  string time_slot = 5;        // presentación «10:30 a.m.»
+  string timezone = 6;         // America/Guayaquil
+  int32 total_units = 7;
+  int32 available_units = 8;   // retenciones ya descontadas
+  EstadoTurno estado = 9;
+  int64 revision = 10;
+}
+
+message GetDisponibilidadRequest {
+  string item_id = 1;
+  string date = 2;
+}
+
+message GetDisponibilidadResponse {
+  string item_id = 1;
+  string date = 2;
+  string motivo_no_opera = 3;  // vacío si la fecha no está bloqueada
+  repeated Turno turnos = 4;
+}
+
+message GetTurnoRequest {
+  string slot_id = 1;
+  string item_id = 2;
+}

@@ -1,0 +1,166 @@
+openapi: 3.1.0
+info:
+  title: Componentes comunes de los microservicios de Descubre EC
+  version: 1.0.0
+  description: |
+    Piezas que comparten todos los contratos REST de los microservicios (schema-first, fuente única):
+    errores RFC 7807, seguridad, cabeceras de trazabilidad e idempotencia, paginación y enlaces HATEOAS.
+    Cada servicio las referencia con `$ref: ../../comun/comun.yaml#/components/...`; nunca se copian.
+  license:
+    name: Uso académico
+    identifier: MIT
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (Kong) en desarrollo
+paths: {}
+components:
+  securitySchemes:
+    UsuarioJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT RS256 emitido por MS Usuarios (llave pública en `/.well-known/jwks.json`). Ligado al navegador con
+        DPoP (RFC 9449): en la web se envía `Authorization: DPoP <token>` + cabecera `DPoP`. Cada servicio
+        vuelve a revisar los scopes (`attractions:read|book|cancel|write|manage`, `admin:full`).
+    ServicioJWT:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Token de servicio a servicio (client credentials, `aud` = servicio destino) dentro de la red privada,
+        además de mTLS. Solo para las rutas internas (`/internal/...`), que el gateway no publica.
+    BookingApiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Clave máquina a máquina de Booking Prototipo (contrato v2). La valida el gateway.
+  parameters:
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Id de la petición; si no llega, el gateway lo crea. Se devuelve igual y viaja en logs y eventos.
+      schema: { type: string, pattern: '^[\w-]{8,64}$' }
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: Correlación de la transacción completa (saga) entre servicios y con Booking.
+      schema: { type: string, pattern: '^[\w-]{8,64}$' }
+    Traceparent:
+      name: traceparent
+      in: header
+      required: false
+      description: W3C Trace Context; cada servicio continúa la traza.
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID v4. La misma clave repite la respuesta (24 h) sin duplicar efectos.
+      schema: { type: string, format: uuid }
+    Pagina:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+    Limite:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+  schemas:
+    Problem:
+      type: object
+      description: Error RFC 7807 (application/problem+json), igual en todos los servicios.
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri, examples: ['https://api.descubre-ec.com/api/v1/errores/sin-cupos'] }
+        title: { type: string, examples: ['Conflicto'] }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string }
+        instance: { type: string }
+        code:
+          type: string
+          description: Código estable para decidir en código (nunca se parsea `detail`).
+          examples: [OUT_OF_STOCK, VALIDATION_FAILED, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, INVALID_STATE, INVALID_DOCUMENT]
+        request_id: { type: string }
+        correlation_id: { type: string }
+        timestamp: { type: string, format: date-time }
+        invalid_params:
+          type: array
+          items:
+            type: object
+            required: [name, reason]
+            properties:
+              name: { type: string, examples: ['customer.phone'] }
+              reason: { type: string }
+    Precio:
+      type: object
+      required: [currency, total]
+      properties:
+        currency: { type: string, pattern: '^[A-Z]{3}$', examples: [USD] }
+        total: { type: number, minimum: 0, multipleOf: 0.01 }
+    Enlace:
+      type: object
+      required: [href]
+      properties:
+        href: { type: string }
+        method: { type: string, enum: [GET, POST, PUT, PATCH, DELETE] }
+    Enlaces:
+      type: object
+      additionalProperties: { $ref: '#/components/schemas/Enlace' }
+    Paginacion:
+      type: object
+      required: [total, page, limit]
+      properties:
+        total: { type: integer, minimum: 0 }
+        page: { type: integer, minimum: 1 }
+        limit: { type: integer, minimum: 1 }
+    Salud:
+      type: object
+      required: [status, service, version]
+      properties:
+        status: { type: string, enum: [UP, DEGRADED, DOWN] }
+        service: { type: string }
+        version: { type: string }
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status: { type: string, enum: [UP, DOWN] }
+              latency_ms: { type: integer }
+  responses:
+    Error400:
+      description: Datos inválidos
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Error401:
+      description: Sin credenciales válidas
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Error403:
+      description: Sin permisos (scope)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Error404:
+      description: No existe
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Error409:
+      description: Conflicto de estado, de idempotencia o de cupos
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Error422:
+      description: Entidad no procesable (p. ej. cédula con dígito verificador inválido)
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Error429:
+      description: Demasiadas peticiones
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Error503:
+      description: Servicio no disponible o circuito abierto
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    Salud:
+      description: Estado del servicio
+      content: { application/json: { schema: { $ref: '#/components/schemas/Salud' } } }

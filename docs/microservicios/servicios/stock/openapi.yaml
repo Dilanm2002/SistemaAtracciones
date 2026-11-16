@@ -1,0 +1,228 @@
+openapi: 3.1.0
+info:
+  title: MS Stock — cupos por turno, fechas bloqueadas y retenciones
+  version: 1.0.0
+  description: |
+    Dueño de la verdad de los cupos (esquema `stock`: disponibilidad, fecha_bloqueada, retencion).
+    Modelo canónico del turno según docs/CONTRATO-SCHEMA-FIRST.md §4: `slot_id` (clave), `date`, `time_24h`,
+    `timezone`, `total_units`, `available_units`, `revision` (monótona por turno).
+    Cada cambio se publica como evento `atracciones.stock.actualizado` y se envía a Booking por gRPC
+    (`inventory.InventoryStockService/PushStockUpdate`, CE01).
+    Las retenciones (`/internal/retenciones`) solo las usa MS Reservas dentro de la saga.
+  contact: { name: Equipo Stock }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (desarrollo)
+  - url: http://ms-stock:3003
+    description: Red interna (incluye /internal)
+tags:
+  - name: Disponibilidad
+  - name: Fechas bloqueadas
+  - name: Retenciones (interno)
+  - name: Salud
+paths:
+  /atracciones/{atraccionId}/availability:
+    get:
+      tags: [Disponibilidad]
+      operationId: disponibilidadDelDia
+      summary: Turnos de un día con cupos y estado (público)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/AtraccionId'
+        - name: date
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Turnos del día
+          content: { application/json: { schema: { $ref: '#/components/schemas/DisponibilidadDia' } } }
+        '400': { $ref: '../../comun/comun.yaml#/components/responses/Error400' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /atracciones/{atraccionId}/availability/calendar:
+    get:
+      tags: [Disponibilidad]
+      operationId: calendario
+      summary: Resumen por día de un mes (para el calendario de la web)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/AtraccionId'
+        - name: month
+          in: query
+          required: true
+          schema: { type: string, pattern: '^\d{4}-\d{2}$' }
+      responses:
+        '200':
+          description: Días del mes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [date, available_units, status]
+                  properties:
+                    date: { type: string, format: date }
+                    available_units: { type: integer, minimum: 0 }
+                    status: { type: string, enum: [DISPONIBLE, ULTIMOS_CUPOS, AGOTADO, NO_OPERA] }
+  /atracciones/{atraccionId}/blocked-dates:
+    get:
+      tags: [Fechas bloqueadas]
+      operationId: listarFechasBloqueadas
+      summary: Fechas bloqueadas (dueño u ADMIN)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      responses:
+        '200':
+          description: Fechas en que no opera
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/FechaBloqueada' } } } }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+    post:
+      tags: [Fechas bloqueadas]
+      operationId: bloquearFecha
+      summary: Bloquear una fecha (todos sus turnos pasan a 0 y se publica a Booking)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, reason]
+              properties:
+                date: { type: string, format: date }
+                reason: { type: string, minLength: 3, maxLength: 255 }
+      responses:
+        '201':
+          description: Bloqueada
+          content: { application/json: { schema: { $ref: '#/components/schemas/FechaBloqueada' } } }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /atracciones/{atraccionId}/blocked-dates/{bloqueoId}:
+    delete:
+      tags: [Fechas bloqueadas]
+      operationId: desbloquearFecha
+      summary: Desbloquear una fecha
+      security: [{ UsuarioJWT: [] }]
+      parameters:
+        - $ref: '#/components/parameters/AtraccionId'
+        - name: bloqueoId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Desbloqueada (los turnos recuperan sus cupos) }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /internal/retenciones:
+    post:
+      tags: [Retenciones (interno)]
+      operationId: retenerCupos
+      summary: Retener cupos de un turno durante la saga (bloqueo de la fila, sin sobreventa)
+      description: Solo MS Reservas. La retención vence sola (por defecto 15 min) y libera los cupos.
+      security: [{ ServicioJWT: [] }]
+      parameters: [{ $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attraction_id, slot_id, units, order_number]
+              properties:
+                attraction_id: { type: string, format: uuid }
+                slot_id: { type: string, pattern: '^slot-\d{8}-\d{4}$' }
+                units: { type: integer, minimum: 1, maximum: 50 }
+                order_number: { type: string }
+                ttl_seconds: { type: integer, minimum: 60, maximum: 86400, default: 900 }
+      responses:
+        '201':
+          description: Retención creada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Retencion' } } }
+        '409':
+          description: Sin cupos (code OUT_OF_STOCK), turno cerrado o fecha bloqueada
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+  /internal/retenciones/{retencionId}:
+    delete:
+      tags: [Retenciones (interno)]
+      operationId: liberarRetencion
+      summary: Compensación — liberar la retención (idempotente)
+      security: [{ ServicioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/RetencionId' }]
+      responses:
+        '204': { description: Liberada (o ya estaba liberada) }
+  /internal/retenciones/{retencionId}/confirmar:
+    post:
+      tags: [Retenciones (interno)]
+      operationId: confirmarRetencion
+      summary: Convertir la retención en venta (al confirmarse el pago)
+      security: [{ ServicioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/RetencionId' }]
+      responses:
+        '200':
+          description: Vendida
+          content: { application/json: { schema: { $ref: '#/components/schemas/Retencion' } } }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /health/ready:
+    get:
+      tags: [Salud]
+      operationId: listo
+      summary: Listo para recibir tráfico (base, broker y dependencias)
+      security: []
+      responses:
+        '200': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+components:
+  securitySchemes:
+    UsuarioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/UsuarioJWT' }
+    ServicioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/ServicioJWT' }
+  parameters:
+    AtraccionId:
+      name: atraccionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RetencionId:
+      name: retencionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Turno:
+      type: object
+      required: [slot_id, date, time_24h, time, timezone, total_units, available_units, status, revision]
+      properties:
+        slot_id: { type: string, pattern: '^slot-\d{8}-\d{4}$' }
+        date: { type: string, format: date }
+        time_24h: { type: string, pattern: '^\d{2}:\d{2}$' }
+        time: { type: string, description: 'Solo presentación («10:30 a.m.»)' }
+        timezone: { type: string, default: America/Guayaquil }
+        total_units: { type: integer, minimum: 0 }
+        available_units: { type: integer, minimum: 0, description: 'Retenciones ya descontadas' }
+        status: { type: string, enum: [DISPONIBLE, ULTIMOS_CUPOS, AGOTADO] }
+        revision: { type: integer, minimum: 0 }
+    DisponibilidadDia:
+      type: object
+      required: [attraction_id, date, slots]
+      properties:
+        attraction_id: { type: string, format: uuid }
+        date: { type: string, format: date }
+        unavailable_reason: { type: [string, 'null'], description: 'Motivo si la fecha está bloqueada' }
+        slots: { type: array, items: { $ref: '#/components/schemas/Turno' } }
+    FechaBloqueada:
+      type: object
+      required: [id, date, reason]
+      properties:
+        id: { type: integer }
+        date: { type: string, format: date }
+        reason: { type: string }
+        affected_reservations: { type: integer, minimum: 0 }
+    Retencion:
+      type: object
+      required: [retention_id, slot_id, units, status, expires_at]
+      properties:
+        retention_id: { type: string, format: uuid }
+        slot_id: { type: string }
+        units: { type: integer }
+        status: { type: string, enum: [RETENIDA, VENDIDA, LIBERADA, VENCIDA] }
+        expires_at: { type: string, format: date-time }
+        revision: { type: integer, description: 'Revisión del turno tras el cambio' }

@@ -1,0 +1,426 @@
+openapi: 3.1.0
+info:
+  title: MS Clientes — ficha del cliente, direcciones, favoritos, contacto y operadores
+  version: 1.0.0
+  description: |
+    Esquema `clientes`: direccion, favorito, mensaje_contacto, operador, operador_usuario, solicitud_operador.
+    Crea la ficha del cliente al consumir `atracciones.usuario.registrado`.
+    Publica `atracciones.cliente.actualizado` (Reservas y Facturación guardan una copia de los datos de contacto)
+    y `atracciones.operador.aprobado` (Productos habilita al operador para publicar).
+    `/internal/clientes/{usuarioId}/facturacion` entrega los datos que van en la factura (razón social,
+    documento, dirección); solo lo llaman Reservas y Facturación.
+  contact: { name: Equipo Clientes }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (desarrollo)
+  - url: http://ms-clientes:3008
+    description: Red interna (incluye /internal)
+tags:
+  - name: Perfil
+  - name: Direcciones
+  - name: Favoritos
+  - name: Contacto
+  - name: Operadores
+  - name: Interno
+  - name: Salud
+paths:
+  /clientes/me:
+    get:
+      tags: [Perfil]
+      operationId: miFicha
+      summary: Ficha del cliente autenticado
+      security: [{ UsuarioJWT: [] }]
+      responses:
+        '200':
+          description: Ficha del cliente
+          content: { application/json: { schema: { $ref: '#/components/schemas/Cliente' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+    patch:
+      tags: [Perfil]
+      operationId: actualizarFicha
+      summary: Datos de facturación y preferencias (publica cliente.actualizado)
+      security: [{ UsuarioJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                tipo_documento: { $ref: '#/components/schemas/TipoDocumento' }
+                documento: { type: string, pattern: '^(\d{10}|\d{13}|[A-Z0-9]{6,20})$' }
+                razon_social: { type: string, maxLength: 150 }
+                fecha_nacimiento: { type: string, format: date }
+                acepta_marketing: { type: boolean }
+      responses:
+        '200':
+          description: Actualizada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Cliente' } } }
+        '422':
+          description: Cédula o RUC con dígito verificador inválido
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+  /clientes/me/direcciones:
+    get:
+      tags: [Direcciones]
+      operationId: listarDirecciones
+      summary: Direcciones del cliente
+      security: [{ UsuarioJWT: [] }]
+      responses:
+        '200':
+          description: Direcciones
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Direccion' } } } }
+    post:
+      tags: [Direcciones]
+      operationId: crearDireccion
+      summary: Agregar dirección (MS Mapas valida las coordenadas si vienen)
+      security: [{ UsuarioJWT: [] }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DireccionEntrada' } } }
+      responses:
+        '201':
+          description: Creada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Direccion' } } }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+  /clientes/me/direcciones/{direccionId}:
+    put:
+      tags: [Direcciones]
+      operationId: actualizarDireccion
+      summary: Actualizar una dirección
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/DireccionId' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/DireccionEntrada' } } }
+      responses:
+        '200':
+          description: Actualizada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Direccion' } } }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+    delete:
+      tags: [Direcciones]
+      operationId: eliminarDireccion
+      summary: Eliminar una dirección
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/DireccionId' }]
+      responses:
+        '204': { description: Eliminada }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /favoritos:
+    get:
+      tags: [Favoritos]
+      operationId: listarFavoritos
+      summary: Atracciones favoritas del cliente
+      security: [{ UsuarioJWT: [] }]
+      responses:
+        '200':
+          description: Atracciones favoritas (los datos de la atracción los completa GraphQL desde Productos)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [atraccion_id, agregado_en]
+                  properties:
+                    atraccion_id: { type: string, format: uuid }
+                    agregado_en: { type: string, format: date-time }
+  /favoritos/{atraccionId}:
+    put:
+      tags: [Favoritos]
+      operationId: agregarFavorito
+      summary: Idempotente
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      responses:
+        '204': { description: Agregada (o ya estaba) }
+    delete:
+      tags: [Favoritos]
+      operationId: quitarFavorito
+      summary: Quitar de favoritos (idempotente)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      responses:
+        '204': { description: Quitada (o no estaba) }
+  /mensajes:
+    post:
+      tags: [Contacto]
+      operationId: enviarMensaje
+      summary: Formulario de contacto (público, con límite de frecuencia)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, correo, asunto, mensaje]
+              properties:
+                nombre: { type: string, minLength: 2, maxLength: 120 }
+                correo: { type: string, format: email }
+                asunto: { type: string, minLength: 3, maxLength: 150 }
+                mensaje: { type: string, minLength: 10, maxLength: 2000 }
+      responses:
+        '201': { description: Recibido }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+        '429': { $ref: '../../comun/comun.yaml#/components/responses/Error429' }
+    get:
+      tags: [Contacto]
+      operationId: listarMensajes
+      summary: Bandeja de mensajes (solo ADMIN)
+      security: [{ UsuarioJWT: [] }]
+      parameters:
+        - $ref: '../../comun/comun.yaml#/components/parameters/Pagina'
+        - $ref: '../../comun/comun.yaml#/components/parameters/Limite'
+        - name: leido
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Mensajes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Mensaje' } }
+                  pagination: { $ref: '../../comun/comun.yaml#/components/schemas/Paginacion' }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+  /proveedores/solicitudes:
+    post:
+      tags: [Operadores]
+      operationId: solicitarSerOperador
+      summary: Una empresa pide publicar atracciones
+      security: [{ UsuarioJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [razon_social, ruc, correo, telefono]
+              properties:
+                razon_social: { type: string, maxLength: 150 }
+                ruc: { type: string, pattern: '^\d{13}$' }
+                correo: { type: string, format: email }
+                telefono: { type: string }
+                sitio_web: { type: string, format: uri }
+                descripcion: { type: string, maxLength: 1000 }
+      responses:
+        '201':
+          description: Solicitud registrada (estado PENDIENTE)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Solicitud' } } }
+        '409':
+          description: Ya existe una solicitud o un operador con ese RUC
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+    get:
+      tags: [Operadores]
+      operationId: listarSolicitudes
+      summary: Solicitudes (solo ADMIN)
+      security: [{ UsuarioJWT: [] }]
+      parameters:
+        - name: estado
+          in: query
+          schema: { type: string, enum: [PENDIENTE, APROBADA, RECHAZADA] }
+      responses:
+        '200':
+          description: Solicitudes
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Solicitud' } } } }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+  /proveedores/solicitudes/{solicitudId}/decision:
+    post:
+      tags: [Operadores]
+      operationId: decidirSolicitud
+      summary: Aprobar (crea el operador y publica operador.aprobado) o rechazar
+      security: [{ UsuarioJWT: [] }]
+      parameters:
+        - name: solicitudId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [APROBAR, RECHAZAR] }
+                motivo: { type: string, maxLength: 255 }
+      responses:
+        '200':
+          description: Solicitud decidida
+          content: { application/json: { schema: { $ref: '#/components/schemas/Solicitud' } } }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /operadores:
+    get:
+      tags: [Operadores]
+      operationId: listarOperadores
+      summary: Operadores activos
+      security: []
+      responses:
+        '200':
+          description: Operadores activos
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Operador' } } } }
+  /operadores/{operadorCodigo}:
+    get:
+      tags: [Operadores]
+      operationId: obtenerOperador
+      summary: Datos públicos de un operador
+      security: []
+      parameters: [{ $ref: '#/components/parameters/OperadorCodigo' }]
+      responses:
+        '200':
+          description: Operador
+          content: { application/json: { schema: { $ref: '#/components/schemas/Operador' } } }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /operadores/{operadorCodigo}/usuarios:
+    post:
+      tags: [Operadores]
+      operationId: agregarUsuarioOperador
+      summary: Vincular un usuario a la empresa (el usuario recibe el rol OPERADOR)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/OperadorCodigo' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usuario_id]
+              properties:
+                usuario_id: { type: string, format: uuid }
+      responses:
+        '204': { description: Vinculado }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+  /internal/clientes/{usuarioId}/facturacion:
+    get:
+      tags: [Interno]
+      operationId: datosFacturacion
+      summary: Datos del cliente para la factura (solo Reservas y Facturación)
+      security: [{ ServicioJWT: [] }]
+      parameters:
+        - name: usuarioId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Datos de facturación (Facturación los copia en la factura al emitirla)
+          content: { application/json: { schema: { $ref: '#/components/schemas/DatosFacturacion' } } }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /health/ready:
+    get:
+      tags: [Salud]
+      operationId: listo
+      summary: Listo para recibir tráfico (base, broker y dependencias)
+      security: []
+      responses:
+        '200': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+components:
+  securitySchemes:
+    UsuarioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/UsuarioJWT' }
+    ServicioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/ServicioJWT' }
+  parameters:
+    DireccionId:
+      name: direccionId
+      in: path
+      required: true
+      schema: { type: integer }
+    AtraccionId:
+      name: atraccionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    OperadorCodigo:
+      name: operadorCodigo
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1, description: 'ope_codigo (el operator.id del contrato público)' }
+  schemas:
+    TipoDocumento:
+      type: string
+      enum: [CEDULA, PASAPORTE, RUC]
+    Cliente:
+      type: object
+      required: [usuario_id, nombre, correo]
+      properties:
+        usuario_id: { type: string, format: uuid }
+        nombre: { type: string }
+        correo: { type: string, format: email }
+        telefono: { type: [string, 'null'] }
+        tipo_documento: { oneOf: [{ $ref: '#/components/schemas/TipoDocumento' }, { type: 'null' }] }
+        documento: { type: [string, 'null'] }
+        razon_social: { type: [string, 'null'] }
+        fecha_nacimiento: { type: [string, 'null'], format: date }
+        acepta_marketing: { type: boolean }
+        direcciones: { type: array, items: { $ref: '#/components/schemas/Direccion' } }
+    DireccionEntrada:
+      type: object
+      required: [linea1, ciudad, provincia]
+      properties:
+        alias: { type: string, maxLength: 40, examples: [Casa] }
+        linea1: { type: string, maxLength: 200 }
+        linea2: { type: string, maxLength: 200 }
+        ciudad: { type: string, maxLength: 80 }
+        provincia: { type: string, maxLength: 80 }
+        codigo_postal: { type: string, maxLength: 10 }
+        latitud: { type: number, minimum: -5.1, maximum: 1.7 }
+        longitud: { type: number, minimum: -92.1, maximum: -75.1 }
+        principal: { type: boolean, default: false }
+    Direccion:
+      allOf:
+        - $ref: '#/components/schemas/DireccionEntrada'
+        - type: object
+          required: [id]
+          properties:
+            id: { type: integer }
+    DatosFacturacion:
+      type: object
+      required: [usuario_id, razon_social, tipo_documento, documento, correo]
+      properties:
+        usuario_id: { type: string, format: uuid }
+        razon_social: { type: string }
+        tipo_documento: { $ref: '#/components/schemas/TipoDocumento' }
+        documento: { type: string }
+        correo: { type: string, format: email }
+        telefono: { type: [string, 'null'] }
+        direccion: { type: [string, 'null'], description: 'Dirección principal en una línea' }
+    Mensaje:
+      type: object
+      required: [id, nombre, correo, asunto, mensaje, leido, recibido_en]
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        correo: { type: string, format: email }
+        asunto: { type: string }
+        mensaje: { type: string }
+        leido: { type: boolean }
+        recibido_en: { type: string, format: date-time }
+    Solicitud:
+      type: object
+      required: [id, razon_social, ruc, estado, creada_en]
+      properties:
+        id: { type: integer }
+        razon_social: { type: string }
+        ruc: { type: string }
+        correo: { type: string, format: email }
+        estado: { type: string, enum: [PENDIENTE, APROBADA, RECHAZADA] }
+        motivo: { type: [string, 'null'] }
+        operador_codigo: { type: [integer, 'null'], description: 'Se asigna al aprobar' }
+        creada_en: { type: string, format: date-time }
+    Operador:
+      type: object
+      required: [codigo, razon_social, activo]
+      properties:
+        codigo: { type: integer, description: 'ope_codigo' }
+        razon_social: { type: string }
+        ruc: { type: string }
+        correo: { type: string, format: email }
+        telefono: { type: string }
+        sitio_web: { type: [string, 'null'], format: uri }
+        activo: { type: boolean }

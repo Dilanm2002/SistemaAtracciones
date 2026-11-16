@@ -1,0 +1,51 @@
+# Subgrafo de MS Clientes (Apollo Federation 2). Dueño de Operador; agrega la ficha y los favoritos al Usuario.
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
+
+enum TipoDocumento {
+  CEDULA
+  PASAPORTE
+  RUC
+}
+
+type Direccion {
+  id: ID!
+  alias: String
+  linea1: String!
+  ciudad: String!
+  provincia: String!
+  latitud: Float
+  longitud: Float
+  principal: Boolean!
+}
+
+type FichaCliente {
+  tipoDocumento: TipoDocumento
+  documento: String
+  razonSocial: String
+  direcciones: [Direccion!]!
+}
+
+type Operador @key(fields: "codigo") {
+  codigo: ID!
+  razonSocial: String!
+  sitioWeb: String
+  activo: Boolean!
+}
+
+# Referencia a la atracción (dueño: MS Productos)
+type Atraccion @key(fields: "id", resolvable: false) {
+  id: ID!
+}
+
+# El usuario (dueño: MS Usuarios) gana su ficha, favoritos y empresa
+type Usuario @key(fields: "id") {
+  id: ID!
+  ficha: FichaCliente
+  favoritos: [Atraccion!]!
+  operador: Operador
+}
+
+type Query {
+  operadores: [Operador!]!
+}

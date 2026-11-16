@@ -1,0 +1,122 @@
+# Registro de servicios (docs/ARQUITECTURA-MICROSERVICIOS.md §2.2). Se revisa en cada PR:
+# ningún servicio se publica sin su contrato, y un cambio que rompe un contrato sube la versión mayor.
+servicios:
+  - servicio: ms-usuarios
+    capa: entidad
+    dueno: equipo-usuarios
+    version: 1.0.0
+    puerto: 3001
+    contratos:
+      rest: servicios/usuarios/openapi.yaml
+      graphql: servicios/usuarios/subgraph.graphql
+      eventos_publica: [atracciones.usuario.registrado, atracciones.usuario.actualizado]
+      eventos_consume: []
+    depende_de: []
+    sla: { disponibilidad: 99.9, p95_ms: 300 }
+
+  - servicio: ms-clientes
+    capa: entidad
+    dueno: equipo-clientes
+    version: 1.0.0
+    puerto: 3008
+    contratos:
+      rest: servicios/clientes/openapi.yaml
+      graphql: servicios/clientes/subgraph.graphql
+      eventos_publica: [atracciones.cliente.actualizado, atracciones.operador.aprobado]
+      eventos_consume: [atracciones.usuario.registrado, atracciones.usuario.actualizado]
+    depende_de: [ms-usuarios, ms-mapas]
+    sla: { disponibilidad: 99.5, p95_ms: 400 }
+
+  - servicio: ms-productos
+    capa: entidad
+    dueno: equipo-productos
+    version: 1.0.0
+    puerto: 3002
+    contratos:
+      rest: servicios/productos/openapi.yaml
+      grpc: servicios/productos/productos.proto
+      graphql: servicios/productos/subgraph.graphql
+      eventos_publica: [atracciones.atraccion.publicada, atracciones.atraccion.actualizada, atracciones.atraccion.retirada]
+      eventos_consume: [atracciones.operador.aprobado]
+    depende_de: [ms-mapas]
+    sla: { disponibilidad: 99.9, p95_ms: 500 }
+
+  - servicio: ms-stock
+    capa: entidad
+    dueno: equipo-stock
+    version: 1.0.0
+    puerto: 3003
+    contratos:
+      rest: servicios/stock/openapi.yaml
+      grpc: servicios/stock/stock.proto
+      grpc_cliente: ../../backend/contracts/inventory.proto   # PushStockUpdate hacia Booking
+      graphql: servicios/stock/subgraph.graphql
+      eventos_publica: [atracciones.stock.actualizado, atracciones.stock.retenido, atracciones.stock.liberado]
+      eventos_consume: [atracciones.atraccion.publicada, atracciones.atraccion.actualizada, atracciones.atraccion.retirada,
+                        atracciones.reserva.confirmada, atracciones.reserva.cancelada, atracciones.pago.expirado]
+    depende_de: []
+    sla: { disponibilidad: 99.9, p95_ms: 300 }
+
+  - servicio: ms-reservas
+    capa: proceso
+    dueno: equipo-reservas
+    version: 1.0.0
+    puerto: 3004
+    contratos:
+      rest: servicios/reservas/openapi.yaml
+      grpc: servicios/reservas/reservas.proto
+      graphql: servicios/reservas/subgraph.graphql
+      eventos_publica: [atracciones.reserva.creada, atracciones.reserva.confirmada, atracciones.reserva.cancelada,
+                        atracciones.reserva.checkin]
+      eventos_consume: [atracciones.pago.aprobado, atracciones.pago.rechazado, atracciones.pago.expirado,
+                        atracciones.pago.reembolsado, atracciones.stock.retenido, atracciones.stock.liberado,
+                        atracciones.factura.emitida, atracciones.factura.anulada, atracciones.atraccion.retirada,
+                        atracciones.usuario.registrado, atracciones.usuario.actualizado, atracciones.cliente.actualizado]
+    depende_de: [ms-productos, ms-stock, ms-pagos, ms-facturacion, ms-clientes]
+    sla: { disponibilidad: 99.5, p95_ms: 2000 }
+
+  - servicio: ms-pagos
+    capa: utilidad
+    dueno: equipo-pagos
+    version: 1.0.0
+    puerto: 3005
+    contratos:
+      rest: servicios/pagos/openapi.yaml
+      eventos_publica: [atracciones.pago.aprobado, atracciones.pago.rechazado, atracciones.pago.expirado,
+                        atracciones.pago.reembolsado]
+      eventos_consume: [atracciones.reserva.cancelada]
+    depende_de: [sistema-pagos-externo]
+    sla: { disponibilidad: 99.5, p95_ms: 10000 }   # incluye el tiempo del sistema externo
+
+  - servicio: ms-facturacion
+    capa: utilidad
+    dueno: equipo-facturacion
+    version: 1.0.0
+    puerto: 3006
+    puerto_grpc: 50056
+    contratos:
+      grpc: servicios/facturacion/facturacion.proto        # interfaz principal (encabezado + detalle)
+      rest: servicios/facturacion/openapi.yaml             # solo lectura, el gateway traduce a gRPC
+      graphql: servicios/facturacion/subgraph.graphql
+      eventos_publica: [atracciones.factura.emitida, atracciones.factura.anulada]
+      eventos_consume: [atracciones.reserva.creada, atracciones.reserva.confirmada, atracciones.reserva.cancelada,
+                        atracciones.pago.aprobado, atracciones.pago.reembolsado, atracciones.cliente.actualizado]
+    depende_de: [ms-clientes]
+    sla: { disponibilidad: 99.5, p95_ms: 2000 }
+
+  - servicio: ms-mapas
+    capa: utilidad
+    dueno: equipo-mapas
+    version: 1.0.0
+    puerto: 3007
+    contratos:
+      rest: servicios/mapas/openapi.yaml
+      eventos_publica: []
+      eventos_consume: []
+    depende_de: [google-maps, openstreetmap]
+    sla: { disponibilidad: 99.0, p95_ms: 2000 }
+
+# Contrato compartido por todos los servicios
+comun:
+  rest: comun/comun.yaml
+  eventos: eventos/atracciones-eventos.asyncapi.yaml

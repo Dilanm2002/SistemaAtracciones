@@ -1,0 +1,123 @@
+openapi: 3.1.0
+info:
+  title: MS Mapas — adaptador a Google Maps / OpenStreetMap
+  version: 1.0.0
+  description: |
+    Sin base de datos propia: caché en Redis (24 h por consulta) y límite de frecuencia por usuario o IP.
+    Si Google Maps falla o no hay llave, responde con OpenStreetMap (Nominatim); el campo `fuente` lo indica.
+    Resultados limitados a Ecuador (incluye Galápagos).
+    `/internal/validar` lo usan Productos y Clientes al guardar coordenadas o direcciones.
+  contact: { name: Equipo Mapas }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (desarrollo)
+  - url: http://ms-mapas:3007
+    description: Red interna (incluye /internal)
+tags:
+  - name: Mapas
+  - name: Interno
+  - name: Salud
+paths:
+  /mapas/buscar:
+    get:
+      tags: [Mapas]
+      operationId: buscarLugar
+      summary: Buscar lugares por texto (solo Ecuador)
+      security: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 120 }
+        - name: limite
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10, default: 5 }
+      responses:
+        '200':
+          description: Lugares encontrados
+          headers:
+            X-Cache: { schema: { type: string, enum: [HIT, MISS] } }
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Lugar' } } } }
+        '400': { $ref: '../../comun/comun.yaml#/components/responses/Error400' }
+        '429': { $ref: '../../comun/comun.yaml#/components/responses/Error429' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Error503' }
+  /mapas/inversa:
+    get:
+      tags: [Mapas]
+      operationId: geocodificacionInversa
+      summary: Dirección a partir de coordenadas
+      security: []
+      parameters:
+        - { $ref: '#/components/parameters/Lat' }
+        - { $ref: '#/components/parameters/Lon' }
+      responses:
+        '200':
+          description: Lugar más cercano
+          content: { application/json: { schema: { $ref: '#/components/schemas/Lugar' } } }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+        '429': { $ref: '../../comun/comun.yaml#/components/responses/Error429' }
+  /internal/validar:
+    post:
+      tags: [Interno]
+      operationId: validarUbicacion
+      summary: Comprobar que las coordenadas están en Ecuador y coinciden con la ciudad indicada
+      security: [{ ServicioJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [latitud, longitud]
+              properties:
+                latitud: { type: number }
+                longitud: { type: number }
+                ciudad: { type: string, description: 'Si viene, se verifica que el punto caiga en esa ciudad (radio 30 km)' }
+      responses:
+        '200':
+          description: Resultado de la validación
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valida]
+                properties:
+                  valida: { type: boolean }
+                  motivo: { type: [string, 'null'], enum: [FUERA_DE_ECUADOR, CIUDAD_NO_COINCIDE, null] }
+                  lugar: { $ref: '#/components/schemas/Lugar' }
+  /health/ready:
+    get:
+      tags: [Salud]
+      operationId: listo
+      summary: Listo para recibir tráfico (base, broker y dependencias)
+      security: []
+      responses:
+        '200': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+components:
+  securitySchemes:
+    ServicioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/ServicioJWT' }
+  parameters:
+    Lat:
+      name: lat
+      in: query
+      required: true
+      schema: { type: number, minimum: -90, maximum: 90 }
+    Lon:
+      name: lon
+      in: query
+      required: true
+      schema: { type: number, minimum: -180, maximum: 180 }
+  schemas:
+    Lugar:
+      type: object
+      required: [nombre, direccion, latitud, longitud, fuente]
+      properties:
+        nombre: { type: string }
+        direccion: { type: string }
+        ciudad: { type: [string, 'null'] }
+        provincia: { type: [string, 'null'] }
+        latitud: { type: number }
+        longitud: { type: number }
+        place_id: { type: [string, 'null'] }
+        fuente: { type: string, enum: [GOOGLE, OSM] }

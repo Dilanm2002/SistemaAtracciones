@@ -1,0 +1,168 @@
+openapi: 3.1.0
+info:
+  title: MS Facturación — consultas REST (traducidas a gRPC por el gateway)
+  version: 1.0.0
+  description: |
+    MS Facturación expone su servicio por **gRPC** (`facturacion.proto`). Estas rutas REST de solo lectura
+    las publica el **API Gateway** con *gRPC-JSON transcoding* (`x-grpc` indica el método destino); el servicio
+    no tiene controladores REST propios. Emitir y anular solo lo hace MS Reservas, por gRPC.
+
+    **Toda factura se devuelve con su detalle** (`lineas`, tabla `factura_detalle`): una línea por tipo de
+    boleto, con base imponible, IVA y total. La suma de las líneas cuadra con el encabezado.
+  contact: { name: Equipo Facturación }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (desarrollo)
+security:
+  - UsuarioJWT: []
+tags:
+  - name: Facturas
+paths:
+  /facturas/{numero}:
+    get:
+      tags: [Facturas]
+      operationId: obtenerFactura
+      summary: Factura con encabezado y detalle
+      description: El cliente solo ve las suyas; el administrador, todas.
+      x-grpc: descubre.facturacion.v1.FacturacionService/ObtenerFactura
+      parameters:
+        - $ref: '#/components/parameters/Numero'
+        - $ref: '../../comun/comun.yaml#/components/parameters/XRequestId'
+      responses:
+        '200':
+          description: Factura
+          content: { application/json: { schema: { $ref: '#/components/schemas/Factura' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Error503' }
+  /facturas/{numero}/pdf:
+    get:
+      tags: [Facturas]
+      operationId: obtenerFacturaPdf
+      summary: RIDE en PDF de la factura (incluye el detalle)
+      x-grpc: descubre.facturacion.v1.FacturacionService/ObtenerPdf
+      parameters:
+        - $ref: '#/components/parameters/Numero'
+      responses:
+        '200':
+          description: Documento PDF
+          content: { application/pdf: { schema: { type: string, contentMediaType: application/pdf } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /facturas:
+    get:
+      tags: [Facturas]
+      operationId: listarFacturas
+      summary: Facturas de un cliente (más recientes primero), cada una con su detalle
+      x-grpc: descubre.facturacion.v1.FacturacionService/ListarFacturasDeCliente
+      parameters:
+        - name: documento
+          in: query
+          required: true
+          description: Documento del cliente. Un cliente solo puede consultar el suyo.
+          schema: { type: string, minLength: 6, maxLength: 13 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Página de facturas
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Factura' } }
+                  next_cursor: { type: [string, 'null'] }
+        '400': { $ref: '../../comun/comun.yaml#/components/responses/Error400' }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+  /ordenes/{orden_numero}/factura:
+    get:
+      tags: [Facturas]
+      operationId: obtenerFacturaDeOrden
+      summary: Factura de una orden (404 si aún no se emitió)
+      x-grpc: descubre.facturacion.v1.FacturacionService/ObtenerFacturaDeOrden
+      parameters:
+        - name: orden_numero
+          in: path
+          required: true
+          schema: { type: string, pattern: '^ORD-[A-Z0-9]{6}$' }
+      responses:
+        '200':
+          description: Factura
+          content: { application/json: { schema: { $ref: '#/components/schemas/Factura' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+components:
+  securitySchemes:
+    UsuarioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/UsuarioJWT' }
+  parameters:
+    Numero:
+      name: numero
+      in: path
+      required: true
+      schema: { type: string, pattern: '^\d{3}-\d{3}-\d{9}$', examples: ['001-001-000000123'] }
+  schemas:
+    Decimal:
+      type: string
+      pattern: '^-?\d+\.\d{2}$'
+      description: Monto con 2 decimales como texto (igual que en gRPC; nunca float)
+      examples: ['25.00']
+    ClienteFactura:
+      type: object
+      required: [razon_social, tipo_documento, documento]
+      properties:
+        razon_social: { type: string }
+        tipo_documento: { type: string, enum: [CEDULA, PASAPORTE, RUC] }
+        documento: { type: string }
+        correo: { type: string, format: email }
+        direccion: { type: string }
+        telefono: { type: string }
+    LineaFactura:
+      type: object
+      description: Línea del detalle (factura_detalle). base_imponible = cantidad × precio_unitario − descuento; total = base_imponible + valor_iva.
+      required: [linea, codigo, descripcion, cantidad, precio_unitario, descuento, base_imponible, tarifa_iva, valor_iva, total]
+      properties:
+        linea: { type: integer, minimum: 1 }
+        codigo: { type: string, examples: ['ATR-12-AD'] }
+        descripcion: { type: string, examples: ['Tour Quilotoa · 2026-10-20 09:00 · Adulto'] }
+        cantidad: { type: integer, minimum: 1 }
+        precio_unitario: { $ref: '#/components/schemas/Decimal' }
+        descuento: { $ref: '#/components/schemas/Decimal' }
+        base_imponible: { $ref: '#/components/schemas/Decimal' }
+        tarifa_iva: { type: string, pattern: '^\d{1,3}\.\d{2}$', examples: ['0.00', '15.00'] }
+        valor_iva: { $ref: '#/components/schemas/Decimal' }
+        total: { $ref: '#/components/schemas/Decimal' }
+        tipo_boleto: { type: string, enum: [ADULTO, NINO, ADULTO_MAYOR, ESTUDIANTE, INFANTE] }
+        referencia_orden: { type: string }
+    Factura:
+      type: object
+      description: Encabezado + detalle. Σ líneas.base_imponible = subtotal − descuento; Σ valor_iva = iva; Σ total = total.
+      required: [numero, orden_numero, cliente, lineas, subtotal, descuento, iva, total, moneda, estado, emitida_en]
+      properties:
+        numero: { type: string, examples: ['001-001-000000123'] }
+        orden_numero: { type: string, examples: ['ORD-7F3K9Q'] }
+        pago_numero: { type: string, examples: ['PAG-7F3K9Q'] }
+        cliente: { $ref: '#/components/schemas/ClienteFactura' }
+        lineas:
+          type: array
+          minItems: 1
+          description: Detalle de la factura
+          items: { $ref: '#/components/schemas/LineaFactura' }
+        subtotal: { $ref: '#/components/schemas/Decimal' }
+        descuento: { $ref: '#/components/schemas/Decimal' }
+        iva: { $ref: '#/components/schemas/Decimal' }
+        total: { $ref: '#/components/schemas/Decimal' }
+        moneda: { type: string, examples: [USD] }
+        estado: { type: string, enum: [EMITIDA, ANULADA] }
+        emitida_en: { type: string, format: date-time }
+        anulada_en: { type: [string, 'null'], format: date-time }
+        motivo_anulacion: { type: [string, 'null'] }
+        clave_acceso_sri: { type: [string, 'null'] }
+        autorizacion_sri: { type: [string, 'null'] }

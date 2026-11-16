@@ -1,0 +1,150 @@
+// Contrato gRPC de MS Facturación — interfaz principal del servicio (docs/ARQUITECTURA-MICROSERVICIOS.md §6.2).
+//
+// Dueño: equipo Facturación. Consumidores: MS Reservas (emitir/anular), router GraphQL y API Gateway
+// (consultas; el gateway traduce REST → gRPC con gRPC-JSON transcoding).
+// Datos: esquema `facturacion` en Supabase PostgreSQL → tablas `factura` (encabezado) y
+// `factura_detalle` (detalle). Toda factura viaja SIEMPRE con su detalle: el detalle es parte del
+// documento tributario y se congela al emitir (no se lee de la orden de Reservas).
+//
+// Reglas de evolución (schema-first): campos nuevos al final, nunca se reutiliza un número, un cambio
+// incompatible crea `descubre.facturacion.v2`. Montos como texto decimal ("25.00"): nunca float.
+// CI: `buf lint` y `buf breaking` contra la rama principal.
+syntax = "proto3";
+
+package descubre.facturacion.v1;
+
+option java_package = "ec.descubre.facturacion.v1";
+option go_package = "descubre-ec/servicios/facturacion/v1;facturacionv1";
+
+service FacturacionService {
+  // Emite la factura de una orden pagada con su detalle. Idempotente por orden_numero:
+  // la misma orden devuelve siempre la misma factura (nunca dos). Solo lo llama MS Reservas.
+  rpc EmitirFactura (EmitirFacturaRequest) returns (Factura);
+
+  // Factura por su número (FAC-001-001-000000123), con encabezado y detalle.
+  rpc ObtenerFactura (ObtenerFacturaRequest) returns (Factura);
+
+  // Factura de una orden (ORD-XXXXXX); NOT_FOUND si aún no se emitió.
+  rpc ObtenerFacturaDeOrden (ObtenerFacturaDeOrdenRequest) returns (Factura);
+
+  // Facturas de un cliente (por documento), paginadas por cursor, más recientes primero.
+  rpc ListarFacturasDeCliente (ListarFacturasRequest) returns (ListarFacturasResponse);
+
+  // Anula la factura (p. ej. tras un reembolso) con nota de crédito. El detalle se conserva.
+  // Idempotente: anular una factura ya anulada devuelve la misma factura. Solo MS Reservas.
+  rpc AnularFactura (AnularFacturaRequest) returns (Factura);
+
+  // Representación PDF de la factura (RIDE) para descarga.
+  rpc ObtenerPdf (ObtenerFacturaRequest) returns (DocumentoPdf);
+}
+
+enum EstadoFactura {
+  ESTADO_FACTURA_UNSPECIFIED = 0;
+  EMITIDA = 1;    // vigente (en la base: PAGADA_FAC)
+  ANULADA = 2;    // anulada con nota de crédito (ANULADA_FAC)
+}
+
+enum TipoDocumento {
+  TIPO_DOCUMENTO_UNSPECIFIED = 0;
+  CEDULA = 1;
+  PASAPORTE = 2;
+  RUC = 3;
+}
+
+// Tipo de boleto que factura la línea (una línea por tipo en cada reserva).
+enum TipoBoleto {
+  TIPO_BOLETO_UNSPECIFIED = 0;
+  ADULTO = 1;
+  NINO = 2;
+  ADULTO_MAYOR = 3;
+  ESTUDIANTE = 4;
+  INFANTE = 5;     // tarifa 0: igual se factura en una línea con total 0.00
+}
+
+// Datos del cliente COPIADOS al facturar: la factura no cambia si el cliente edita su perfil.
+message ClienteFactura {
+  string razon_social = 1;          // nombre completo o razón social
+  TipoDocumento tipo_documento = 2;
+  string documento = 3;             // cédula (módulo 10), pasaporte o RUC
+  string correo = 4;
+  string direccion = 5;
+  string telefono = 6;              // E.164
+}
+
+// Una línea del DETALLE de la factura (tabla factura_detalle).
+// Invariantes: cantidad > 0; base_imponible = cantidad × precio_unitario − descuento;
+// total = base_imponible + valor_iva; tarifa_iva entre "0.00" y "100.00".
+message LineaFactura {
+  int32 linea = 1;                  // orden dentro de la factura: 1, 2, 3…
+  string codigo = 2;                // código principal del producto, p. ej. "ATR-12-AD"
+  string descripcion = 3;           // «Tour Quilotoa · 2026-10-20 09:00 · Adulto»
+  int32 cantidad = 4;
+  string precio_unitario = 5;       // decimal como texto: "25.00"
+  string descuento = 6;             // "0.00"
+  string base_imponible = 7;
+  string tarifa_iva = 8;            // porcentaje: "0.00", "15.00"
+  string valor_iva = 9;
+  string total = 10;
+  TipoBoleto tipo_boleto = 11;
+  string referencia_orden = 12;     // línea de la orden de origen (solo referencia, puede venir vacía)
+}
+
+// Factura = encabezado + detalle. La suma de las líneas cuadra con el encabezado:
+// Σ base_imponible = subtotal − descuento; Σ valor_iva = iva; Σ total = total.
+message Factura {
+  string numero = 1;                // "001-001-000000123"
+  string orden_numero = 2;          // ORD-XXXXXX (Reservas)
+  string pago_numero = 3;           // PAG-XXXXXX (Pagos)
+  ClienteFactura cliente = 4;
+  repeated LineaFactura lineas = 5; // DETALLE: nunca vacío en una factura emitida
+  string subtotal = 6;
+  string descuento = 7;
+  string iva = 8;
+  string total = 9;
+  string moneda = 10;               // ISO 4217: "USD"
+  EstadoFactura estado = 11;
+  string emitida_en = 12;           // ISO 8601 UTC
+  string anulada_en = 13;           // ISO 8601 UTC; vacío si está vigente
+  string motivo_anulacion = 14;
+  string clave_acceso_sri = 15;     // 49 dígitos cuando el SRI la asigna
+  string autorizacion_sri = 16;
+}
+
+message EmitirFacturaRequest {
+  string orden_numero = 1;          // clave de idempotencia
+  string pago_numero = 2;
+  ClienteFactura cliente = 3;
+  repeated LineaFactura lineas = 4; // al menos una; `linea` puede venir en 0 y el servicio la numera
+  string moneda = 5;
+  string correlation_id = 6;        // misma correlación de la saga de compra
+}
+
+message ObtenerFacturaRequest {
+  string numero = 1;
+}
+
+message ObtenerFacturaDeOrdenRequest {
+  string orden_numero = 1;
+}
+
+message ListarFacturasRequest {
+  string documento_cliente = 1;
+  int32 limite = 2;                 // 1..100 (por defecto 20)
+  string cursor = 3;                // vacío = primera página
+}
+
+message ListarFacturasResponse {
+  repeated Factura facturas = 1;    // cada una con su detalle
+  string siguiente_cursor = 2;      // vacío = no hay más
+}
+
+message AnularFacturaRequest {
+  string numero = 1;
+  string motivo = 2;                // «Reembolso de la reserva DEC-7F3K9Q»
+  string correlation_id = 3;
+}
+
+message DocumentoPdf {
+  string nombre_archivo = 1;        // «FAC-001-001-000000123.pdf»
+  bytes contenido = 2;
+}

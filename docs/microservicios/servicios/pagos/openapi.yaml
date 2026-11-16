@@ -1,0 +1,272 @@
+openapi: 3.1.0
+info:
+  title: MS Pagos — intermediario con el sistema de pagos externo
+  version: 1.0.0
+  description: |
+    Esquema `pagos`: pago, pago_tarjeta, pago_transferencia, reembolso, metodo_pago.
+    **No cobra por sí mismo:** envía el cobro al sistema externo, **mide cuánto tarda** y avisa del
+    resultado por eventos (`atracciones.pago.aprobado` / `.rechazado` / `.expirado` / `.reembolsado`).
+
+    Flujo (docs/ARQUITECTURA-MICROSERVICIOS.md §6.1):
+    1. Reservas llama `POST /internal/pagos` → **202** «EN_PROCESO» al instante.
+    2. Pagos envía el cobro con su propio identificador idempotente (30 s máximo).
+    3. Si no hay respuesta, **consulta el estado** (hasta 3 veces, cada 10 s); nunca reintenta el cobro a ciegas.
+    4. Vencida la ventana (15 min, la duración de la retención) → `pago.expirado`.
+    5. Un aprobado que llega tarde dispara un reembolso automático.
+
+    Los datos de tarjeta nunca se guardan completos ni viajan en eventos (solo marca y últimos 4).
+    La única ruta pública es `GET /pagos/{numero}` (el dueño de la orden o ADMIN).
+  contact: { name: Equipo Pagos }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (solo GET /pagos/{numero})
+  - url: http://ms-pagos:3005
+    description: Red interna
+tags:
+  - name: Pagos
+  - name: Reembolsos
+  - name: Sistema externo
+  - name: Reportes
+  - name: Salud
+paths:
+  /internal/pagos:
+    post:
+      tags: [Pagos]
+      operationId: solicitarCobro
+      summary: Solicitar el cobro de una orden (solo MS Reservas)
+      security: [{ ServicioJWT: [] }]
+      parameters:
+        - $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey'
+        - $ref: '../../comun/comun.yaml#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudCobro' }
+      responses:
+        '202':
+          description: Aceptado; el resultado llega por evento (y se puede consultar con GET)
+          headers:
+            Location: { schema: { type: string, example: /pagos/PAG-7F3K9Q } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Pago' } } }
+        '200':
+          description: Misma Idempotency-Key ya procesada (devuelve el pago existente, sin volver a cobrar)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Pago' } } }
+        '409':
+          description: La orden ya tiene un pago aprobado
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+        '503':
+          description: Circuit breaker abierto con el sistema externo (Reservas libera los cupos)
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+  /pagos/{pagoNumero}:
+    get:
+      tags: [Pagos]
+      operationId: obtenerPago
+      summary: Estado y tiempos medidos del pago (la web lo usa para el progreso del pago)
+      security: [{ UsuarioJWT: [] }, { ServicioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/PagoNumero' }]
+      responses:
+        '200':
+          description: Pago
+          content: { application/json: { schema: { $ref: '#/components/schemas/Pago' } } }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /internal/pagos/{pagoNumero}/verificacion:
+    post:
+      tags: [Pagos]
+      operationId: verificarPagoManual
+      summary: El operador confirma una transferencia o un pago en sitio (publica pago.aprobado)
+      security: [{ ServicioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/PagoNumero' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verificado_por]
+              properties:
+                verificado_por: { type: string, format: uuid }
+                comprobante: { type: string, maxLength: 60, description: 'Número del depósito o transferencia' }
+      responses:
+        '200':
+          description: Aprobado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Pago' } } }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /internal/pagos/{pagoNumero}/reembolsos:
+    post:
+      tags: [Reembolsos]
+      operationId: reembolsar
+      summary: Reembolso total o parcial (al consumir reserva.cancelada o por un aprobado tardío)
+      security: [{ ServicioJWT: [] }]
+      parameters:
+        - $ref: '#/components/parameters/PagoNumero'
+        - $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monto, motivo]
+              properties:
+                monto: { $ref: '#/components/schemas/Decimal' }
+                motivo: { type: string, enum: [CANCELACION_CLIENTE, CANCELACION_OPERADOR, PAGO_TARDIO, ADMIN] }
+                detalle: { type: string, maxLength: 255 }
+      responses:
+        '201':
+          description: Reembolso registrado (publica pago.reembolsado)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Reembolso' } } }
+        '409':
+          description: El monto supera lo pagado menos lo ya reembolsado
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+  /webhooks/pasarela:
+    post:
+      tags: [Sistema externo]
+      operationId: webhookPasarela
+      summary: Aviso del sistema de pagos externo (firma HMAC-SHA256 en X-Firma)
+      description: |
+        Idempotente por `id_externo` + `estado`. Si el pago ya estaba EXPIRADO y llega APROBADO,
+        se registra y se reembolsa automáticamente.
+      security: []
+      parameters:
+        - name: X-Firma
+          in: header
+          required: true
+          description: 'sha256=<hex> del cuerpo, con el secreto compartido'
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_externo, referencia, estado]
+              properties:
+                id_externo: { type: string }
+                referencia: { type: string, description: 'Nuestro identificador idempotente del cobro' }
+                estado: { type: string, enum: [APROBADO, RECHAZADO] }
+                codigo_autorizacion: { type: string }
+                motivo_rechazo: { type: string }
+      responses:
+        '204': { description: Recibido }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+  /internal/pagos/reportes/tiempos:
+    get:
+      tags: [Reportes]
+      operationId: reporteTiempos
+      summary: Tiempos del sistema de pagos por día y método (panel de administración)
+      security: [{ ServicioJWT: [] }]
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Filas del reporte
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [dia, metodo, pagos, aprobados, expirados, p50_ms, p95_ms, p99_ms, promedio_ms]
+                  properties:
+                    dia: { type: string, format: date }
+                    metodo: { $ref: '#/components/schemas/Metodo' }
+                    pagos: { type: integer }
+                    aprobados: { type: integer }
+                    expirados: { type: integer }
+                    p50_ms: { type: integer }
+                    p95_ms: { type: integer }
+                    p99_ms: { type: integer }
+                    promedio_ms: { type: integer }
+  /health/ready:
+    get:
+      tags: [Salud]
+      operationId: listo
+      summary: Listo para recibir tráfico (base, broker y dependencias)
+      security: []
+      responses:
+        '200': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+components:
+  securitySchemes:
+    UsuarioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/UsuarioJWT' }
+    ServicioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/ServicioJWT' }
+  parameters:
+    PagoNumero:
+      name: pagoNumero
+      in: path
+      required: true
+      schema: { type: string, pattern: '^PAG-[A-Z0-9]{6,}$' }
+  schemas:
+    Decimal:
+      type: string
+      pattern: '^\d+\.\d{2}$'
+      examples: ['105.00']
+    Metodo:
+      type: string
+      enum: [TARJETA, TRANSFERENCIA, EN_SITIO, SOA_BOOKING_GATEWAY]
+    SolicitudCobro:
+      type: object
+      required: [orden_numero, monto, moneda, metodo]
+      properties:
+        orden_numero: { type: string, pattern: '^ORD-[A-Z0-9]{6,}$' }
+        reserva_id: { type: string, format: uuid }
+        monto: { $ref: '#/components/schemas/Decimal' }
+        moneda: { type: string, const: USD }
+        metodo: { $ref: '#/components/schemas/Metodo' }
+        tarjeta:
+          type: object
+          description: Solo con TARJETA. Token de la pasarela; el número completo nunca llega a este servicio.
+          required: [token]
+          properties:
+            token: { type: string }
+            marca: { type: string, enum: [VISA, MASTERCARD, AMEX, DINERS, DISCOVER] }
+            ultimos4: { type: string, pattern: '^\d{4}$' }
+        vence_en: { type: string, format: date-time, description: 'Fin de la ventana de pago (= vencimiento de la retención)' }
+        saga_id: { type: string, format: uuid }
+    Tiempos:
+      type: object
+      description: Tiempos medidos (columnas pag_* de pagos.pago)
+      required: [solicitado_en, intentos]
+      properties:
+        solicitado_en: { type: string, format: date-time, description: pag_solicitado_en }
+        enviado_en: { type: [string, 'null'], format: date-time, description: pag_enviado_en }
+        respondido_en: { type: [string, 'null'], format: date-time, description: pag_respondido_en }
+        duracion_ms: { type: [integer, 'null'], minimum: 0, description: 'pag_duracion_ms: respondido − enviado (sistema externo)' }
+        duracion_total_ms: { type: [integer, 'null'], minimum: 0, description: 'pag_duracion_total_ms: respondido − solicitado (lo que vio el cliente)' }
+        intentos: { type: integer, minimum: 0, description: 'pag_intentos: consultas de estado al sistema externo' }
+    Pago:
+      type: object
+      required: [numero, orden_numero, monto, moneda, metodo, estado, tiempos]
+      properties:
+        numero: { type: string }
+        orden_numero: { type: string }
+        monto: { $ref: '#/components/schemas/Decimal' }
+        moneda: { type: string }
+        metodo: { $ref: '#/components/schemas/Metodo' }
+        estado: { type: string, enum: [EN_PROCESO, APROBADO, RECHAZADO, EXPIRADO, ERROR_SISTEMA, REEMBOLSADO, REEMBOLSO_PARCIAL] }
+        resultado: { type: [string, 'null'], enum: [APROBADO, RECHAZADO, EXPIRADO, ERROR_SISTEMA, null], description: pag_resultado }
+        fase:
+          type: string
+          enum: [RECIBIDO, VERIFICANDO_TARJETA, ENVIADO, CONSULTANDO_ESTADO, FINALIZADO]
+          description: Para los círculos de carga de la web
+        tarjeta:
+          type: [object, 'null']
+          properties:
+            marca: { type: string }
+            ultimos4: { type: string }
+        codigo_autorizacion: { type: [string, 'null'] }
+        motivo_rechazo: { type: [string, 'null'] }
+        monto_reembolsado: { $ref: '#/components/schemas/Decimal' }
+        tiempos: { $ref: '#/components/schemas/Tiempos' }
+    Reembolso:
+      type: object
+      required: [numero, pago_numero, monto, motivo, creado_en]
+      properties:
+        numero: { type: string, pattern: '^REE-[A-Z0-9]{6,}$' }
+        pago_numero: { type: string }
+        monto: { $ref: '#/components/schemas/Decimal' }
+        motivo: { type: string }
+        creado_en: { type: string, format: date-time }

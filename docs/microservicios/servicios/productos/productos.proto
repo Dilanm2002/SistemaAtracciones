@@ -1,0 +1,86 @@
+// Contrato gRPC de MS Productos: lectura rápida de la atracción para MS Reservas (precio y horario
+// vigentes al reservar) y para el subgrafo GraphQL (carga en lote, sin N+1).
+// Montos como texto decimal ("35.00") para no perder centavos.
+// Errores: NOT_FOUND (no existe o está retirada), INVALID_ARGUMENT.
+syntax = "proto3";
+
+package descubre.productos.v1;
+
+option go_package = "descubre-ec/servicios/productos/v1;productosv1";
+
+service ProductosService {
+  rpc GetAtraccion (GetAtraccionRequest) returns (Atraccion);
+  // Hasta 100 ids; los que no existen se omiten de la respuesta.
+  rpc BatchGetAtracciones (BatchGetAtraccionesRequest) returns (BatchGetAtraccionesResponse);
+}
+
+enum EstadoAtraccion {
+  ESTADO_ATRACCION_UNSPECIFIED = 0;
+  BORRADOR = 1;
+  PUBLICADA = 2;
+  INACTIVA = 3;
+}
+
+enum TipoTarifa {
+  TIPO_TARIFA_UNSPECIFIED = 0;
+  ADULTO = 1;
+  NINO = 2;
+  MAYOR = 3;
+  ESTUDIANTE = 4;
+  GRUPO = 5;
+  // El infante no tiene tarifa: siempre 0.00 (ocupa cupo).
+}
+
+message Tarifa {
+  TipoTarifa tipo = 1;
+  string precio = 2;           // "35.00"
+  string moneda = 3;           // USD
+  string vigente_desde = 4;    // YYYY-MM-DD
+}
+
+message Horario {
+  int64 id = 1;
+  string time_24h = 2;         // HH:mm
+  int32 capacidad = 3;
+  bool activo = 4;
+}
+
+message Foto {
+  string url = 1;
+  string alt = 2;
+}
+
+message Atraccion {
+  string id = 1;               // atr_uuid
+  string nombre = 2;
+  EstadoAtraccion estado = 3;
+  int32 operador_id = 4;       // ope_codigo
+  int32 ciudad_id = 5;
+  string duracion = 6;
+  string tipo_producto = 7;    // SINGLE_TICKET | GUIDED_TOUR | PACKAGE
+  bool cancelacion_gratuita = 8;
+  string timezone = 9;         // America/Guayaquil
+  repeated Tarifa tarifas = 10;      // solo las vigentes, una por tipo
+  repeated Horario horarios = 11;    // solo los activos
+  repeated string categorias = 12;
+  repeated string idiomas = 13;
+  repeated string incluye = 14;
+  repeated Foto fotos = 15;
+  double latitud = 16;
+  double longitud = 17;
+  int64 version = 18;          // sube con cada cambio (para cachés)
+}
+
+message GetAtraccionRequest {
+  string id = 1;
+  // Fecha del servicio: devuelve las tarifas vigentes en ese día (vacío = hoy).
+  string fecha = 2;
+}
+
+message BatchGetAtraccionesRequest {
+  repeated string ids = 1;
+}
+
+message BatchGetAtraccionesResponse {
+  repeated Atraccion atracciones = 1;
+}

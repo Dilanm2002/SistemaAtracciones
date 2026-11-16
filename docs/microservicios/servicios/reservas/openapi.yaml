@@ -1,0 +1,372 @@
+openapi: 3.1.0
+info:
+  title: MS Reservas — orden, reserva, pasajeros y saga de compra
+  version: 1.0.0
+  description: |
+    Servicio de **proceso** (SOA): orquesta la compra (Productos → Stock → Pagos → Facturación) con
+    compensaciones, y aplica la política de cancelación. Dueño del esquema `reservas`
+    (orden, orden_detalle, reserva, reserva_pasajero, estado, cupon, orden_cupon, carrito, carrito_item, idempotencia).
+
+    Las rutas públicas son **las mismas del contrato actual** (`/api/v1`) y del contrato v2 con Booking
+    (`/api/v2`); el gateway las enruta aquí sin cambios. Comandos con `Idempotency-Key`; errores RFC 7807.
+    El turno se identifica con la clave canónica `slot_id` (docs/CONTRATO-SCHEMA-FIRST.md §4).
+  contact: { name: Equipo Reservas }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (desarrollo)
+  - url: http://ms-reservas:3004
+    description: Red interna
+security:
+  - UsuarioJWT: []
+tags:
+  - name: Reservas
+  - name: Carrito y cupones
+  - name: Salud
+paths:
+  /atracciones/{atraccionId}/reservations:
+    post:
+      tags: [Reservas]
+      operationId: crearReserva
+      summary: Reservar (saga) — 201 confirmada o pendiente de pago; 409 OUT_OF_STOCK
+      description: |
+        Pasos: precio vigente (Productos, gRPC) → retener cupos (Stock) → orden y reserva → cobrar (Pagos)
+        → confirmar → emitir factura con su detalle (Facturación, gRPC). Si un paso falla se compensa
+        (se libera la retención) y se responde el motivo. Requiere `attractions:book`.
+      parameters:
+        - name: atraccionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey'
+        - $ref: '../../comun/comun.yaml#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/NuevaReserva' } } }
+      responses:
+        '201':
+          description: Reserva creada
+          headers:
+            Location: { schema: { type: string } }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Reserva' } } }
+        '400': { $ref: '../../comun/comun.yaml#/components/responses/Error400' }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '402':
+          description: Pago rechazado por el sistema de pagos (la retención ya se liberó)
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Error503' }
+  /atracciones/reservations:
+    get:
+      tags: [Reservas]
+      operationId: listarReservas
+      summary: Reservas propias (cliente), de su empresa (operador) o todas (admin)
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/Estado' }
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+        - $ref: '../../comun/comun.yaml#/components/parameters/Pagina'
+        - $ref: '../../comun/comun.yaml#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Página de reservas
+          headers:
+            X-Total-Count: { schema: { type: integer } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Reserva' } }
+                  pagination: { $ref: '../../comun/comun.yaml#/components/schemas/Paginacion' }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+  /atracciones/reservations/{reservationId}:
+    get:
+      tags: [Reservas]
+      operationId: obtenerReserva
+      summary: Reserva por UUID o código PNR
+      parameters: [{ $ref: '#/components/parameters/ReservaId' }]
+      responses:
+        '200':
+          description: Reserva
+          content: { application/json: { schema: { $ref: '#/components/schemas/Reserva' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /atracciones/reservations/{reservationId}/cancel:
+    post:
+      tags: [Reservas]
+      operationId: cancelarReserva
+      summary: Cancelar / compensar (devuelve cupos y, si corresponde, reembolsa)
+      parameters:
+        - $ref: '#/components/parameters/ReservaId'
+        - $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 5, maxLength: 255 }
+                accept_no_refund: { type: boolean, description: 'Fuera de plazo: el cliente acepta cancelar sin reembolso' }
+                requester: { type: string, enum: [CLIENTE, SAGA_ORCHESTRATOR, ADMIN], default: CLIENTE }
+      responses:
+        '200':
+          description: Reserva cancelada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Reserva' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /atracciones/reservations/{reservationId}/confirm:
+    post:
+      tags: [Reservas]
+      operationId: confirmarPago
+      summary: El operador confirma un pago por transferencia o en sitio (emite la factura con su detalle)
+      parameters:
+        - $ref: '#/components/parameters/ReservaId'
+        - $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Reserva confirmada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Reserva' } } }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /atracciones/reservations/{reservationId}/checkin:
+    post:
+      tags: [Reservas]
+      operationId: checkin
+      summary: Check-in presencial (documento del titular y/o QR del voucher); idempotente por clave
+      parameters:
+        - $ref: '#/components/parameters/ReservaId'
+        - $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [documento_identidad]
+              properties:
+                documento_identidad: { type: string, minLength: 5, maxLength: 20 }
+                codigo_voucher_qr: { type: string, maxLength: 600 }
+                guia_codigo: { type: string, maxLength: 60 }
+                scanner_device_id: { type: string, maxLength: 60 }
+      responses:
+        '200':
+          description: Check-in registrado (o el mismo pase si se repite la clave)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Checkin' } } }
+        '400': { $ref: '../../comun/comun.yaml#/components/responses/Error400' }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /atracciones/reservations/{reservationId}/calendar-link:
+    get:
+      tags: [Reservas]
+      operationId: enlaceCalendario
+      summary: Enlace firmado al evento .ics de la reserva
+      parameters: [{ $ref: '#/components/parameters/ReservaId' }]
+      responses:
+        '200':
+          description: Enlace
+          content:
+            application/json:
+              schema: { type: object, required: [url], properties: { url: { type: string, format: uri } } }
+  /carrito:
+    get:
+      tags: [Carrito y cupones]
+      operationId: verCarrito
+      summary: Carrito del usuario (varias experiencias antes de pagar)
+      responses:
+        '200':
+          description: Carrito
+          content: { application/json: { schema: { $ref: '#/components/schemas/Carrito' } } }
+  /carrito/items:
+    post:
+      tags: [Carrito y cupones]
+      operationId: agregarAlCarrito
+      summary: Agregar un turno al carrito (no retiene cupos hasta pagar)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [attraction_id, slot_id, tickets]
+              properties:
+                attraction_id: { type: string, format: uuid }
+                slot_id: { type: string, pattern: '^slot-\d{8}-\d{4}$' }
+                tickets: { $ref: '#/components/schemas/Boletos' }
+      responses:
+        '201':
+          description: Carrito actualizado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Carrito' } } }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /carrito/items/{itemId}:
+    delete:
+      tags: [Carrito y cupones]
+      operationId: quitarDelCarrito
+      summary: Quitar un ítem del carrito
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '204': { description: Quitado }
+  /cupones/validar:
+    post:
+      tags: [Carrito y cupones]
+      operationId: validarCupon
+      summary: Validar un cupón para una compra
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, subtotal]
+              properties:
+                code: { type: string, maxLength: 30 }
+                subtotal: { type: number, minimum: 0 }
+      responses:
+        '200':
+          description: Descuento aplicable
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valid, discount]
+                properties:
+                  valid: { type: boolean }
+                  discount: { type: number, minimum: 0 }
+                  reason: { type: string }
+  /health/ready:
+    get:
+      tags: [Salud]
+      operationId: listo
+      security: []
+      summary: Lista para recibir tráfico (base, Stock, Pagos y Facturación alcanzables)
+      responses:
+        '200': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+components:
+  securitySchemes:
+    UsuarioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/UsuarioJWT' }
+  parameters:
+    ReservaId:
+      name: reservationId
+      in: path
+      required: true
+      description: UUID de la reserva o su código PNR (DEC-XXXXXX)
+      schema: { type: string }
+  schemas:
+    Estado:
+      type: string
+      enum: [PENDING, CONFIRMED, CHECKED_IN, COMPLETED, CANCELLED, EXPIRED]
+    Boletos:
+      type: object
+      description: Boletos por tipo. Infantes no pagan pero ocupan cupo. Al menos un adulto.
+      required: [adults]
+      properties:
+        adults: { type: integer, minimum: 1, maximum: 50 }
+        children: { type: integer, minimum: 0, maximum: 50, default: 0 }
+        seniors: { type: integer, minimum: 0, maximum: 50, default: 0 }
+        students: { type: integer, minimum: 0, maximum: 50, default: 0 }
+        infants: { type: integer, minimum: 0, maximum: 50, default: 0 }
+    Titular:
+      type: object
+      required: [name, email, phone]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 160 }
+        phone: { type: string, pattern: '^(\+[1-9]\d{7,14}|09\d{8}|0[2-7]\d{7})$' }
+        document_type: { type: string, enum: [CEDULA, PASAPORTE, RUC], default: CEDULA }
+        document: { type: string, minLength: 6, maxLength: 13 }
+    NuevaReserva:
+      type: object
+      required: [slot_id, tickets, customer, payment_method]
+      properties:
+        slot_id: { type: string, pattern: '^slot-\d{8}-\d{4}$', description: 'Clave canónica del turno' }
+        tickets: { $ref: '#/components/schemas/Boletos' }
+        customer: { $ref: '#/components/schemas/Titular' }
+        passengers:
+          type: array
+          maxItems: 49
+          items:
+            type: object
+            required: [name, ticket_type]
+            properties:
+              name: { type: string }
+              document: { type: string }
+              ticket_type: { type: string, enum: [ADULT, CHILD, SENIOR, STUDENT, INFANT] }
+        payment_method: { type: string, enum: [TARJETA, TRANSFERENCIA, EN_SITIO, SOA_BOOKING_GATEWAY] }
+        card:
+          type: object
+          description: Solo marca y últimos 4 dígitos (el cobro lo hace el sistema de pagos externo)
+          properties:
+            brand: { type: string, enum: [VISA, MASTERCARD, AMEX, DINERS, OTRA] }
+            last4: { type: string, pattern: '^\d{4}$' }
+            holder: { type: string }
+            exp_month: { type: integer, minimum: 1, maximum: 12 }
+            exp_year: { type: integer }
+        coupon_code: { type: string, maxLength: 30 }
+        notes: { type: string, maxLength: 500 }
+        saga_id: { type: string, maxLength: 60 }
+    Reserva:
+      type: object
+      required: [reservation_id, code, order_number, status, attraction_id, slot_id, date, time_24h, tickets, total_price, created_at]
+      properties:
+        reservation_id: { type: string, format: uuid }
+        code: { type: string, pattern: '^DEC-[A-Z0-9]{6}$' }
+        order_number: { type: string, pattern: '^ORD-[A-Z0-9]{6}$' }
+        status: { $ref: '#/components/schemas/Estado' }
+        attraction_id: { type: string, format: uuid }
+        slot_id: { type: string }
+        date: { type: string, format: date }
+        time_24h: { type: string, pattern: '^\d{2}:\d{2}$' }
+        timezone: { type: string, default: America/Guayaquil }
+        tickets: { $ref: '#/components/schemas/Boletos' }
+        total_price: { $ref: '../../comun/comun.yaml#/components/schemas/Precio' }
+        customer: { $ref: '#/components/schemas/Titular' }
+        payment_method: { type: string }
+        payment_status: { type: string, enum: [PENDING, PAID, REFUNDED, REJECTED, EXPIRED] }
+        invoice_number:
+          type: [string, 'null']
+          description: Número de la factura (el encabezado y su detalle se consultan en MS Facturación)
+        voucher_qr_payload: { type: string }
+        checked_in_at: { type: [string, 'null'], format: date-time }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+        cancellation_reason: { type: [string, 'null'] }
+        cancellation_policy: { type: string, enum: [FULL_REFUND, NO_CHARGE, NO_REFUND, NOT_ALLOWED] }
+        created_at: { type: string, format: date-time }
+        _links: { $ref: '../../comun/comun.yaml#/components/schemas/Enlaces' }
+    Checkin:
+      type: object
+      required: [reservation_id, status, checked_in_at]
+      properties:
+        reservation_id: { type: string, format: uuid }
+        code: { type: string }
+        status: { type: string, const: CHECKED_IN }
+        holder_name: { type: string }
+        checked_in_at: { type: string, format: date-time }
+        boarding_pass_qr_url: { type: string, format: uri }
+    Carrito:
+      type: object
+      required: [items, subtotal]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, attraction_id, slot_id, tickets, subtotal]
+            properties:
+              id: { type: integer }
+              attraction_id: { type: string, format: uuid }
+              slot_id: { type: string }
+              tickets: { $ref: '#/components/schemas/Boletos' }
+              subtotal: { type: number }
+        subtotal: { type: number }

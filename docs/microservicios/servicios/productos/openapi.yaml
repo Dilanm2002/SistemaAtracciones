@@ -1,0 +1,392 @@
+openapi: 3.1.0
+info:
+  title: MS Productos — catálogo de atracciones
+  version: 1.0.0
+  description: |
+    Esquema `productos`: region, provincia, ciudad, categoria, idioma, inclusion, atraccion (+ categoría, idioma,
+    inclusión y foto), horario, tarifa, resena.
+
+    **Rutas del contrato con Booking:** `/atracciones`, `/atracciones/{id}`, `/atracciones/search` y
+    `/atracciones/details` usan **los mismos esquemas** de `backend/contracts/atracciones-openapi.yaml`
+    (se referencian, no se copian): el gateway las publica sin cambios.
+
+    Publica `atracciones.atraccion.publicada` / `.actualizada` / `.retirada` (cambios de horario o tarifa
+    salen como `.actualizada`; Stock ajusta los cupos). Consume `atracciones.operador.aprobado`.
+    Reservas lee precio y horario vigentes por gRPC (`productos.proto`, `GetAtraccion`), no por REST.
+  contact: { name: Equipo Productos }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (desarrollo)
+  - url: http://ms-productos:3002
+    description: Red interna
+tags:
+  - name: Atracciones (contrato Booking)
+  - name: Tarifas y horarios
+  - name: Catálogos
+  - name: Reseñas
+  - name: Salud
+paths:
+  /atracciones:
+    get:
+      tags: [Atracciones (contrato Booking)]
+      operationId: listarAtracciones
+      summary: Listar atracciones publicadas
+      security: []
+      parameters:
+        - $ref: '../../comun/comun.yaml#/components/parameters/Pagina'
+        - $ref: '../../comun/comun.yaml#/components/parameters/Limite'
+        - { name: city, in: query, schema: { type: integer } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string, maxLength: 80 } }
+      responses:
+        '200':
+          description: Página de atracciones
+          content:
+            application/json:
+              schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/PaginatedAtraccionResponse' }
+    post:
+      tags: [Atracciones (contrato Booking)]
+      operationId: crearAtraccion
+      summary: Crear (OPERADOR aprobado o ADMIN); queda en BORRADOR hasta publicarse
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '../../comun/comun.yaml#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/CreateAtraccionRequest' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/AtraccionResponse' }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+  /atracciones/search:
+    post:
+      tags: [Atracciones (contrato Booking)]
+      operationId: buscarAtracciones
+      summary: Búsqueda del contrato Booking
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/SearchAtraccionesRequest' }
+      responses:
+        '200':
+          description: Resultados
+          content:
+            application/json:
+              schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/SearchAtraccionesResponse' }
+  /atracciones/details:
+    post:
+      tags: [Atracciones (contrato Booking)]
+      operationId: detallesAtracciones
+      summary: Detalle en lote (contrato Booking)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/DetailsRequest' }
+      responses:
+        '200':
+          description: Detalles
+          content:
+            application/json:
+              schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/DetailsResponse' }
+  /atracciones/{atraccionId}:
+    get:
+      tags: [Atracciones (contrato Booking)]
+      operationId: obtenerAtraccion
+      summary: Detalle de una atracción
+      security: []
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      responses:
+        '200':
+          description: Atracción
+          content:
+            application/json:
+              schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/AtraccionResponse' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+    put:
+      tags: [Atracciones (contrato Booking)]
+      operationId: reemplazarAtraccion
+      summary: Reemplazar una atracción (dueño u ADMIN)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/CreateAtraccionRequest' }
+      responses:
+        '200':
+          description: Reemplazada (publica atraccion.actualizada)
+          content:
+            application/json:
+              schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/AtraccionResponse' }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+    patch:
+      tags: [Atracciones (contrato Booking)]
+      operationId: actualizarAtraccion
+      summary: Actualización parcial (dueño u ADMIN)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/UpdateAtraccionRequest' }
+      responses:
+        '200':
+          description: Actualizada (publica atraccion.actualizada)
+          content:
+            application/json:
+              schema: { $ref: '../../../../backend/contracts/atracciones-openapi.yaml#/components/schemas/AtraccionResponse' }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+    delete:
+      tags: [Atracciones (contrato Booking)]
+      operationId: retirarAtraccion
+      summary: Borrado lógico (publica atraccion.retirada; Stock cierra las fechas)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      responses:
+        '204': { description: Retirada }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+  /atracciones/{atraccionId}/tarifas:
+    get:
+      tags: [Tarifas y horarios]
+      operationId: tarifasVigentes
+      summary: Precio vigente por tipo de boleto (infante siempre 0.00)
+      security: []
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      responses:
+        '200':
+          description: Tarifas vigentes
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Tarifa' } } } }
+    post:
+      tags: [Tarifas y horarios]
+      operationId: nuevaTarifa
+      summary: Nueva versión de una tarifa (cierra la vigente; las reservas ya hechas conservan su precio)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo, precio, vigente_desde]
+              properties:
+                tipo: { $ref: '#/components/schemas/TipoTarifa' }
+                precio: { $ref: '#/components/schemas/Decimal' }
+                vigente_desde: { type: string, format: date }
+      responses:
+        '201':
+          description: Tarifa creada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Tarifa' } } }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+  /atracciones/{atraccionId}/horarios:
+    get:
+      tags: [Tarifas y horarios]
+      operationId: listarHorarios
+      summary: Horarios de la atracción
+      security: []
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      responses:
+        '200':
+          description: Horarios (Stock los usa para crear los turnos)
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Horario' } } } }
+    put:
+      tags: [Tarifas y horarios]
+      operationId: reemplazarHorarios
+      summary: Reemplazar los horarios (publica atraccion.actualizada; Stock ajusta el aforo de los turnos futuros)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [time_24h, capacity]
+                properties:
+                  time_24h: { type: string, pattern: '^\d{2}:\d{2}$' }
+                  capacity: { type: integer, minimum: 1, maximum: 500 }
+                  active: { type: boolean, default: true }
+      responses:
+        '200':
+          description: Horarios guardados
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Horario' } } } }
+  /atracciones/{atraccionId}/reviews:
+    get:
+      tags: [Reseñas]
+      operationId: listarResenas
+      summary: Reseñas visibles de la atracción
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/AtraccionId'
+        - $ref: '../../comun/comun.yaml#/components/parameters/Pagina'
+        - $ref: '../../comun/comun.yaml#/components/parameters/Limite'
+      responses:
+        '200':
+          description: Reseñas visibles
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Resena' } }
+                  pagination: { $ref: '../../comun/comun.yaml#/components/schemas/Paginacion' }
+    post:
+      tags: [Reseñas]
+      operationId: crearResena
+      summary: Una reseña por usuario y atracción, solo con una reserva COMPLETED (lo valida contra Reservas)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/AtraccionId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [score, comment]
+              properties:
+                score: { type: integer, minimum: 1, maximum: 5 }
+                comment: { type: string, minLength: 10, maxLength: 1000 }
+                reservation_id: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Publicada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Resena' } } }
+        '409':
+          description: Ya reseñó esta atracción
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+  /categorias:
+    get:
+      tags: [Catálogos]
+      operationId: listarCategorias
+      summary: Categorías
+      security: []
+      responses:
+        '200':
+          description: Categorías
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ItemCatalogo' } } } }
+  /idiomas:
+    get:
+      tags: [Catálogos]
+      operationId: listarIdiomas
+      summary: Idiomas de guía
+      security: []
+      responses:
+        '200':
+          description: Idiomas (código ISO 639-1)
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/ItemCatalogo' } } } }
+  /provincias:
+    get:
+      tags: [Catálogos]
+      operationId: listarProvincias
+      summary: Provincias con su región
+      security: []
+      responses:
+        '200':
+          description: Provincias con su región
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [id, nombre, region]
+                  properties:
+                    id: { type: integer }
+                    nombre: { type: string }
+                    region: { type: string, enum: [COSTA, SIERRA, AMAZONIA, GALAPAGOS] }
+  /destinos:
+    get:
+      tags: [Catálogos]
+      operationId: listarDestinos
+      summary: Ciudades (el `city` del contrato público) con cantidad de atracciones
+      security: []
+      responses:
+        '200':
+          description: Destinos
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Ciudad' } } } }
+  /health/ready:
+    get:
+      tags: [Salud]
+      operationId: listo
+      summary: Listo para recibir tráfico (base, broker y dependencias)
+      security: []
+      responses:
+        '200': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+components:
+  securitySchemes:
+    UsuarioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/UsuarioJWT' }
+  parameters:
+    AtraccionId:
+      name: atraccionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Decimal:
+      type: string
+      pattern: '^\d+\.\d{2}$'
+      examples: ['35.00']
+    TipoTarifa:
+      type: string
+      enum: [ADULTO, NINO, MAYOR, ESTUDIANTE, GRUPO]
+    Tarifa:
+      type: object
+      required: [tipo, precio, moneda, vigente_desde]
+      properties:
+        tipo: { $ref: '#/components/schemas/TipoTarifa' }
+        precio: { $ref: '#/components/schemas/Decimal' }
+        moneda: { type: string, const: USD }
+        vigente_desde: { type: string, format: date }
+        vigente_hasta: { type: [string, 'null'], format: date }
+    Horario:
+      type: object
+      required: [id, time_24h, time, capacity, active]
+      properties:
+        id: { type: integer }
+        time_24h: { type: string, pattern: '^\d{2}:\d{2}$' }
+        time: { type: string, description: '«10:30 a.m.» (presentación)' }
+        capacity: { type: integer, minimum: 1 }
+        active: { type: boolean }
+    Resena:
+      type: object
+      required: [id, author, score, comment, created_at]
+      properties:
+        id: { type: integer }
+        author: { type: string }
+        score: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string }
+        created_at: { type: string, format: date-time }
+    ItemCatalogo:
+      type: object
+      required: [id, nombre]
+      properties:
+        id: { type: integer }
+        codigo: { type: string }
+        nombre: { type: string }
+    Ciudad:
+      type: object
+      required: [id, nombre, provincia]
+      properties:
+        id: { type: integer }
+        nombre: { type: string }
+        provincia: { type: string }
+        latitud: { type: number }
+        longitud: { type: number }
+        atracciones: { type: integer, minimum: 0 }

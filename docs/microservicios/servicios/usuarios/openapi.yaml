@@ -1,0 +1,355 @@
+openapi: 3.1.0
+info:
+  title: MS Usuarios — identidad, sesiones y roles
+  version: 1.0.0
+  description: |
+    Servidor de identidad (esquema `usuarios`: usuario, rol, usuario_rol, sesion, token_verificacion).
+    Emite los JWT de acceso (RS256) que validan el gateway y los demás servicios con la llave pública
+    publicada en `/.well-known/jwks.json`. Los tokens van atados a la llave del cliente con DPoP.
+    Publica `atracciones.usuario.registrado` y `atracciones.usuario.actualizado` (outbox).
+    Las rutas públicas son las mismas del monolito: Booking y la web no notan el cambio.
+  contact: { name: Equipo Usuarios }
+servers:
+  - url: http://localhost:8000/api/v1
+    description: API Gateway (desarrollo)
+  - url: http://ms-usuarios:3001
+    description: Red interna
+tags:
+  - name: Autenticación
+  - name: Cuenta
+  - name: Administración de usuarios
+  - name: Llaves (interno)
+  - name: Salud
+paths:
+  /auth/register:
+    post:
+      tags: [Autenticación]
+      operationId: registrar
+      summary: Crear una cuenta de cliente (publica usuario.registrado)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nombre, apellido, correo, password]
+              properties:
+                nombre: { type: string, minLength: 2, maxLength: 80 }
+                apellido: { type: string, minLength: 2, maxLength: 80 }
+                correo: { type: string, format: email, maxLength: 150 }
+                password: { type: string, format: password, minLength: 8, maxLength: 72 }
+                telefono: { type: string, pattern: '^(\+593|0)9\d{8}$' }
+      responses:
+        '201':
+          description: Cuenta creada (se envía el correo de verificación)
+          content: { application/json: { schema: { $ref: '#/components/schemas/Sesion' } } }
+        '409': { $ref: '../../comun/comun.yaml#/components/responses/Error409' }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+        '429': { $ref: '../../comun/comun.yaml#/components/responses/Error429' }
+  /auth/login:
+    post:
+      tags: [Autenticación]
+      operationId: iniciarSesion
+      summary: Iniciar sesión con correo y contraseña
+      security: []
+      parameters:
+        - name: DPoP
+          in: header
+          required: false
+          description: Prueba DPoP (RFC 9449); si viene, el token queda atado a esa llave
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correo, password]
+              properties:
+                correo: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Sesión iniciada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Sesion' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '429': { $ref: '../../comun/comun.yaml#/components/responses/Error429' }
+  /auth/google:
+    post:
+      tags: [Autenticación]
+      operationId: iniciarSesionGoogle
+      summary: Iniciar sesión con el id_token de Google (crea la cuenta si no existe)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id_token]
+              properties:
+                id_token: { type: string }
+      responses:
+        '200':
+          description: Sesión iniciada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Sesion' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+  /auth/refresh:
+    post:
+      tags: [Autenticación]
+      operationId: renovarSesion
+      summary: Renovar el token de acceso (el refresh token rota en cada uso)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: Tokens nuevos
+          content: { application/json: { schema: { $ref: '#/components/schemas/Sesion' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+  /auth/logout:
+    post:
+      tags: [Autenticación]
+      operationId: cerrarSesion
+      summary: Cerrar la sesión actual
+      security: [{ UsuarioJWT: [] }]
+      responses:
+        '204': { description: Sesión cerrada (la sesión queda revocada) }
+  /auth/me:
+    get:
+      tags: [Cuenta]
+      operationId: miCuenta
+      summary: Cuenta del usuario autenticado
+      security: [{ UsuarioJWT: [] }]
+      responses:
+        '200':
+          description: Usuario autenticado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+    patch:
+      tags: [Cuenta]
+      operationId: actualizarMiCuenta
+      summary: Cambiar nombre, apellido o teléfono (publica usuario.actualizado)
+      security: [{ UsuarioJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                nombre: { type: string, minLength: 2, maxLength: 80 }
+                apellido: { type: string, minLength: 2, maxLength: 80 }
+                telefono: { type: string, pattern: '^(\+593|0)9\d{8}$' }
+      responses:
+        '200':
+          description: Actualizado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+  /auth/password:
+    put:
+      tags: [Cuenta]
+      operationId: cambiarPassword
+      summary: Cambiar la contraseña (revoca las demás sesiones)
+      security: [{ UsuarioJWT: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password_actual, password_nueva]
+              properties:
+                password_actual: { type: string, format: password }
+                password_nueva: { type: string, format: password, minLength: 8, maxLength: 72 }
+      responses:
+        '204': { description: Contraseña cambiada }
+        '401': { $ref: '../../comun/comun.yaml#/components/responses/Error401' }
+        '422': { $ref: '../../comun/comun.yaml#/components/responses/Error422' }
+  /auth/verificar:
+    post:
+      tags: [Cuenta]
+      operationId: verificarCorreo
+      summary: Confirmar el correo con el token enviado (token_verificacion, un solo uso)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        '204': { description: Correo verificado }
+        '400': { $ref: '../../comun/comun.yaml#/components/responses/Error400' }
+  /usuarios:
+    get:
+      tags: [Administración de usuarios]
+      operationId: listarUsuarios
+      summary: Listar usuarios (solo ADMIN)
+      security: [{ UsuarioJWT: [] }]
+      parameters:
+        - $ref: '../../comun/comun.yaml#/components/parameters/Pagina'
+        - $ref: '../../comun/comun.yaml#/components/parameters/Limite'
+        - name: rol
+          in: query
+          schema: { $ref: '#/components/schemas/Rol' }
+        - name: q
+          in: query
+          description: Busca en nombre, apellido o correo
+          schema: { type: string, maxLength: 80 }
+      responses:
+        '200':
+          description: Página de usuarios
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, pagination]
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Usuario' } }
+                  pagination: { $ref: '../../comun/comun.yaml#/components/schemas/Paginacion' }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+  /usuarios/{usuarioId}:
+    get:
+      tags: [Administración de usuarios]
+      operationId: obtenerUsuario
+      summary: Obtener un usuario (ADMIN o servicio interno)
+      security: [{ UsuarioJWT: [] }, { ServicioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/UsuarioId' }]
+      responses:
+        '200':
+          description: Usuario
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '404': { $ref: '../../comun/comun.yaml#/components/responses/Error404' }
+    patch:
+      tags: [Administración de usuarios]
+      operationId: cambiarEstadoUsuario
+      summary: Activar o bloquear una cuenta (solo ADMIN; bloquear revoca sus sesiones)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/UsuarioId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [activo]
+              properties:
+                activo: { type: boolean }
+      responses:
+        '200':
+          description: Actualizado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+  /usuarios/{usuarioId}/roles:
+    put:
+      tags: [Administración de usuarios]
+      operationId: asignarRoles
+      summary: Reemplazar los roles del usuario (solo ADMIN; publica usuario.actualizado)
+      security: [{ UsuarioJWT: [] }]
+      parameters: [{ $ref: '#/components/parameters/UsuarioId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles: { type: array, minItems: 1, uniqueItems: true, items: { $ref: '#/components/schemas/Rol' } }
+      responses:
+        '200':
+          description: Roles actualizados
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '403': { $ref: '../../comun/comun.yaml#/components/responses/Error403' }
+        '409':
+          description: No se puede quitar el último ADMIN
+          content: { application/problem+json: { schema: { $ref: '../../comun/comun.yaml#/components/schemas/Problem' } } }
+  /.well-known/jwks.json:
+    get:
+      tags: [Llaves (interno)]
+      operationId: llavesPublicas
+      summary: Llaves públicas para validar los JWT (las cachean el gateway y cada servicio)
+      security: []
+      responses:
+        '200':
+          description: JWK Set (RFC 7517)
+          headers:
+            Cache-Control: { schema: { type: string, example: 'public, max-age=600' } }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [keys]
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      required: [kty, kid, use, alg, n, e]
+                      properties:
+                        kty: { type: string, const: RSA }
+                        kid: { type: string }
+                        use: { type: string, const: sig }
+                        alg: { type: string, const: RS256 }
+                        n: { type: string }
+                        e: { type: string }
+  /health/ready:
+    get:
+      tags: [Salud]
+      operationId: listo
+      summary: Listo para recibir tráfico (base, broker y dependencias)
+      security: []
+      responses:
+        '200': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+        '503': { $ref: '../../comun/comun.yaml#/components/responses/Salud' }
+components:
+  securitySchemes:
+    UsuarioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/UsuarioJWT' }
+    ServicioJWT: { $ref: '../../comun/comun.yaml#/components/securitySchemes/ServicioJWT' }
+  parameters:
+    UsuarioId:
+      name: usuarioId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    Rol:
+      type: string
+      enum: [CLIENTE, OPERADOR, ADMIN]
+    Usuario:
+      type: object
+      required: [id, nombre, apellido, correo, roles, activo, correo_verificado, creado_en]
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        apellido: { type: string }
+        correo: { type: string, format: email }
+        telefono: { type: [string, 'null'] }
+        roles: { type: array, items: { $ref: '#/components/schemas/Rol' } }
+        proveedor: { type: string, enum: [LOCAL, GOOGLE], description: 'Cómo se creó la cuenta' }
+        activo: { type: boolean }
+        correo_verificado: { type: boolean }
+        ultimo_acceso: { type: [string, 'null'], format: date-time }
+        creado_en: { type: string, format: date-time }
+    Sesion:
+      type: object
+      required: [access_token, token_type, expires_in, refresh_token, usuario]
+      properties:
+        access_token: { type: string, description: 'JWT RS256 (claims sub, roles, sid, cnf.jkt si hay DPoP)' }
+        token_type: { type: string, enum: [Bearer, DPoP] }
+        expires_in: { type: integer, description: 'Segundos (900)' }
+        refresh_token: { type: string }
+        usuario: { $ref: '#/components/schemas/Usuario' }

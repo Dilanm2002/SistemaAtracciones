@@ -1,0 +1,53 @@
+# Subgrafo de MS Reservas (Apollo Federation 2). Dueño del tipo Reserva.
+# La factura de la reserva la agrega el subgrafo de Facturación (Reserva.factura, con su detalle).
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key"])
+
+enum EstadoReserva {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+type Boletos {
+  adultos: Int!
+  ninos: Int!
+  seniors: Int!
+  estudiantes: Int!
+  infantes: Int!
+}
+
+type Reserva @key(fields: "id") {
+  id: ID!
+  codigo: String!
+  ordenNumero: String!
+  estado: EstadoReserva!
+  atraccion: Atraccion!
+  slotId: String!
+  fecha: String!
+  hora24h: String!
+  boletos: Boletos!
+  total: Float!
+  moneda: String!
+  checkinEn: String
+  creadaEn: String!
+}
+
+# Referencia a la atracción (dueño: MS Productos)
+type Atraccion @key(fields: "id", resolvable: false) {
+  id: ID!
+}
+
+# El usuario (dueño: MS Usuarios) gana sus reservas
+type Usuario @key(fields: "id") {
+  id: ID!
+  reservas(estado: EstadoReserva, limite: Int = 20): [Reserva!]!
+}
+
+type Query {
+  "Solo reservas propias (cliente), de su empresa (operador) o todas (admin)"
+  reserva(id: ID!): Reserva
+}

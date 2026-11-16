@@ -1,0 +1,91 @@
+// Contrato gRPC de MS Reservas (interno y para Booking si prefiere gRPC a REST).
+// Mismas reglas que el REST: idempotencia por idempotency_key, turno por slot_id, montos como texto decimal.
+// Errores con códigos gRPC: INVALID_ARGUMENT, NOT_FOUND, FAILED_PRECONDITION (estado no permite la acción),
+// RESOURCE_EXHAUSTED (sin cupos = OUT_OF_STOCK), UNAVAILABLE (reintentable).
+syntax = "proto3";
+
+package descubre.reservas.v1;
+
+option go_package = "descubre-ec/servicios/reservas/v1;reservasv1";
+
+service ReservasService {
+  rpc CrearReserva (CrearReservaRequest) returns (Reserva);
+  rpc ObtenerReserva (ObtenerReservaRequest) returns (Reserva);
+  // Compensación de saga: idempotente; cancelar una reserva cancelada devuelve la misma reserva.
+  rpc CancelarReserva (CancelarReservaRequest) returns (Reserva);
+}
+
+enum EstadoReserva {
+  ESTADO_RESERVA_UNSPECIFIED = 0;
+  PENDING = 1;
+  CONFIRMED = 2;
+  CHECKED_IN = 3;
+  COMPLETED = 4;
+  CANCELLED = 5;
+  EXPIRED = 6;
+}
+
+enum Solicitante {
+  SOLICITANTE_UNSPECIFIED = 0;
+  CLIENTE = 1;
+  SAGA_ORCHESTRATOR = 2;
+  ADMIN = 3;
+}
+
+message Boletos {
+  int32 adultos = 1;      // >= 1
+  int32 ninos = 2;
+  int32 seniors = 3;
+  int32 estudiantes = 4;
+  int32 infantes = 5;     // gratis, ocupan cupo
+}
+
+message Titular {
+  string nombre = 1;
+  string correo = 2;
+  string telefono = 3;    // E.164 o 09XXXXXXXX
+  string tipo_documento = 4;
+  string documento = 5;
+}
+
+message CrearReservaRequest {
+  string idempotency_key = 1;
+  string atraccion_id = 2;   // UUID
+  string slot_id = 3;        // slot-AAAAMMDD-HHMM
+  Boletos boletos = 4;
+  Titular titular = 5;
+  string metodo_pago = 6;    // TARJETA | TRANSFERENCIA | EN_SITIO | SOA_BOOKING_GATEWAY
+  string saga_id = 7;
+  string correlation_id = 8;
+  string notas = 9;
+}
+
+message ObtenerReservaRequest {
+  string id = 1;             // UUID o código PNR
+}
+
+message CancelarReservaRequest {
+  string id = 1;
+  string idempotency_key = 2;
+  string motivo = 3;
+  Solicitante solicitante = 4;
+  string correlation_id = 5;
+}
+
+message Reserva {
+  string id = 1;
+  string codigo = 2;               // DEC-XXXXXX
+  string orden_numero = 3;         // ORD-XXXXXX
+  EstadoReserva estado = 4;
+  string atraccion_id = 5;
+  string slot_id = 6;
+  string fecha = 7;                // YYYY-MM-DD
+  string hora_24h = 8;             // HH:mm
+  Boletos boletos = 9;
+  string total = 10;               // "105.00"
+  string moneda = 11;
+  string factura_numero = 12;      // vacío si aún no se emite (el detalle está en MS Facturación)
+  string reembolso_numero = 13;
+  string monto_reembolsado = 14;
+  string creada_en = 15;           // ISO 8601 UTC
+}

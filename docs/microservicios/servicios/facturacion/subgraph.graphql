@@ -1,0 +1,73 @@
+# Subgrafo de MS Facturación (Apollo Federation 2). Los resolvers llaman al servicio por gRPC
+# (FacturacionService). La factura se lee SIEMPRE con su detalle (`lineas`).
+extend schema
+  @link(url: "https://specs.apollo.dev/federation/v2.3", import: ["@key", "@external", "@requires"])
+
+enum EstadoFactura {
+  EMITIDA
+  ANULADA
+}
+
+enum TipoBoleto {
+  ADULTO
+  NINO
+  ADULTO_MAYOR
+  ESTUDIANTE
+  INFANTE
+}
+
+"Datos del cliente copiados al facturar"
+type ClienteFactura {
+  razonSocial: String!
+  tipoDocumento: String!
+  documento: String!
+  correo: String
+  direccion: String
+}
+
+"Línea del detalle (factura_detalle). Montos como texto decimal para no perder centavos."
+type LineaFactura {
+  linea: Int!
+  codigo: String!
+  descripcion: String!
+  cantidad: Int!
+  precioUnitario: String!
+  descuento: String!
+  baseImponible: String!
+  tarifaIva: String!
+  valorIva: String!
+  total: String!
+  tipoBoleto: TipoBoleto
+  referenciaOrden: String
+}
+
+"Factura = encabezado + detalle; la suma de las líneas cuadra con el encabezado"
+type Factura @key(fields: "numero") {
+  numero: String!
+  ordenNumero: String!
+  pagoNumero: String
+  cliente: ClienteFactura!
+  lineas: [LineaFactura!]!
+  subtotal: String!
+  descuento: String!
+  iva: String!
+  total: String!
+  moneda: String!
+  estado: EstadoFactura!
+  emitidaEn: String!
+  anuladaEn: String
+  pdfUrl: String!
+}
+
+"La reserva (dueño: MS Reservas) gana su factura, buscada por el número de orden"
+type Reserva @key(fields: "id") {
+  id: ID!
+  ordenNumero: String! @external
+  factura: Factura @requires(fields: "ordenNumero")
+}
+
+type Query {
+  "El cliente solo ve sus facturas; el administrador, todas"
+  factura(numero: String!): Factura
+  facturasDeCliente(documento: String!, limite: Int = 20, cursor: String): [Factura!]!
+}
