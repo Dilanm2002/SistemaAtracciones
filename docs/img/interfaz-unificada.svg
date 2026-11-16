@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1060" width="1600" height="1060" font-family="'Segoe UI', Arial, sans-serif">
+  <title>Bosquejo de la interfaz unificada de Descubre EC</title>
+  <desc>Una sola aplicación web (shell) con un módulo de interfaz por cada microservicio: Usuarios, Clientes, Productos, Stock, Reservas, Pagos, Facturación y Mapas. Las lecturas van por GraphQL, las escrituras por el ESB y los avisos en vivo llegan desde el Event Bus.</desc>
+  <defs>
+    <marker id="fl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c62828"/></marker>
+    <marker id="fn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/></marker>
+  </defs>
+  <rect width="1600" height="1060" fill="#fbfbf8"/>
+  <text x="24" y="34" font-size="22" font-weight="700" fill="#0f3d38">Interfaz unificada · bosquejo</text>
+  <text x="24" y="58" font-size="14" fill="#52615e">Una sola aplicación web (shell) · un módulo por microservicio · un login (JWT de MS Usuarios) · lecturas por GraphQL · escrituras por el ESB</text>
+
+  <!-- ═══ Ventana del navegador ═══ -->
+  <rect x="24" y="80" width="1552" height="740" rx="12" fill="#fff" stroke="#1f2937" stroke-width="2.5"/>
+  <rect x="24" y="80" width="1552" height="36" rx="12" fill="#eef1f0" stroke="#1f2937" stroke-width="2.5"/>
+  <rect x="24" y="104" width="1552" height="12" fill="#eef1f0"/>
+  <line x1="24" y1="116" x2="1576" y2="116" stroke="#1f2937" stroke-width="2"/>
+  <circle cx="48" cy="98" r="6" fill="#e57373"/><circle cx="68" cy="98" r="6" fill="#ffd54f"/><circle cx="88" cy="98" r="6" fill="#81c784"/>
+  <rect x="300" y="88" width="700" height="20" rx="10" fill="#fff" stroke="#9aa5a2"/>
+  <text x="316" y="103" font-size="12" fill="#52615e">https://descubre-ec.app/panel</text>
+
+  <!-- Barra superior -->
+  <rect x="24" y="116" width="1552" height="62" fill="#ffffff"/>
+  <line x1="24" y1="178" x2="1576" y2="178" stroke="#d6e1de" stroke-width="2"/>
+  <rect x="44" y="130" width="34" height="34" rx="8" fill="#0f766e"/>
+  <path d="M51,157 L59,140 L64,150 L67,146 L72,157 z" fill="#fff"/>
+  <text x="88" y="153" font-size="19" font-weight="700" fill="#1f2937">Descubre<tspan fill="#c2410c">EC</tspan></text>
+  <!-- buscador -->
+  <rect x="330" y="132" width="560" height="32" rx="16" fill="#f4f6f5" stroke="#9aa5a2"/>
+  <circle cx="352" cy="148" r="7" fill="none" stroke="#52615e" stroke-width="2"/><line x1="357" y1="153" x2="362" y2="158" stroke="#52615e" stroke-width="2"/>
+  <text x="372" y="153" font-size="13" fill="#7a8784">Buscar atracciones, destinos, reservas…</text>
+  <rect x="770" y="137" width="110" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="825" y="152" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Productos</text>
+  <!-- notificaciones en vivo -->
+  <path d="M1250,140 a10,10 0 0 1 20,0 v9 l4,6 h-28 l4,-6 z" fill="none" stroke="#1f2937" stroke-width="2"/>
+  <circle cx="1272" cy="138" r="7" fill="#c62828"/><text x="1272" y="142" font-size="9" fill="#fff" text-anchor="middle" font-weight="700">3</text>
+  <rect x="1168" y="160" width="190" height="16" rx="8" fill="#fdecea"/><text x="1263" y="172" font-size="10" fill="#c62828" text-anchor="middle" font-weight="700">avisos en vivo · Event Bus</text>
+  <!-- usuario -->
+  <circle cx="1410" cy="147" r="17" fill="#0f766e"/><text x="1410" y="152" font-size="12" font-weight="700" fill="#fff" text-anchor="middle">DM</text>
+  <text x="1434" y="144" font-size="13" font-weight="700" fill="#1f2937">Dilan</text><text x="1434" y="160" font-size="11" fill="#52615e">Admin ▾</text>
+  <rect x="1505" y="137" width="62" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="1536" y="152" font-size="10" font-weight="700" fill="#c62828" text-anchor="middle">Usuarios</text>
+
+  <!-- ═══ Menú lateral (un módulo por microservicio) ═══ -->
+  <rect x="24" y="178" width="250" height="642" fill="#0f3d38"/>
+  <text x="44" y="210" font-size="11" font-weight="700" fill="#8fb5ae" letter-spacing="1">MÓDULOS</text>
+  <g font-size="14" fill="#e5eeec">
+    <rect x="34" y="222" width="230" height="38" rx="8" fill="#14524b"/>
+    <text x="52" y="246" font-weight="700" fill="#fff">⌂  Inicio</text><text x="250" y="246" font-size="10" fill="#8fb5ae" text-anchor="end">todos</text>
+    <text x="52" y="292">▦  Catálogo</text><text x="250" y="292" font-size="10" fill="#fca5a5" text-anchor="end">Productos</text>
+    <text x="52" y="336">◎  Mapa</text><text x="250" y="336" font-size="10" fill="#fca5a5" text-anchor="end">Mapas</text>
+    <text x="52" y="380">▤  Disponibilidad</text><text x="250" y="380" font-size="10" fill="#fca5a5" text-anchor="end">Stock</text>
+    <text x="52" y="424">✓  Reservas</text><text x="250" y="424" font-size="10" fill="#fca5a5" text-anchor="end">Reservas</text>
+    <text x="52" y="468">$  Pagos</text><text x="250" y="468" font-size="10" fill="#fca5a5" text-anchor="end">Pagos</text>
+    <text x="52" y="512">▧  Facturas</text><text x="250" y="512" font-size="10" fill="#fca5a5" text-anchor="end">Facturación</text>
+    <text x="52" y="556">☺  Clientes</text><text x="250" y="556" font-size="10" fill="#fca5a5" text-anchor="end">Clientes</text>
+    <text x="52" y="600">⚿  Usuarios y roles</text><text x="250" y="600" font-size="10" fill="#fca5a5" text-anchor="end">Usuarios</text>
+  </g>
+  <line x1="44" y1="630" x2="254" y2="630" stroke="#2f6b63"/>
+  <text x="44" y="656" font-size="11" fill="#8fb5ae">El menú muestra solo los módulos</text>
+  <text x="44" y="672" font-size="11" fill="#8fb5ae">que permiten los scopes del JWT:</text>
+  <text x="44" y="692" font-size="11" fill="#d7ece8">cliente → Catálogo, Mapa, Reservas,</text>
+  <text x="44" y="708" font-size="11" fill="#d7ece8">   Pagos, Facturas, Perfil</text>
+  <text x="44" y="726" font-size="11" fill="#d7ece8">operador → + Disponibilidad</text>
+  <text x="44" y="744" font-size="11" fill="#d7ece8">admin → todos los módulos</text>
+  <rect x="44" y="768" width="210" height="34" rx="8" fill="none" stroke="#8fb5ae" stroke-dasharray="5 4"/>
+  <text x="149" y="790" font-size="11" fill="#8fb5ae" text-anchor="middle">+ nuevo módulo = nuevo servicio</text>
+
+  <!-- ═══ Área principal: tarjetas, una por microservicio ═══ -->
+  <text x="300" y="214" font-size="22" font-weight="700" fill="#1f2937">Inicio</text>
+  <text x="300" y="236" font-size="13" fill="#52615e">Un vistazo a todo el sistema: cada tarjeta es un módulo que trae sus datos de su microservicio</text>
+
+  <!-- Tarjeta: Productos -->
+  <g transform="translate(300,256)">
+    <rect width="400" height="250" rx="12" fill="#fff" stroke="#9aa5a2" stroke-width="1.5"/>
+    <text x="18" y="32" font-size="15" font-weight="700" fill="#1f2937">Atracciones destacadas</text>
+    <rect x="290" y="16" width="96" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="338" y="31" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Productos</text>
+    <g fill="#e3eeec" stroke="#9aa5a2"><rect x="18" y="52" width="114" height="80" rx="6"/><rect x="143" y="52" width="114" height="80" rx="6"/><rect x="268" y="52" width="114" height="80" rx="6"/></g>
+    <path d="M30,122 l22,-30 l14,18 l10,-10 l20,22 z" fill="#b8d2cd"/><path d="M155,122 l22,-30 l14,18 l10,-10 l20,22 z" fill="#b8d2cd"/><path d="M280,122 l22,-30 l14,18 l10,-10 l20,22 z" fill="#b8d2cd"/>
+    <g font-size="12" fill="#1f2937"><text x="18" y="152">Quilotoa</text><text x="143" y="152">Cotopaxi</text><text x="268" y="152">Mitad del Mundo</text></g>
+    <g font-size="12" font-weight="700" fill="#0f766e"><text x="18" y="170">$45</text><text x="143" y="170">$65</text><text x="268" y="170">$25</text></g>
+    <rect x="18" y="196" width="364" height="36" rx="8" fill="#0f766e"/><text x="200" y="219" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">Ver catálogo completo</text>
+  </g>
+
+  <!-- Tarjeta: Mapa -->
+  <g transform="translate(716,256)">
+    <rect width="420" height="250" rx="12" fill="#fff" stroke="#9aa5a2" stroke-width="1.5"/>
+    <text x="18" y="32" font-size="15" font-weight="700" fill="#1f2937">Mapa de experiencias</text>
+    <rect x="320" y="16" width="86" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="363" y="31" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Mapas</text>
+    <rect x="18" y="50" width="384" height="182" rx="8" fill="#dff0f7" stroke="#9aa5a2"/>
+    <path d="M18,140 C90,110 140,170 210,130 C270,100 330,150 402,120 L402,232 L18,232 z" fill="#e8f1e0"/>
+    <path d="M60,80 C120,120 180,90 240,150 C280,190 330,170 380,210" fill="none" stroke="#c9d6c9" stroke-width="3"/>
+    <g fill="#c62828"><path d="M120,120 a9,9 0 1 1 18,0 c0,8 -9,18 -9,18 c0,0 -9,-10 -9,-18z"/><path d="M250,150 a9,9 0 1 1 18,0 c0,8 -9,18 -9,18 c0,0 -9,-10 -9,-18z"/><path d="M330,100 a9,9 0 1 1 18,0 c0,8 -9,18 -9,18 c0,0 -9,-10 -9,-18z"/></g>
+  </g>
+
+  <!-- Tarjeta: Stock -->
+  <g transform="translate(1152,256)">
+    <rect width="408" height="250" rx="12" fill="#fff" stroke="#9aa5a2" stroke-width="1.5"/>
+    <text x="18" y="32" font-size="15" font-weight="700" fill="#1f2937">Cupos de hoy</text>
+    <rect x="300" y="16" width="92" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="346" y="31" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Stock</text>
+    <g font-size="12" fill="#1f2937">
+      <text x="18" y="70">Quilotoa · 09:00</text><rect x="170" y="60" width="176" height="12" rx="6" fill="#e3eeec"/><rect x="170" y="60" width="127" height="12" rx="6" fill="#0f766e"/><text x="378" y="70" font-size="11" text-anchor="end" fill="#52615e">18/25</text>
+      <text x="18" y="110">Cotopaxi · 07:00</text><rect x="170" y="100" width="176" height="12" rx="6" fill="#e3eeec"/><rect x="170" y="100" width="168" height="12" rx="6" fill="#d97706"/><text x="378" y="110" font-size="11" text-anchor="end" fill="#52615e">23/25</text>
+      <text x="18" y="150">Mitad del Mundo · 14:00</text><rect x="170" y="140" width="176" height="12" rx="6" fill="#e3eeec"/><rect x="170" y="140" width="42" height="12" rx="6" fill="#0f766e"/><text x="378" y="150" font-size="11" text-anchor="end" fill="#52615e">6/25</text>
+    </g>
+    <text x="18" y="200" font-size="11" fill="#52615e">Se actualiza solo cuando llega «stock.retenido»</text>
+    <text x="18" y="216" font-size="11" fill="#52615e">o «stock.liberado» por el Event Bus</text>
+  </g>
+
+  <!-- Tarjeta: Reservas -->
+  <g transform="translate(300,522)">
+    <rect width="400" height="280" rx="12" fill="#fff" stroke="#9aa5a2" stroke-width="1.5"/>
+    <text x="18" y="32" font-size="15" font-weight="700" fill="#1f2937">Próximas reservas</text>
+    <rect x="290" y="16" width="96" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="338" y="31" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Reservas</text>
+    <g font-size="12" fill="#1f2937">
+      <rect x="18" y="52" width="364" height="56" rx="8" fill="#f4f6f5"/><text x="30" y="74" font-weight="700">DEC-J9WRXZ · Quilotoa</text><text x="30" y="94" fill="#52615e">20 oct · 09:00 · 2 personas</text><rect x="290" y="64" width="80" height="20" rx="10" fill="#dcfce7"/><text x="330" y="78" font-size="10" fill="#166534" text-anchor="middle" font-weight="700">CONFIRMADA</text>
+      <rect x="18" y="118" width="364" height="56" rx="8" fill="#f4f6f5"/><text x="30" y="140" font-weight="700">DEC-7F3K9Q · Cotopaxi</text><text x="30" y="160" fill="#52615e">23 oct · 07:00 · 1 persona</text><rect x="290" y="130" width="80" height="20" rx="10" fill="#fef3c7"/><text x="330" y="144" font-size="10" fill="#92400e" text-anchor="middle" font-weight="700">PENDIENTE</text>
+    </g>
+    <rect x="18" y="194" width="176" height="36" rx="8" fill="#d97706"/><text x="106" y="217" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">Reservar</text>
+    <rect x="206" y="194" width="176" height="36" rx="8" fill="#fff" stroke="#9aa5a2"/><text x="294" y="217" font-size="13" font-weight="700" fill="#1f2937" text-anchor="middle">Cancelar</text>
+    <text x="18" y="256" font-size="11" fill="#52615e">Reservar y cancelar van por el ESB (REST · Idempotency-Key)</text>
+  </g>
+
+  <!-- Tarjeta: Pagos -->
+  <g transform="translate(716,522)">
+    <rect width="420" height="280" rx="12" fill="#fff" stroke="#9aa5a2" stroke-width="1.5"/>
+    <text x="18" y="32" font-size="15" font-weight="700" fill="#1f2937">Pagos · tiempo medido</text>
+    <rect x="324" y="16" width="82" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="365" y="31" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Pagos</text>
+    <g font-size="12" fill="#1f2937">
+      <text x="18" y="66" fill="#52615e">Tiempo promedio del sistema de pagos</text>
+      <text x="18" y="100" font-size="30" font-weight="700" fill="#0f766e">2,3 s</text><text x="110" y="100" font-size="12" fill="#52615e">p95 4,1 s · 0 expirados</text>
+    </g>
+    <!-- mini gráfico -->
+    <line x1="18" y1="200" x2="402" y2="200" stroke="#d6e1de"/>
+    <g fill="#0f766e"><rect x="30" y="160" width="28" height="40"/><rect x="78" y="150" width="28" height="50"/><rect x="126" y="170" width="28" height="30"/><rect x="174" y="140" width="28" height="60"/><rect x="222" y="165" width="28" height="35"/><rect x="270" y="155" width="28" height="45"/><rect x="318" y="175" width="28" height="25"/><rect x="366" y="160" width="28" height="40"/></g>
+    <text x="18" y="222" font-size="11" fill="#52615e">duración por pago (últimos 8)</text>
+    <text x="18" y="256" font-size="11" fill="#52615e">El cobro lo hace el sistema de pagos externo (SOA)</text>
+  </g>
+
+  <!-- Tarjeta: Facturas + Perfil -->
+  <g transform="translate(1152,522)">
+    <rect width="408" height="130" rx="12" fill="#fff" stroke="#9aa5a2" stroke-width="1.5"/>
+    <text x="18" y="32" font-size="15" font-weight="700" fill="#1f2937">Últimas facturas</text>
+    <rect x="268" y="16" width="124" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="330" y="31" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Facturación</text>
+    <g font-size="12" fill="#1f2937"><text x="18" y="70">FAC-001-001-000123 · $50,00</text><text x="350" y="70" fill="#0f766e" font-weight="700">PDF</text><text x="18" y="96">FAC-001-001-000122 · $25,00</text><text x="350" y="96" fill="#0f766e" font-weight="700">PDF</text></g>
+    <text x="18" y="118" font-size="10.5" fill="#52615e">datos por GraphQL → subgrafo → gRPC</text>
+  </g>
+  <g transform="translate(1152,668)">
+    <rect width="408" height="134" rx="12" fill="#fff" stroke="#9aa5a2" stroke-width="1.5"/>
+    <text x="18" y="32" font-size="15" font-weight="700" fill="#1f2937">Mi perfil</text>
+    <rect x="216" y="16" width="176" height="22" rx="11" fill="#fdecea" stroke="#c62828"/><text x="304" y="31" font-size="11" font-weight="700" fill="#c62828" text-anchor="middle">MS Clientes · Usuarios</text>
+    <circle cx="44" cy="80" r="22" fill="#0f766e"/><text x="44" y="85" font-size="13" font-weight="700" fill="#fff" text-anchor="middle">DM</text>
+    <g font-size="12" fill="#1f2937"><text x="78" y="72" font-weight="700">Dilan Mena</text><text x="78" y="90" fill="#52615e">dilan@correo.com · 0991234567</text><text x="78" y="108" fill="#52615e">3 favoritos · 1 dirección</text></g>
+  </g>
+
+  <!-- ═══ Debajo: cómo se conecta la interfaz ═══ -->
+  <text x="24" y="860" font-size="15" font-weight="700" fill="#1f2937">Cómo se conecta la interfaz con los microservicios</text>
+  <g font-size="13">
+    <rect x="24" y="876" width="300" height="78" rx="10" fill="#fff" stroke="#1f2937" stroke-width="2"/>
+    <text x="174" y="904" font-weight="700" fill="#1f2937" text-anchor="middle">Shell (React)</text>
+    <text x="174" y="924" fill="#52615e" text-anchor="middle" font-size="12">login · menú · módulos por servicio</text>
+    <text x="174" y="942" fill="#52615e" text-anchor="middle" font-size="12">(micro-frontends)</text>
+
+    <rect x="470" y="868" width="270" height="44" rx="10" fill="#fdecea" stroke="#c62828" stroke-width="2"/>
+    <text x="605" y="895" font-weight="700" fill="#c62828" text-anchor="middle">GraphQL · lecturas y avisos</text>
+    <rect x="470" y="920" width="270" height="44" rx="10" fill="#fff" stroke="#1f2937" stroke-width="2"/>
+    <text x="605" y="947" font-weight="700" fill="#1f2937" text-anchor="middle">ESB / Gateway · escrituras</text>
+    <rect x="470" y="972" width="270" height="44" rx="10" fill="#fff" stroke="#1f2937" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="605" y="999" font-weight="700" fill="#1f2937" text-anchor="middle">MS Usuarios · login (JWT)</text>
+
+    <rect x="890" y="876" width="420" height="132" rx="10" fill="#fff" stroke="#1f2937" stroke-width="2"/>
+    <text x="1100" y="902" font-weight="700" fill="#1f2937" text-anchor="middle">8 microservicios</text>
+    <text x="1100" y="926" fill="#52615e" text-anchor="middle" font-size="12">Usuarios · Clientes · Productos · Stock</text>
+    <text x="1100" y="946" fill="#52615e" text-anchor="middle" font-size="12">Reservas · Pagos · Facturación · Mapas</text>
+    <text x="1100" y="976" fill="#c62828" text-anchor="middle" font-size="12" font-weight="700">Event Bus (RabbitMQ) → avisos en vivo a la UI</text>
+    <text x="1100" y="994" fill="#52615e" text-anchor="middle" font-size="11">(suscripciones GraphQL)</text>
+
+    <rect x="1360" y="876" width="216" height="132" rx="10" fill="#eef6f5" stroke="#0f766e" stroke-width="2"/>
+    <text x="1468" y="904" font-weight="700" fill="#0f3d38" text-anchor="middle">Si un servicio cae</text>
+    <text x="1468" y="928" fill="#1f2937" text-anchor="middle" font-size="12">solo su tarjeta muestra</text>
+    <text x="1468" y="946" fill="#1f2937" text-anchor="middle" font-size="12">«no disponible»; el resto</text>
+    <text x="1468" y="964" fill="#1f2937" text-anchor="middle" font-size="12">de la interfaz sigue</text>
+    <text x="1468" y="982" fill="#1f2937" text-anchor="middle" font-size="12">funcionando</text>
+  </g>
+  <g fill="none" stroke-width="2">
+    <path d="M324,906 L466,890" stroke="#c62828" marker-end="url(#fl)"/>
+    <path d="M324,922 L466,942" stroke="#1f2937" marker-end="url(#fn)"/>
+    <path d="M324,940 L466,992" stroke="#1f2937" stroke-dasharray="6 4" marker-end="url(#fn)"/>
+    <path d="M740,890 L886,912" stroke="#c62828" marker-end="url(#fl)"/>
+    <path d="M740,942 L886,942" stroke="#1f2937" marker-end="url(#fn)"/>
+    <path d="M740,994 L886,972" stroke="#1f2937" stroke-dasharray="6 4" marker-end="url(#fn)"/>
+  </g>
+</svg>
